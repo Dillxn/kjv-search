@@ -183,18 +183,91 @@ export default function Home() {
               Enter search words (separated by spaces):
             </label>
             <div className="relative">
-              <input
-                id="search"
-                type="text"
-                value={searchTerms}
-                onChange={(e) => setSearchTerms(e.target.value)}
-                placeholder="Start typing to search... (min 2 characters)"
-                className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                    : 'border-gray-300 text-black'
-                }`}
-              />
+              <div className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent min-h-[28px] ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'border-gray-300 text-black bg-white'
+              }`}>
+                <div className="flex flex-wrap gap-1 items-center">
+                  {(() => {
+                    const words = searchTerms.split(' ');
+                    const colors = getHighlightColors();
+                    const isTypingNewWord = searchTerms.endsWith(' ');
+                    
+                    return words.map((word, index) => {
+                      const isLastWord = index === words.length - 1;
+                      const isCurrentlyTyping = isLastWord && !isTypingNewWord && word;
+                      
+                      if (!word.trim() && !isCurrentlyTyping) return null;
+                      
+                      const colorClass = colors[index % colors.length];
+                      
+                      if (isCurrentlyTyping) {
+                        // Show the word being typed with cursor inside the badge
+                        return (
+                          <span key={index} className={`${colorClass} px-0.5 rounded text-sm relative`}>
+                            {word}
+                            <span className="cursor-blink">|</span>
+                          </span>
+                        );
+                      } else if (word.trim()) {
+                        // Show completed words
+                        return (
+                          <span key={index} className={`${colorClass} px-0.5 rounded text-sm`}>
+                            {word}
+                          </span>
+                        );
+                      }
+                      return null;
+                    });
+                  })()}
+                  
+                  {/* Show cursor when ready to type new word */}
+                  {(searchTerms.endsWith(' ') && searchTerms.trim()) || (!searchTerms) ? (
+                    <span className={`cursor-blink text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>|</span>
+                  ) : null}
+                  
+                  <input
+                    id="search"
+                    type="text"
+                    value=""
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      if (newValue === ' ') {
+                        setSearchTerms(searchTerms + ' ');
+                      } else if (newValue) {
+                        const words = searchTerms.split(' ');
+                        words[words.length - 1] = (words[words.length - 1] || '') + newValue;
+                        setSearchTerms(words.join(' '));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
+                        e.preventDefault();
+                        const words = searchTerms.split(' ');
+                        if (words.length > 0) {
+                          const lastWord = words[words.length - 1];
+                          if (lastWord) {
+                            words[words.length - 1] = lastWord.slice(0, -1);
+                            setSearchTerms(words.join(' '));
+                          } else if (words.length > 1) {
+                            words.pop();
+                            setSearchTerms(words.join(' '));
+                          }
+                        }
+                      } else if (e.key === ' ') {
+                        e.preventDefault();
+                        setSearchTerms(searchTerms + ' ');
+                      }
+                    }}
+                    placeholder={searchTerms ? "" : "Start typing to search... (min 2 characters)"}
+                    className={`flex-1 min-w-0 bg-transparent border-none outline-none text-sm caret-transparent ${
+                      isDarkMode ? 'placeholder-gray-400' : 'placeholder-gray-500'
+                    }`}
+                    style={{ minWidth: '20px' }}
+                  />
+                </div>
+              </div>
               {isLoading && (
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                   <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${
