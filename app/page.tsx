@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { kjvParser, SearchResult } from '../lib/kjv-parser';
 
 const HIGHLIGHT_COLORS_LIGHT = [
@@ -33,6 +33,35 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [editorRef, setEditorRef] = useState<HTMLDivElement | null>(null);
+
+  const getHighlightColors = useCallback(() => {
+    return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
+  }, [isDarkMode]);
+
+  const formatTextWithColors = useCallback((text: string) => {
+    if (!text.trim()) {
+      return '';
+    }
+
+    const colors = getHighlightColors();
+    // Split by spaces but preserve the spaces
+    const parts = text.split(/(\s+)/);
+    let wordIndex = 0;
+
+    return parts.map(part => {
+      if (/^\s+$/.test(part)) {
+        // This is whitespace, return as-is
+        return part;
+      } else if (part.trim()) {
+        // This is a word, wrap it in a colored span
+        const colorClass = colors[wordIndex % colors.length];
+        wordIndex++;
+        return `<span class="${colorClass} px-0.5 rounded">${part}</span>`;
+      }
+      return part;
+    }).join('');
+  }, [isDarkMode, getHighlightColors]);
 
   useEffect(() => {
     const initializeKJV = async () => {
@@ -97,7 +126,9 @@ export default function Home() {
 
       try {
         const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
+        console.log('Search terms:', terms, 'Original:', debouncedSearchTerms);
         const searchResults = kjvParser.searchWords(terms);
+        console.log('Search results:', searchResults.length);
         setResults(searchResults);
       } catch (err) {
         setError('Search failed. Please try again.');
@@ -112,45 +143,44 @@ export default function Home() {
     }
   }, [debouncedSearchTerms, isInitialized]);
 
+  // Update contentEditable when searchTerms changes externally (like from localStorage)
+  useEffect(() => {
+    if (editorRef && document.activeElement !== editorRef) {
+      editorRef.innerHTML = formatTextWithColors(searchTerms);
+    }
+  }, [searchTerms, isDarkMode, editorRef, formatTextWithColors]);
+
 
   const getSearchTermsArray = () => {
     return searchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
   };
 
-  const getHighlightColors = () => {
-    return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
-  };
-
   const highlightText = (text: string, matches: string[], searchTerms: string[]): string => {
     const colors = getHighlightColors();
 
-    // Create a map of words to highlight with their corresponding colors
-    const wordsToHighlight = new Map<string, string>();
-
-    matches.forEach((match) => {
-      const normalizedMatch = match.toLowerCase();
-      const termIndex = searchTerms.indexOf(normalizedMatch);
-      if (termIndex !== -1) {
-        const colorClass = colors[termIndex % colors.length];
-        // Use the original match casing for display, but normalized for lookup
-        wordsToHighlight.set(match.toLowerCase(), colorClass);
+    // Create a map of search terms to colors
+    const termToColor = new Map<string, string>();
+    searchTerms.forEach((term, index) => {
+      const normalizedTerm = term.toLowerCase().trim();
+      if (normalizedTerm) {
+        termToColor.set(normalizedTerm, colors[index % colors.length]);
       }
     });
 
-    // Split text into words and punctuation, preserving the original structure
-    const parts = text.split(/(\b\w+\b|[^\w\s]+)/g);
+    let result = text;
 
-    // Process each part and highlight matching words
-    const highlightedParts = parts.map(part => {
-      const normalizedPart = part.toLowerCase();
-      const colorClass = wordsToHighlight.get(normalizedPart);
-      if (colorClass && /^\w+$/.test(part)) { // Only highlight word characters
-        return `<mark class="${colorClass} px-0.5 rounded">${part}</mark>`;
+    // For each search term, find and highlight all occurrences (including partial matches)
+    for (const [term, colorClass] of termToColor.entries()) {
+      if (term.length >= 2) {
+        // Escape special regex characters
+        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Create a regex that matches the term as a substring, case insensitive
+        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+        result = result.replace(regex, `<mark class="${colorClass} px-0.5 rounded">$1</mark>`);
       }
-      return part;
-    });
+    }
 
-    return highlightedParts.join('');
+    return result;
   };
 
   if (!isInitialized) {
@@ -183,91 +213,140 @@ export default function Home() {
               Enter search words (separated by spaces):
             </label>
             <div className="relative">
-              <div className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent min-h-[28px] ${
-                isDarkMode
-                  ? 'bg-gray-700 border-gray-600 text-white'
-                  : 'border-gray-300 text-black bg-white'
-              }`}>
-                <div className="flex flex-wrap gap-1 items-center">
-                  {(() => {
-                    const words = searchTerms.split(' ');
-                    const colors = getHighlightColors();
-                    const isTypingNewWord = searchTerms.endsWith(' ');
+              <div
+                ref={setEditorRef}
+                contentEditable
+                suppressContentEditableWarning={true}
+                data-placeholder="Start typing to search... (min 2 characters)"
+                onInput={(e) => {
+                  const text = e.currentTarget.textContent || '';
+                  setSearchTerms(text);
+
+                  // Re-apply styling after input
+                  if (e.currentTarget === document.activeElement) {
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0) return;
+
+                    // Get cursor position relative to the text content
+                    const range = selection.getRangeAt(0);
+                    let cursorOffset = 0;
                     
-                    return words.map((word, index) => {
-                      const isLastWord = index === words.length - 1;
-                      const isCurrentlyTyping = isLastWord && !isTypingNewWord && word;
-                      
-                      if (!word.trim() && !isCurrentlyTyping) return null;
-                      
-                      const colorClass = colors[index % colors.length];
-                      
-                      if (isCurrentlyTyping) {
-                        // Show the word being typed with cursor inside the badge
-                        return (
-                          <span key={index} className={`${colorClass} px-0.5 rounded text-sm relative`}>
-                            {word}
-                            <span className="cursor-blink">|</span>
-                          </span>
-                        );
-                      } else if (word.trim()) {
-                        // Show completed words
-                        return (
-                          <span key={index} className={`${colorClass} px-0.5 rounded text-sm`}>
-                            {word}
-                          </span>
-                        );
+                    // Calculate the actual text offset by walking through all text nodes
+                    const walker = document.createTreeWalker(
+                      e.currentTarget,
+                      NodeFilter.SHOW_TEXT,
+                      null
+                    );
+                    
+                    let node;
+                    let found = false;
+                    while (node = walker.nextNode()) {
+                      if (node === range.startContainer) {
+                        cursorOffset += range.startOffset;
+                        found = true;
+                        break;
                       }
-                      return null;
-                    });
-                  })()}
-                  
-                  {/* Show cursor when ready to type new word */}
-                  {(searchTerms.endsWith(' ') && searchTerms.trim()) || (!searchTerms) ? (
-                    <span className={`cursor-blink text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>|</span>
-                  ) : null}
-                  
-                  <input
-                    id="search"
-                    type="text"
-                    value=""
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      if (newValue === ' ') {
-                        setSearchTerms(searchTerms + ' ');
-                      } else if (newValue) {
-                        const words = searchTerms.split(' ');
-                        words[words.length - 1] = (words[words.length - 1] || '') + newValue;
-                        setSearchTerms(words.join(' '));
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
-                        e.preventDefault();
-                        const words = searchTerms.split(' ');
-                        if (words.length > 0) {
-                          const lastWord = words[words.length - 1];
-                          if (lastWord) {
-                            words[words.length - 1] = lastWord.slice(0, -1);
-                            setSearchTerms(words.join(' '));
-                          } else if (words.length > 1) {
-                            words.pop();
-                            setSearchTerms(words.join(' '));
+                      cursorOffset += node.textContent?.length || 0;
+                    }
+
+                    // Update HTML with colored spans
+                    e.currentTarget.innerHTML = formatTextWithColors(text);
+
+                    // Restore cursor position
+                    if (found && text) {
+                      try {
+                        // Walk through the new DOM structure to find the correct position
+                        const newWalker = document.createTreeWalker(
+                          e.currentTarget,
+                          NodeFilter.SHOW_TEXT,
+                          null
+                        );
+                        
+                        let currentOffset = 0;
+                        let targetNode = null;
+                        let targetOffset = 0;
+                        
+                        while (node = newWalker.nextNode()) {
+                          const nodeLength = node.textContent?.length || 0;
+                          if (currentOffset + nodeLength >= cursorOffset) {
+                            targetNode = node;
+                            targetOffset = cursorOffset - currentOffset;
+                            break;
                           }
+                          currentOffset += nodeLength;
                         }
-                      } else if (e.key === ' ') {
-                        e.preventDefault();
-                        setSearchTerms(searchTerms + ' ');
+
+                        if (targetNode) {
+                          const newRange = document.createRange();
+                          newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+                          newRange.collapse(true);
+                          selection.removeAllRanges();
+                          selection.addRange(newRange);
+                        }
+                      } catch {
+                        // Fallback: place cursor at the calculated position in plain text
+                        const textNodes = [];
+                        const fallbackWalker = document.createTreeWalker(
+                          e.currentTarget,
+                          NodeFilter.SHOW_TEXT,
+                          null
+                        );
+                        let fallbackNode;
+                        while (fallbackNode = fallbackWalker.nextNode()) {
+                          textNodes.push(fallbackNode);
+                        }
+                        
+                        if (textNodes.length > 0) {
+                          const lastNode = textNodes[textNodes.length - 1];
+                          const newRange = document.createRange();
+                          newRange.setStart(lastNode, Math.min(cursorOffset, lastNode.textContent?.length || 0));
+                          newRange.collapse(true);
+                          selection.removeAllRanges();
+                          selection.addRange(newRange);
+                        }
                       }
-                    }}
-                    placeholder={searchTerms ? "" : "Start typing to search... (min 2 characters)"}
-                    className={`flex-1 min-w-0 bg-transparent border-none outline-none text-sm caret-transparent ${
-                      isDarkMode ? 'placeholder-gray-400' : 'placeholder-gray-500'
-                    }`}
-                    style={{ minWidth: '20px' }}
-                  />
-                </div>
-              </div>
+                    }
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                  } else if (e.key === ' ') {
+                    // Handle space key to ensure proper word separation
+                    e.preventDefault();
+                    const target = e.currentTarget;
+                    const text = target.textContent || '';
+                    const newText = text + ' ';
+                    setSearchTerms(newText);
+
+                    // Update HTML and place cursor at end
+                    setTimeout(() => {
+                      if (target && target.isConnected) {
+                        target.innerHTML = formatTextWithColors(newText);
+                        // Place cursor at end
+                        const selection = window.getSelection();
+                        if (selection) {
+                          const range = document.createRange();
+                          range.selectNodeContents(target);
+                          range.collapse(false);
+                          selection.removeAllRanges();
+                          selection.addRange(range);
+                        }
+                      }
+                    }, 0);
+                  }
+                }}
+
+                className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[28px] outline-none placeholder-editor ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'border-gray-300 text-black bg-white'
+                }`}
+                style={{ 
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}
+              />
               {isLoading && (
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                   <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${

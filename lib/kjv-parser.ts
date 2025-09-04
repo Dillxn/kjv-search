@@ -109,9 +109,25 @@ class KJVParser {
 
     for (const term of searchTerms) {
       const normalizedTerm = term.toLowerCase().trim();
-      const verses = this.wordIndex.get(normalizedTerm) || [];
+      if (!normalizedTerm) continue;
 
-      for (const verse of verses) {
+      // For partial matching, check if the term is a substring of any indexed words
+      const matchingVerses = new Set<Verse>();
+
+      // First try exact match
+      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
+      exactMatches.forEach(verse => matchingVerses.add(verse));
+
+      // Then try partial matches
+      if (normalizedTerm.length >= 2) {
+        for (const [indexedWord, verses] of this.wordIndex.entries()) {
+          if (indexedWord.includes(normalizedTerm)) {
+            verses.forEach(verse => matchingVerses.add(verse));
+          }
+        }
+      }
+
+      for (const verse of matchingVerses) {
         const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
         if (!allResults.has(key)) {
           allResults.set(key, {
@@ -124,7 +140,6 @@ class KJVParser {
     }
 
     // Convert to array and preserve the order from the original text
-    // Since verses are already indexed in canonical order, sort by their position
     const results = Array.from(allResults.values());
     results.sort((a, b) => a.verse.position - b.verse.position);
 

@@ -33,3 +33,13 @@ body {
 .cursor-blink {
   animation: blink 1s infinite;
 }
+/* ContentEditable placeholder styles */
+.placeholder-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af; /* gray-400 */
+  pointer-events: none;
+}
+
+.dark .placeholder-editor:empty:before {
+  color: #6b7280; /* gray-500 for dark mode */
+}
