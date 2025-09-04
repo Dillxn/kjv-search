@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { kjvParser, SearchResult } from '../lib/kjv-parser';
+import { VirtualScroll } from '../lib/virtual-scroll';
 
 const HIGHLIGHT_COLORS_LIGHT = [
   'bg-yellow-200 text-yellow-900',
@@ -34,6 +35,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [editorRef, setEditorRef] = useState<HTMLDivElement | null>(null);
+  const [containerHeight, setContainerHeight] = useState(400);
 
   const getHighlightColors = useCallback(() => {
     return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
@@ -77,7 +79,7 @@ export default function Home() {
     initializeKJV();
   }, []);
 
-  // Load saved preferences from localStorage
+  // Load saved preferences from localStorage and set container height
   useEffect(() => {
     const savedSearchTerms = localStorage.getItem('kjv-search-terms');
     const savedDarkMode = localStorage.getItem('kjv-dark-mode');
@@ -89,6 +91,16 @@ export default function Home() {
     if (savedDarkMode) {
       setIsDarkMode(savedDarkMode === 'true');
     }
+
+    // Set initial container height
+    const updateHeight = () => {
+      setContainerHeight(window.innerHeight - 200);
+    };
+    
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    
+    return () => window.removeEventListener('resize', updateHeight);
   }, []);
 
   // Save search terms to localStorage
@@ -373,9 +385,18 @@ export default function Home() {
               </h2>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-1.5">
-              {results.map((result, index) => (
-                <div key={index} className={`border-l-2 pl-1.5 py-1 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
+            <VirtualScroll
+              items={results}
+              itemHeight={(result) => {
+                // Estimate height based on text length
+                const baseHeight = 40; // Height for reference
+                const textHeight = Math.ceil(result.verse.text.length / 80) * 16; // ~80 chars per line, 16px line height
+                return Math.max(60, baseHeight + textHeight + 16); // Min 60px, add padding
+              }}
+              containerHeight={containerHeight}
+              className="flex-1 scrollbar-visible"
+              renderItem={(result, index) => (
+                <div className={`border-l-2 pl-1.5 py-1 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
                   <div className="mb-0.5">
                     <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                       {result.verse.reference}
@@ -388,8 +409,8 @@ export default function Home() {
                     }}
                   />
                 </div>
-              ))}
-            </div>
+              )}
+            />
           </div>
         )}
 
