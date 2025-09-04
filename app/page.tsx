@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { kjvParser, SearchResult } from '../lib/kjv-parser';
 
-const HIGHLIGHT_COLORS = [
+const HIGHLIGHT_COLORS_LIGHT = [
   'bg-yellow-200 text-yellow-900',
   'bg-blue-200 text-blue-900',
   'bg-green-200 text-green-900',
@@ -14,12 +14,25 @@ const HIGHLIGHT_COLORS = [
   'bg-orange-200 text-orange-900'
 ];
 
+const HIGHLIGHT_COLORS_DARK = [
+  'bg-yellow-300 text-yellow-900',
+  'bg-blue-300 text-blue-900',
+  'bg-green-300 text-green-900',
+  'bg-red-300 text-red-900',
+  'bg-purple-300 text-purple-900',
+  'bg-pink-300 text-pink-900',
+  'bg-indigo-300 text-indigo-900',
+  'bg-orange-300 text-orange-900'
+];
+
 export default function Home() {
   const [searchTerms, setSearchTerms] = useState<string>('');
+  const [debouncedSearchTerms, setDebouncedSearchTerms] = useState<string>('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     const initializeKJV = async () => {
@@ -35,140 +48,189 @@ export default function Home() {
     initializeKJV();
   }, []);
 
-  const handleSearch = async () => {
-    if (!searchTerms.trim()) return;
+  // Load saved preferences from localStorage
+  useEffect(() => {
+    const savedSearchTerms = localStorage.getItem('kjv-search-terms');
+    const savedDarkMode = localStorage.getItem('kjv-dark-mode');
 
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const terms = searchTerms.split(',').map(term => term.trim()).filter(term => term);
-      const searchResults = kjvParser.searchWords(terms);
-      setResults(searchResults);
-    } catch (err) {
-      setError('Search failed. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    if (savedSearchTerms) {
+      setSearchTerms(savedSearchTerms);
     }
-  };
+
+    if (savedDarkMode) {
+      setIsDarkMode(savedDarkMode === 'true');
+    }
+  }, []);
+
+  // Save search terms to localStorage
+  useEffect(() => {
+    if (searchTerms) {
+      localStorage.setItem('kjv-search-terms', searchTerms);
+    }
+  }, [searchTerms]);
+
+  // Save dark mode preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('kjv-dark-mode', isDarkMode.toString());
+  }, [isDarkMode]);
+
+  // Debounce search terms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerms(searchTerms);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerms]);
+
+  // Realtime search effect
+  useEffect(() => {
+    const performRealtimeSearch = async () => {
+      if (!debouncedSearchTerms.trim() || debouncedSearchTerms.trim().length < 2) {
+        setResults([]);
+        setError('');
+        return;
+      }
+
+      setIsLoading(true);
+      setError('');
+
+      try {
+        const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
+        const searchResults = kjvParser.searchWords(terms);
+        setResults(searchResults);
+      } catch (err) {
+        setError('Search failed. Please try again.');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isInitialized) {
+      performRealtimeSearch();
+    }
+  }, [debouncedSearchTerms, isInitialized]);
+
 
   const getSearchTermsArray = () => {
-    return searchTerms.split(',').map(term => term.trim().toLowerCase()).filter(term => term);
+    return searchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
+  };
+
+  const getHighlightColors = () => {
+    return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
   };
 
   const highlightText = (text: string, matches: string[], searchTerms: string[]): string => {
-    let highlightedText = text;
+    const colors = getHighlightColors();
+
+    // Create a map of words to highlight with their corresponding colors
+    const wordsToHighlight = new Map<string, string>();
 
     matches.forEach((match) => {
-      const termIndex = searchTerms.indexOf(match.toLowerCase());
-      const colorClass = HIGHLIGHT_COLORS[termIndex % HIGHLIGHT_COLORS.length];
-      const regex = new RegExp(`(${match})`, 'gi');
-      highlightedText = highlightedText.replace(regex, `<mark class="${colorClass} px-1 rounded">$1</mark>`);
+      const normalizedMatch = match.toLowerCase();
+      const termIndex = searchTerms.indexOf(normalizedMatch);
+      if (termIndex !== -1) {
+        const colorClass = colors[termIndex % colors.length];
+        // Use the original match casing for display, but normalized for lookup
+        wordsToHighlight.set(match.toLowerCase(), colorClass);
+      }
     });
 
-    return highlightedText;
+    // Split text into words and punctuation, preserving the original structure
+    const parts = text.split(/(\b\w+\b|[^\w\s]+)/g);
+
+    // Process each part and highlight matching words
+    const highlightedParts = parts.map(part => {
+      const normalizedPart = part.toLowerCase();
+      const colorClass = wordsToHighlight.get(normalizedPart);
+      if (colorClass && /^\w+$/.test(part)) { // Only highlight word characters
+        return `<mark class="${colorClass} px-0.5 rounded">${part}</mark>`;
+      }
+      return part;
+    });
+
+    return highlightedParts.join('');
   };
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading KJV text...</p>
+          <div className={`animate-spin rounded-full h-4 w-4 border-b-2 mx-auto mb-1 ${isDarkMode ? 'border-blue-400' : 'border-blue-600'}`}></div>
+          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading KJV text...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">KJV Bible Search</h1>
-          <p className="text-gray-600">Search for multiple words and see them highlighted in their verses</p>
-        </header>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="mb-4">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-              Enter search words (separated by commas):
+    <div className={`h-screen overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className="max-w-6xl mx-auto px-2 py-4 h-full flex flex-col">
+        <div className={`rounded-lg shadow-md p-2 mb-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <div className="flex justify-between items-center mb-2">
+            <h1 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>KJV Bible Search</h1>
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className={`p-0.5 rounded-full text-sm ${isDarkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-200 text-gray-700'} hover:opacity-80 transition-opacity`}
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDarkMode ? '☀️' : '🌙'}
+            </button>
+          </div>
+          <div className="mb-2">
+            <label htmlFor="search" className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Enter search words (separated by spaces):
             </label>
-            <input
-              id="search"
-              type="text"
-              value={searchTerms}
-              onChange={(e) => setSearchTerms(e.target.value)}
-              placeholder="faith, hope, love"
-              className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
+            <div className="relative">
+              <input
+                id="search"
+                type="text"
+                value={searchTerms}
+                onChange={(e) => setSearchTerms(e.target.value)}
+                placeholder="Start typing to search... (min 2 characters)"
+                className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'border-gray-300 text-black'
+                }`}
+              />
+              {isLoading && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${
+                    isDarkMode ? 'border-blue-400' : 'border-blue-600'
+                  }`}></div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <button
-            onClick={handleSearch}
-            disabled={isLoading || !searchTerms.trim()}
-            className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Searching...
-              </span>
-            ) : (
-              'Search'
-            )}
-          </button>
 
           {error && (
-            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            <div className={`mt-1.5 p-1 rounded text-xs ${isDarkMode ? 'bg-red-900 border border-red-700 text-red-300' : 'bg-red-100 border border-red-400 text-red-700'}`}>
               {error}
             </div>
           )}
         </div>
 
         {results.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <div className={`rounded-lg shadow-md p-2 flex flex-col flex-1 min-h-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="mb-2 flex-shrink-0">
+              <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 Found {results.length} verses
               </h2>
-              <div className="flex flex-wrap gap-2">
-                {searchTerms.split(',').map((term, index) => {
-                  const trimmedTerm = term.trim();
-                  if (!trimmedTerm) return null;
-                  return (
-                    <span
-                      key={index}
-                      className={`px-2 py-1 rounded text-sm font-medium ${HIGHLIGHT_COLORS[index % HIGHLIGHT_COLORS.length]}`}
-                    >
-                      {trimmedTerm}
-                    </span>
-                  );
-                })}
-              </div>
             </div>
 
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto space-y-1.5">
               {results.map((result, index) => (
-                <div key={index} className="border-l-4 border-blue-500 pl-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-gray-800">
+                <div key={index} className={`border-l-2 pl-1.5 py-1 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
+                  <div className="mb-0.5">
+                    <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                       {result.verse.reference}
                     </span>
-                    <div className="flex gap-1">
-                      {result.matches.map((match, matchIndex) => (
-                        <span
-                          key={matchIndex}
-                          className={`px-2 py-1 rounded text-xs font-medium ${HIGHLIGHT_COLORS[getSearchTermsArray().indexOf(match.toLowerCase()) % HIGHLIGHT_COLORS.length]}`}
-                        >
-                          {match}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                   <div
-                    className="text-gray-700 leading-relaxed"
+                    className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
                     dangerouslySetInnerHTML={{
                       __html: highlightText(result.verse.text, result.matches, getSearchTermsArray())
                     }}
@@ -179,9 +241,15 @@ export default function Home() {
           </div>
         )}
 
-        {results.length === 0 && searchTerms && !isLoading && (
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <p className="text-gray-500">No verses found containing the specified words.</p>
+        {results.length === 0 && searchTerms && searchTerms.trim().length >= 2 && !isLoading && (
+          <div className={`rounded-lg shadow-md p-2 text-center flex-1 flex items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No verses found containing the specified words.</p>
+          </div>
+        )}
+
+        {searchTerms && searchTerms.trim().length < 2 && !isLoading && (
+          <div className={`rounded-lg shadow-md p-2 text-center flex-1 flex items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Type at least 2 characters to start searching...</p>
           </div>
         )}
       </div>
