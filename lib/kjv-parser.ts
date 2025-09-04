@@ -121,7 +121,7 @@ class KJVParser {
       // Then try partial matches
       if (normalizedTerm.length >= 2) {
         for (const [indexedWord, verses] of this.wordIndex.entries()) {
-          if (indexedWord.includes(normalizedTerm)) {
+          if (indexedWord.startsWith(normalizedTerm)) {
             verses.forEach(verse => matchingVerses.add(verse));
           }
         }
