@@ -26,6 +26,29 @@ const HIGHLIGHT_COLORS_DARK = [
   'bg-orange-300 text-orange-900'
 ];
 
+// Separate colors for pairings search (second search box)
+const PAIRINGS_HIGHLIGHT_COLORS_LIGHT = [
+  'border-teal-500 text-teal-700 bg-transparent',
+  'border-cyan-500 text-cyan-700 bg-transparent',
+  'border-lime-500 text-lime-700 bg-transparent',
+  'border-amber-500 text-amber-700 bg-transparent',
+  'border-rose-500 text-rose-700 bg-transparent',
+  'border-violet-500 text-violet-700 bg-transparent',
+  'border-emerald-500 text-emerald-700 bg-transparent',
+  'border-sky-500 text-sky-700 bg-transparent'
+];
+
+const PAIRINGS_HIGHLIGHT_COLORS_DARK = [
+  'border-teal-400 text-teal-300 bg-transparent',
+  'border-cyan-400 text-cyan-300 bg-transparent',
+  'border-lime-400 text-lime-300 bg-transparent',
+  'border-amber-400 text-amber-300 bg-transparent',
+  'border-rose-400 text-rose-300 bg-transparent',
+  'border-violet-400 text-violet-300 bg-transparent',
+  'border-emerald-400 text-emerald-300 bg-transparent',
+  'border-sky-400 text-sky-300 bg-transparent'
+];
+
 export default function Home() {
   const [searchTerms, setSearchTerms] = useState<string>('');
   const [debouncedSearchTerms, setDebouncedSearchTerms] = useState<string>('');
@@ -56,6 +79,10 @@ export default function Home() {
     return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
   }, [isDarkMode]);
 
+  const getPairingsHighlightColors = useCallback(() => {
+    return isDarkMode ? PAIRINGS_HIGHLIGHT_COLORS_DARK : PAIRINGS_HIGHLIGHT_COLORS_LIGHT;
+  }, [isDarkMode]);
+
   const formatTextWithColors = useCallback((text: string) => {
     if (!text.trim()) {
       return '';
@@ -79,6 +106,30 @@ export default function Home() {
       return part;
     }).join('');
   }, [getHighlightColors]);
+
+  const formatPairingsTextWithColors = useCallback((text: string) => {
+    if (!text.trim()) {
+      return '';
+    }
+
+    const colors = getPairingsHighlightColors();
+    // Split by spaces but preserve the spaces
+    const parts = text.split(/(\s+)/);
+    let wordIndex = 0;
+
+    return parts.map(part => {
+      if (/^\s+$/.test(part)) {
+        // This is whitespace, return as-is
+        return part;
+      } else if (part.trim()) {
+        // This is a word, wrap it in a colored span
+        const colorClass = colors[wordIndex % colors.length];
+        wordIndex++;
+        return `<span class="${colorClass} border px-0.5 rounded">${part}</span>`;
+      }
+      return part;
+    }).join('');
+  }, [getPairingsHighlightColors]);
 
   useEffect(() => {
     const initializeKJV = async () => {
@@ -327,9 +378,9 @@ export default function Home() {
   // Update pairings contentEditable when pairingsSearchTerms changes externally (like from localStorage)
   useEffect(() => {
     if (pairingsEditorRef && document.activeElement !== pairingsEditorRef) {
-      pairingsEditorRef.innerHTML = formatTextWithColors(pairingsSearchTerms);
+      pairingsEditorRef.innerHTML = formatPairingsTextWithColors(pairingsSearchTerms);
     }
-  }, [pairingsSearchTerms, isDarkMode, pairingsEditorRef, formatTextWithColors]);
+  }, [pairingsSearchTerms, isDarkMode, pairingsEditorRef, formatPairingsTextWithColors]);
 
 
   const getSearchTermsArray = () => {
@@ -378,6 +429,17 @@ export default function Home() {
     const searchTermsArray = getSearchTermsArray();
     const pairingsSearchTermsArray = pairingsSearchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
 
+    // Function to highlight text with both color schemes
+    const highlightPairingText = (text: string): string => {
+      // First highlight with main search terms (original colors)
+      let result = highlightText(text, [], searchTermsArray, false);
+
+      // Then highlight with pairings search terms (pairings colors)
+      result = highlightText(result, [], pairingsSearchTermsArray, true);
+
+      return result;
+    };
+
     return (
       <div className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
 
@@ -391,7 +453,7 @@ export default function Home() {
             <div
               className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
               dangerouslySetInnerHTML={{
-                __html: highlightText(verse.text, [pairing.term1, pairing.term2], searchTermsArray.concat(pairingsSearchTermsArray))
+                __html: highlightPairingText(verse.text)
               }}
             />
           </div>
@@ -400,8 +462,8 @@ export default function Home() {
     );
   };
 
-  const highlightText = (text: string, matches: string[], searchTerms: string[]): string => {
-    const colors = getHighlightColors();
+  const highlightText = (text: string, matches: string[], searchTerms: string[], usePairingsColors: boolean = false): string => {
+    const colors = usePairingsColors ? getPairingsHighlightColors() : getHighlightColors();
 
     // Create a map of search terms to colors
     const termToColor = new Map<string, string>();
@@ -421,7 +483,8 @@ export default function Home() {
         const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Create a regex that matches the term as a substring, case insensitive
         const regex = new RegExp(`(${escapedTerm})`, 'gi');
-        result = result.replace(regex, `<mark class="${colorClass} px-0.5 rounded">$1</mark>`);
+        const borderClass = usePairingsColors ? 'border' : '';
+        result = result.replace(regex, `<mark class="${colorClass} ${borderClass} px-0.5 rounded">$1</mark>`);
       }
     }
 
@@ -816,7 +879,7 @@ export default function Home() {
                           }
 
                           // Update HTML with colored spans
-                          e.currentTarget.innerHTML = formatTextWithColors(text);
+                          e.currentTarget.innerHTML = formatPairingsTextWithColors(text);
 
                           // Restore cursor position
                           if (found && text) {
@@ -888,7 +951,7 @@ export default function Home() {
                           // Update HTML and place cursor at end
                           setTimeout(() => {
                             if (target && target.isConnected) {
-                              target.innerHTML = formatTextWithColors(newText);
+                              target.innerHTML = formatPairingsTextWithColors(newText);
                               // Place cursor at end
                               const selection = window.getSelection();
                               if (selection) {
