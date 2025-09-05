@@ -325,8 +325,8 @@ class KJVParser {
         // Filter out already processed pairings to prevent duplicates
         for (const pairing of pairPairings) {
           const pairingKey = pairing.proximity === 0
-            ? `same-${pairing.verses[0].position}`
-            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}`;
+            ? `same-${pairing.verses[0].position}-${term1}-${term2}`
+            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}-${term1}-${term2}`;
 
           if (!processedPairings.has(pairingKey)) {
             pairings.push(pairing);
@@ -415,8 +415,8 @@ class KJVParser {
         // Filter out already processed pairings to prevent duplicates
         for (const pairing of pairPairings) {
           const pairingKey = pairing.proximity === 0
-            ? `same-${pairing.verses[0].position}`
-            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}`;
+            ? `same-${pairing.verses[0].position}-${term1}-${term2}`
+            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}-${term1}-${term2}`;
 
           if (!processedPairings.has(pairingKey)) {
             pairings.push(pairing);

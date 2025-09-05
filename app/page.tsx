@@ -81,9 +81,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string>('');
-  const [isDarkMode, setIsDarkMode] = useState(
-    activeTabState?.isDarkMode || false
-  );
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const [editorRef, setEditorRef] = useState<HTMLDivElement | null>(null);
   const [pairingsEditorRef, setPairingsEditorRef] =
     useState<HTMLDivElement | null>(null);
@@ -259,6 +258,16 @@ export default function Home() {
     },
     [getPairingsHighlightColors]
   );
+
+  // Handle client-side hydration
+  useEffect(() => {
+    setHasMounted(true);
+    // Only set dark mode on initial mount, don't override user changes
+    if (!hasMounted) {
+      const currentTabState = TabManagerService.getActiveTab(tabManager);
+      setIsDarkMode(currentTabState?.isDarkMode || false);
+    }
+  }, [hasMounted, tabManager]);
 
   useEffect(() => {
     const initializeKJV = async () => {
@@ -714,24 +723,12 @@ export default function Home() {
     return result;
   };
 
-  if (!isInitialized) {
+  if (!isInitialized || !hasMounted) {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center ${
-          isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
-        }`}
-      >
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className='text-center'>
-          <div
-            className={`animate-spin rounded-full h-4 w-4 border-b-2 mx-auto mb-1 ${
-              isDarkMode ? 'border-blue-400' : 'border-blue-600'
-            }`}
-          ></div>
-          <p
-            className={`text-sm ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-600'
-            }`}
-          >
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 mx-auto mb-1 border-blue-600"></div>
+          <p className="text-sm text-gray-600">
             Loading KJV text...
           </p>
         </div>
