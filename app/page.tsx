@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { kjvParser, SearchResult } from '../lib/kjv-parser';
+import { kjvParser, SearchResult, VersePairing } from '../lib/kjv-parser';
 import { VirtualScroll } from '../lib/virtual-scroll';
 
 const HIGHLIGHT_COLORS_LIGHT = [
@@ -30,12 +30,14 @@ export default function Home() {
   const [searchTerms, setSearchTerms] = useState<string>('');
   const [debouncedSearchTerms, setDebouncedSearchTerms] = useState<string>('');
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [pairings, setPairings] = useState<VersePairing[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [editorRef, setEditorRef] = useState<HTMLDivElement | null>(null);
   const [containerHeight, setContainerHeight] = useState(400);
+  const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
 
   const getHighlightColors = useCallback(() => {
     return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
@@ -63,7 +65,7 @@ export default function Home() {
       }
       return part;
     }).join('');
-  }, [isDarkMode, getHighlightColors]);
+  }, [getHighlightColors]);
 
   useEffect(() => {
     const initializeKJV = async () => {
@@ -140,8 +142,16 @@ export default function Home() {
         const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
         console.log('Search terms:', terms, 'Original:', debouncedSearchTerms);
         const searchResults = kjvParser.searchWords(terms);
-        console.log('Search results:', searchResults.length);
+        const versePairings = kjvParser.findVersePairings(terms).sort((a, b) => {
+          // Sort by proximity (same verse first), then by first verse position
+          if (a.proximity !== b.proximity) {
+            return a.proximity - b.proximity;
+          }
+          return a.verses[0].position - b.verses[0].position;
+        });
+        console.log('Search results:', searchResults.length, 'Pairings:', versePairings.length);
         setResults(searchResults);
+        setPairings(versePairings);
       } catch (err) {
         setError('Search failed. Please try again.');
         console.error(err);
@@ -165,6 +175,31 @@ export default function Home() {
 
   const getSearchTermsArray = () => {
     return searchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
+  };
+
+  const renderPairing = (pairing: VersePairing) => {
+    const searchTermsArray = getSearchTermsArray();
+
+    return (
+      <div className={`border-l-2 pl-1.5 py-2 mb-2 h-full flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
+
+        {pairing.verses.map((verse, verseIndex) => (
+          <div key={verse.position} className={verseIndex > 0 ? 'mt-2 pt-2 border-t border-gray-300 dark:border-gray-600' : ''}>
+            <div className="mb-0.5">
+              <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                {verse.reference}
+              </span>
+            </div>
+            <div
+              className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+              dangerouslySetInnerHTML={{
+                __html: highlightText(verse.text, [pairing.term1, pairing.term2], searchTermsArray)
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const highlightText = (text: string, matches: string[], searchTerms: string[]): string => {
@@ -377,44 +412,87 @@ export default function Home() {
           )}
         </div>
 
-        {results.length > 0 && (
+        {(results.length > 0 || pairings.length > 0) && (
           <div className={`rounded-lg shadow-md p-2 flex flex-col flex-1 min-h-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="mb-2 flex-shrink-0">
-              <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                Found {results.length} verses
-              </h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Found {activeTab === 'all' ? results.length : pairings.length} {activeTab === 'all' ? 'verses' : 'pairings'}
+                </h2>
+                <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      activeTab === 'all'
+                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                        : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    All Results
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('pairings')}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      activeTab === 'pairings'
+                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                        : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Verse Pairings
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <VirtualScroll
-              items={results}
-              itemHeight={(result) => {
-                // Estimate height based on text length
-                const baseHeight = 40; // Height for reference
-                const textHeight = Math.ceil(result.verse.text.length / 80) * 16; // ~80 chars per line, 16px line height
-                return Math.max(60, baseHeight + textHeight + 16); // Min 60px, add padding
-              }}
-              containerHeight={containerHeight}
-              className="flex-1 scrollbar-visible"
-              renderItem={(result, index) => (
-                <div className={`border-l-2 pl-1.5 py-1 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
-                  <div className="mb-0.5">
-                    <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                      {result.verse.reference}
-                    </span>
+            {activeTab === 'all' ? (
+              <VirtualScroll
+                items={results}
+                itemHeight={(result) => {
+                  // Estimate height based on text length
+                  const baseHeight = 40; // Height for reference
+                  const textHeight = Math.ceil(result.verse.text.length / 80) * 16; // ~80 chars per line, 16px line height
+                  return Math.max(60, baseHeight + textHeight + 16); // Min 60px, add padding
+                }}
+                containerHeight={containerHeight}
+                className="flex-1 scrollbar-visible"
+                renderItem={(result) => (
+                  <div className={`border-l-2 pl-1.5 py-1 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
+                    <div className="mb-0.5">
+                      <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                        {result.verse.reference}
+                      </span>
+                    </div>
+                    <div
+                      className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                      dangerouslySetInnerHTML={{
+                        __html: highlightText(result.verse.text, result.matches, getSearchTermsArray())
+                      }}
+                    />
                   </div>
-                  <div
-                    className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
-                    dangerouslySetInnerHTML={{
-                      __html: highlightText(result.verse.text, result.matches, getSearchTermsArray())
-                    }}
-                  />
-                </div>
-              )}
-            />
+                )}
+              />
+            ) : (
+              <VirtualScroll
+                items={pairings}
+                itemHeight={(pairing) => {
+                  // Estimate height based on number of verses and text length
+                  const baseHeight = 50; // Height for pairing info
+                  const verseHeights = pairing.verses.map(verse =>
+                    Math.ceil(verse.text.length / 80) * 16 + 20 // text height + verse header
+                  );
+                  const totalVerseHeight = verseHeights.reduce((sum, height) => sum + height, 0);
+                  const separatorHeight = pairing.verses.length > 1 ? 20 : 0; // border separator
+                  return Math.max(80, baseHeight + totalVerseHeight + separatorHeight);
+                }}
+                containerHeight={containerHeight}
+                className="flex-1 scrollbar-visible"
+                renderItem={renderPairing}
+              />
+            )}
           </div>
         )}
 
-        {results.length === 0 && searchTerms && searchTerms.trim().length >= 2 && !isLoading && (
+        {results.length === 0 && pairings.length === 0 && searchTerms && searchTerms.trim().length >= 2 && !isLoading && (
           <div className={`rounded-lg shadow-md p-2 text-center flex-1 flex items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No verses found containing the specified words.</p>
           </div>

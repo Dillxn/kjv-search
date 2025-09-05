@@ -12,6 +12,13 @@ export interface SearchResult {
   matches: string[];
 }
 
+export interface VersePairing {
+  verses: Verse[];
+  term1: string;
+  term2: string;
+  proximity: number; // 0 for same verse, otherwise verse distance
+}
+
 // Book name mappings to canonical order
 const BOOK_ORDER: Record<string, number> = {
   'Genesis': 1, 'Exodus': 2, 'Leviticus': 3, 'Numbers': 4, 'Deuteronomy': 5,
@@ -144,6 +151,94 @@ class KJVParser {
     results.sort((a, b) => a.verse.position - b.verse.position);
 
     return results;
+  }
+
+  findVersePairings(searchTerms: string[]): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const termToVerses = new Map<string, Verse[]>();
+
+    // Get verses for each search term
+    for (const term of searchTerms) {
+      const normalizedTerm = term.toLowerCase().trim();
+      if (!normalizedTerm) continue;
+
+      const matchingVerses = new Set<Verse>();
+
+      // First try exact match
+      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
+      exactMatches.forEach(verse => matchingVerses.add(verse));
+
+      // Then try partial matches
+      if (normalizedTerm.length >= 2) {
+        for (const [indexedWord, verses] of this.wordIndex.entries()) {
+          if (indexedWord.startsWith(normalizedTerm)) {
+            verses.forEach(verse => matchingVerses.add(verse));
+          }
+        }
+      }
+
+      termToVerses.set(term, Array.from(matchingVerses));
+    }
+
+    const termArray = Array.from(termToVerses.keys());
+
+    // Generate all possible pairs of terms
+    for (let i = 0; i < termArray.length; i++) {
+      for (let j = i + 1; j < termArray.length; j++) {
+        const term1 = termArray[i];
+        const term2 = termArray[j];
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        // Find pairings between these two terms
+        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2);
+        pairings.push(...pairPairings);
+      }
+    }
+
+    return pairings;
+  }
+
+  private findPairingsForTerms(term1: string, term2: string, verses1: Verse[], verses2: Verse[]): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const processed = new Set<string>();
+
+    // Find same verse pairings first (proximity 0)
+    for (const verse of verses1) {
+      if (verses2.some(v => v.position === verse.position)) {
+        const key = `same-${verse.position}`;
+        if (!processed.has(key)) {
+          pairings.push({
+            verses: [verse],
+            term1,
+            term2,
+            proximity: 0
+          });
+          processed.add(key);
+        }
+      }
+    }
+
+    // Find different verse pairings
+    for (const verse1 of verses1) {
+      for (const verse2 of verses2) {
+        if (verse1.position === verse2.position) continue; // Skip same verse (already handled above)
+
+        const key = `pair-${Math.min(verse1.position, verse2.position)}-${Math.max(verse1.position, verse2.position)}`;
+        if (!processed.has(key)) {
+          const proximity = Math.abs(verse1.position - verse2.position);
+          pairings.push({
+            verses: verse1.position < verse2.position ? [verse1, verse2] : [verse2, verse1],
+            term1,
+            term2,
+            proximity
+          });
+          processed.add(key);
+        }
+      }
+    }
+
+    return pairings;
   }
 
   private compareVerses(a: Verse, b: Verse): number {
