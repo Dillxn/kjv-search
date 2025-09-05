@@ -99,6 +99,10 @@ export default function Home() {
     const savedSearchTerms = localStorage.getItem('kjv-search-terms');
     const savedPairingsSearchTerms = localStorage.getItem('kjv-pairings-search-terms');
     const savedDarkMode = localStorage.getItem('kjv-dark-mode');
+    const savedSelectedTestament = localStorage.getItem('kjv-selected-testament');
+    const savedSelectedBooks = localStorage.getItem('kjv-selected-books');
+    const savedShowFilters = localStorage.getItem('kjv-show-filters');
+    const savedActiveTab = localStorage.getItem('kjv-active-tab');
 
     if (savedSearchTerms) {
       setSearchTerms(savedSearchTerms);
@@ -112,14 +116,37 @@ export default function Home() {
       setIsDarkMode(savedDarkMode === 'true');
     }
 
+    if (savedSelectedTestament && ['all', 'old', 'new'].includes(savedSelectedTestament)) {
+      setSelectedTestament(savedSelectedTestament as 'all' | 'old' | 'new');
+    }
+
+    if (savedSelectedBooks) {
+      try {
+        const books = JSON.parse(savedSelectedBooks);
+        if (Array.isArray(books) && books.every(book => typeof book === 'string')) {
+          setSelectedBooks(books);
+        }
+      } catch {
+        console.warn('Failed to parse saved selected books from localStorage');
+      }
+    }
+
+    if (savedShowFilters) {
+      setShowFilters(savedShowFilters === 'true');
+    }
+
+    if (savedActiveTab && ['all', 'pairings'].includes(savedActiveTab)) {
+      setActiveTab(savedActiveTab as 'all' | 'pairings');
+    }
+
     // Set initial container height
     const updateHeight = () => {
       setContainerHeight(window.innerHeight - 200);
     };
-    
+
     updateHeight();
     window.addEventListener('resize', updateHeight);
-    
+
     return () => window.removeEventListener('resize', updateHeight);
   }, []);
 
@@ -141,6 +168,26 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('kjv-dark-mode', isDarkMode.toString());
   }, [isDarkMode]);
+
+  // Save selected testament to localStorage
+  useEffect(() => {
+    localStorage.setItem('kjv-selected-testament', selectedTestament);
+  }, [selectedTestament]);
+
+  // Save selected books to localStorage
+  useEffect(() => {
+    localStorage.setItem('kjv-selected-books', JSON.stringify(selectedBooks));
+  }, [selectedBooks]);
+
+  // Save show filters preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('kjv-show-filters', showFilters.toString());
+  }, [showFilters]);
+
+  // Save active tab to localStorage
+  useEffect(() => {
+    localStorage.setItem('kjv-active-tab', activeTab);
+  }, [activeTab]);
 
   // Update search filters when testament or book selections change
   useEffect(() => {
