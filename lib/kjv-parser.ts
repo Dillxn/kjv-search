@@ -156,9 +156,17 @@ class KJVParser {
   findVersePairings(searchTerms: string[]): VersePairing[] {
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
+    const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
+    const MAX_SEARCH_TERMS = 8; // Limit number of terms to prevent combinatorial explosion
+
+    // Limit the number of search terms to prevent combinatorial explosion
+    const limitedTerms = searchTerms.slice(0, MAX_SEARCH_TERMS);
+    if (searchTerms.length > MAX_SEARCH_TERMS) {
+      console.warn(`Limited search terms from ${searchTerms.length} to ${MAX_SEARCH_TERMS} to prevent memory issues`);
+    }
 
     // Get verses for each search term
-    for (const term of searchTerms) {
+    for (const term of limitedTerms) {
       const normalizedTerm = term.toLowerCase().trim();
       if (!normalizedTerm) continue;
 
@@ -185,6 +193,11 @@ class KJVParser {
     // Generate all possible pairs of terms
     for (let i = 0; i < termArray.length; i++) {
       for (let j = i + 1; j < termArray.length; j++) {
+        if (pairings.length >= MAX_TOTAL_PAIRINGS) {
+          console.warn(`Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`);
+          break;
+        }
+
         const term1 = termArray[i];
         const term2 = termArray[j];
         const verses1 = termToVerses.get(term1) || [];
@@ -194,6 +207,7 @@ class KJVParser {
         const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2);
         pairings.push(...pairPairings);
       }
+      if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
     }
 
     return pairings;
@@ -202,9 +216,12 @@ class KJVParser {
   private findPairingsForTerms(term1: string, term2: string, verses1: Verse[], verses2: Verse[]): VersePairing[] {
     const pairings: VersePairing[] = [];
     const processed = new Set<string>();
+    const MAX_PAIRINGS_PER_TERM_PAIR = 5000; // Limit to prevent memory explosion
 
     // Find same verse pairings first (proximity 0)
     for (const verse of verses1) {
+      if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
+
       if (verses2.some(v => v.position === verse.position)) {
         const key = `same-${verse.position}`;
         if (!processed.has(key)) {
@@ -219,14 +236,22 @@ class KJVParser {
       }
     }
 
-    // Find different verse pairings
+    // Find different verse pairings with proximity limits
+    const MAX_PROXIMITY = 100; // Only find pairings within 100 verses of each other
     for (const verse1 of verses1) {
+      if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
+
       for (const verse2 of verses2) {
+        if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
+
         if (verse1.position === verse2.position) continue; // Skip same verse (already handled above)
+
+        // Skip if verses are too far apart
+        const proximity = Math.abs(verse1.position - verse2.position);
+        if (proximity > MAX_PROXIMITY) continue;
 
         const key = `pair-${Math.min(verse1.position, verse2.position)}-${Math.max(verse1.position, verse2.position)}`;
         if (!processed.has(key)) {
-          const proximity = Math.abs(verse1.position - verse2.position);
           pairings.push({
             verses: verse1.position < verse2.position ? [verse1, verse2] : [verse2, verse1],
             term1,
