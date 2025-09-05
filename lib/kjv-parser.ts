@@ -17,6 +17,7 @@ export interface VersePairing {
   term1: string;
   term2: string;
   proximity: number; // 0 for same verse, otherwise verse distance
+  isBetweenGroups?: boolean; // true if pairing is between two different search groups
 }
 
 // Book name mappings to canonical order
@@ -204,7 +205,7 @@ class KJVParser {
         const verses2 = termToVerses.get(term2) || [];
 
         // Find pairings between these two terms
-        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2);
+        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2, false);
         pairings.push(...pairPairings);
       }
       if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
@@ -213,7 +214,69 @@ class KJVParser {
     return pairings;
   }
 
-  private findPairingsForTerms(term1: string, term2: string, verses1: Verse[], verses2: Verse[]): VersePairing[] {
+  findVersePairingsBetweenGroups(group1Terms: string[], group2Terms: string[]): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const termToVerses = new Map<string, Verse[]>();
+    const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
+    const MAX_SEARCH_TERMS_PER_GROUP = 8; // Limit number of terms per group to prevent combinatorial explosion
+
+    // Limit the number of search terms per group
+    const limitedGroup1 = group1Terms.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
+    const limitedGroup2 = group2Terms.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
+
+    if (group1Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
+      console.warn(`Limited group1 terms from ${group1Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`);
+    }
+    if (group2Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
+      console.warn(`Limited group2 terms from ${group2Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`);
+    }
+
+    // Get verses for each search term in both groups
+    const allTerms = [...limitedGroup1, ...limitedGroup2];
+    for (const term of allTerms) {
+      const normalizedTerm = term.toLowerCase().trim();
+      if (!normalizedTerm) continue;
+
+      const matchingVerses = new Set<Verse>();
+
+      // First try exact match
+      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
+      exactMatches.forEach(verse => matchingVerses.add(verse));
+
+      // Then try partial matches
+      if (normalizedTerm.length >= 2) {
+        for (const [indexedWord, verses] of this.wordIndex.entries()) {
+          if (indexedWord.startsWith(normalizedTerm)) {
+            verses.forEach(verse => matchingVerses.add(verse));
+          }
+        }
+      }
+
+      termToVerses.set(term, Array.from(matchingVerses));
+    }
+
+    // Generate pairings only between terms from different groups
+    for (const term1 of limitedGroup1) {
+      for (const term2 of limitedGroup2) {
+        if (pairings.length >= MAX_TOTAL_PAIRINGS) {
+          console.warn(`Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`);
+          break;
+        }
+
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        // Find pairings between these two terms from different groups
+        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2, true);
+        pairings.push(...pairPairings);
+      }
+      if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
+    }
+
+    return pairings;
+  }
+
+  private findPairingsForTerms(term1: string, term2: string, verses1: Verse[], verses2: Verse[], isBetweenGroups: boolean = false): VersePairing[] {
     const pairings: VersePairing[] = [];
     const processed = new Set<string>();
     const MAX_PAIRINGS_PER_TERM_PAIR = 5000; // Limit to prevent memory explosion
@@ -229,7 +292,8 @@ class KJVParser {
             verses: [verse],
             term1,
             term2,
-            proximity: 0
+            proximity: 0,
+            isBetweenGroups
           });
           processed.add(key);
         }
@@ -256,7 +320,8 @@ class KJVParser {
             verses: verse1.position < verse2.position ? [verse1, verse2] : [verse2, verse1],
             term1,
             term2,
-            proximity
+            proximity,
+            isBetweenGroups
           });
           processed.add(key);
         }

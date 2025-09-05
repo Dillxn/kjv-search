@@ -29,6 +29,8 @@ const HIGHLIGHT_COLORS_DARK = [
 export default function Home() {
   const [searchTerms, setSearchTerms] = useState<string>('');
   const [debouncedSearchTerms, setDebouncedSearchTerms] = useState<string>('');
+  const [pairingsSearchTerms, setPairingsSearchTerms] = useState<string>('');
+  const [debouncedPairingsSearchTerms, setDebouncedPairingsSearchTerms] = useState<string>('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [pairings, setPairings] = useState<VersePairing[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +38,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [editorRef, setEditorRef] = useState<HTMLDivElement | null>(null);
+  const [pairingsEditorRef, setPairingsEditorRef] = useState<HTMLDivElement | null>(null);
   const [containerHeight, setContainerHeight] = useState(400);
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
 
@@ -84,10 +87,15 @@ export default function Home() {
   // Load saved preferences from localStorage and set container height
   useEffect(() => {
     const savedSearchTerms = localStorage.getItem('kjv-search-terms');
+    const savedPairingsSearchTerms = localStorage.getItem('kjv-pairings-search-terms');
     const savedDarkMode = localStorage.getItem('kjv-dark-mode');
 
     if (savedSearchTerms) {
       setSearchTerms(savedSearchTerms);
+    }
+
+    if (savedPairingsSearchTerms) {
+      setPairingsSearchTerms(savedPairingsSearchTerms);
     }
 
     if (savedDarkMode) {
@@ -112,6 +120,13 @@ export default function Home() {
     }
   }, [searchTerms]);
 
+  // Save pairings search terms to localStorage
+  useEffect(() => {
+    if (pairingsSearchTerms) {
+      localStorage.setItem('kjv-pairings-search-terms', pairingsSearchTerms);
+    }
+  }, [pairingsSearchTerms]);
+
   // Save dark mode preference to localStorage
   useEffect(() => {
     localStorage.setItem('kjv-dark-mode', isDarkMode.toString());
@@ -125,6 +140,15 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, [searchTerms]);
+
+  // Debounce pairings search terms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedPairingsSearchTerms(pairingsSearchTerms);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [pairingsSearchTerms]);
 
   // Realtime search effect
   useEffect(() => {
@@ -142,13 +166,33 @@ export default function Home() {
         const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
         console.log('Search terms:', terms, 'Original:', debouncedSearchTerms);
         const searchResults = kjvParser.searchWords(terms);
-        const versePairings = kjvParser.findVersePairings(terms).sort((a, b) => {
-          // Sort by proximity (same verse first), then by first verse position
-          if (a.proximity !== b.proximity) {
-            return a.proximity - b.proximity;
+
+        // For pairings, use both search boxes when on pairings tab
+        let versePairings: VersePairing[] = [];
+        if (activeTab === 'pairings') {
+          const mainTerms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
+          const pairingsTerms = debouncedPairingsSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
+
+          if (mainTerms.length > 0 && pairingsTerms.length > 0) {
+            versePairings = kjvParser.findVersePairingsBetweenGroups(mainTerms, pairingsTerms).sort((a, b) => {
+              // Sort by proximity (same verse first), then by first verse position
+              if (a.proximity !== b.proximity) {
+                return a.proximity - b.proximity;
+              }
+              return a.verses[0].position - b.verses[0].position;
+            });
           }
-          return a.verses[0].position - b.verses[0].position;
-        });
+        } else {
+          // For all results tab, use traditional pairings logic
+          versePairings = kjvParser.findVersePairings(terms).sort((a, b) => {
+            // Sort by proximity (same verse first), then by first verse position
+            if (a.proximity !== b.proximity) {
+              return a.proximity - b.proximity;
+            }
+            return a.verses[0].position - b.verses[0].position;
+          });
+        }
+
         console.log('Search results:', searchResults.length, 'Pairings:', versePairings.length);
         setResults(searchResults);
         setPairings(versePairings);
@@ -163,7 +207,7 @@ export default function Home() {
     if (isInitialized) {
       performRealtimeSearch();
     }
-  }, [debouncedSearchTerms, isInitialized]);
+  }, [debouncedSearchTerms, debouncedPairingsSearchTerms, activeTab, isInitialized]);
 
   // Update contentEditable when searchTerms changes externally (like from localStorage)
   useEffect(() => {
@@ -172,6 +216,13 @@ export default function Home() {
     }
   }, [searchTerms, isDarkMode, editorRef, formatTextWithColors]);
 
+  // Update pairings contentEditable when pairingsSearchTerms changes externally (like from localStorage)
+  useEffect(() => {
+    if (pairingsEditorRef && document.activeElement !== pairingsEditorRef) {
+      pairingsEditorRef.innerHTML = formatTextWithColors(pairingsSearchTerms);
+    }
+  }, [pairingsSearchTerms, isDarkMode, pairingsEditorRef, formatTextWithColors]);
+
 
   const getSearchTermsArray = () => {
     return searchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
@@ -179,12 +230,13 @@ export default function Home() {
 
   const renderPairing = (pairing: VersePairing) => {
     const searchTermsArray = getSearchTermsArray();
+    const pairingsSearchTermsArray = pairingsSearchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
 
     return (
-      <div className={`border-l-2 pl-1.5 py-2 mb-2 h-full flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
+      <div className={`border-l-2 pl-3 py-1.5 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
 
         {pairing.verses.map((verse, verseIndex) => (
-          <div key={verse.position} className={verseIndex > 0 ? 'mt-2 pt-2 border-t border-gray-300 dark:border-gray-600' : ''}>
+          <div key={verse.position} className={verseIndex > 0 ? 'mt-1.5' : ''}>
             <div className="mb-0.5">
               <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                 {verse.reference}
@@ -193,7 +245,7 @@ export default function Home() {
             <div
               className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
               dangerouslySetInnerHTML={{
-                __html: highlightText(verse.text, [pairing.term1, pairing.term2], searchTermsArray)
+                __html: highlightText(verse.text, [pairing.term1, pairing.term2], searchTermsArray.concat(pairingsSearchTermsArray))
               }}
             />
           </div>
@@ -442,6 +494,157 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {activeTab === 'pairings' && (
+                <div className="mb-2">
+                  <label htmlFor="pairings-search" className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Pairings Search Group 2 (optional - leave empty for traditional pairings):
+                  </label>
+                  <div className="relative">
+                    <div
+                      ref={setPairingsEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning={true}
+                      data-placeholder="Enter second group of search words... (min 2 characters)"
+                      onInput={(e) => {
+                        const text = e.currentTarget.textContent || '';
+                        setPairingsSearchTerms(text);
+
+                        // Re-apply styling after input
+                        if (e.currentTarget === document.activeElement) {
+                          const selection = window.getSelection();
+                          if (!selection || selection.rangeCount === 0) return;
+
+                          // Get cursor position relative to the text content
+                          const range = selection.getRangeAt(0);
+                          let cursorOffset = 0;
+
+                          // Calculate the actual text offset by walking through all text nodes
+                          const walker = document.createTreeWalker(
+                            e.currentTarget,
+                            NodeFilter.SHOW_TEXT,
+                            null
+                          );
+
+                          let node;
+                          let found = false;
+                          while (node = walker.nextNode()) {
+                            if (node === range.startContainer) {
+                              cursorOffset += range.startOffset;
+                              found = true;
+                              break;
+                            }
+                            cursorOffset += node.textContent?.length || 0;
+                          }
+
+                          // Update HTML with colored spans
+                          e.currentTarget.innerHTML = formatTextWithColors(text);
+
+                          // Restore cursor position
+                          if (found && text) {
+                            try {
+                              // Walk through the new DOM structure to find the correct position
+                              const newWalker = document.createTreeWalker(
+                                e.currentTarget,
+                                NodeFilter.SHOW_TEXT,
+                                null
+                              );
+
+                              let currentOffset = 0;
+                              let targetNode = null;
+                              let targetOffset = 0;
+
+                              while (node = newWalker.nextNode()) {
+                                const nodeLength = node.textContent?.length || 0;
+                                if (currentOffset + nodeLength >= cursorOffset) {
+                                  targetNode = node;
+                                  targetOffset = cursorOffset - currentOffset;
+                                  break;
+                                }
+                                currentOffset += nodeLength;
+                              }
+
+                              if (targetNode) {
+                                const newRange = document.createRange();
+                                newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+                                newRange.collapse(true);
+                                selection.removeAllRanges();
+                                selection.addRange(newRange);
+                              }
+                            } catch {
+                              // Fallback: place cursor at the calculated position in plain text
+                              const textNodes = [];
+                              const fallbackWalker = document.createTreeWalker(
+                                e.currentTarget,
+                                NodeFilter.SHOW_TEXT,
+                                null
+                              );
+                              let fallbackNode;
+                              while (fallbackNode = fallbackWalker.nextNode()) {
+                                textNodes.push(fallbackNode);
+                              }
+
+                              if (textNodes.length > 0) {
+                                const lastNode = textNodes[textNodes.length - 1];
+                                const newRange = document.createRange();
+                                newRange.setStart(lastNode, Math.min(cursorOffset, lastNode.textContent?.length || 0));
+                                newRange.collapse(true);
+                                selection.removeAllRanges();
+                                selection.addRange(newRange);
+                              }
+                            }
+                          }
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                        } else if (e.key === ' ') {
+                          // Handle space key to ensure proper word separation
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          const text = target.textContent || '';
+                          const newText = text + ' ';
+                          setPairingsSearchTerms(newText);
+
+                          // Update HTML and place cursor at end
+                          setTimeout(() => {
+                            if (target && target.isConnected) {
+                              target.innerHTML = formatTextWithColors(newText);
+                              // Place cursor at end
+                              const selection = window.getSelection();
+                              if (selection) {
+                                const range = document.createRange();
+                                range.selectNodeContents(target);
+                                range.collapse(false);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                              }
+                            }
+                          }, 0);
+                        }
+                      }}
+
+                      className={`w-full px-1.5 py-1 pr-6 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[28px] outline-none placeholder-editor ${
+                        isDarkMode
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'border-gray-300 text-black bg-white'
+                      }`}
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word'
+                      }}
+                    />
+                    {isLoading && (
+                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${
+                          isDarkMode ? 'border-blue-400' : 'border-blue-600'
+                        }`}></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {activeTab === 'all' ? (
@@ -449,14 +652,14 @@ export default function Home() {
                 items={results}
                 itemHeight={(result) => {
                   // Estimate height based on text length
-                  const baseHeight = 40; // Height for reference
-                  const textHeight = Math.ceil(result.verse.text.length / 80) * 16; // ~80 chars per line, 16px line height
-                  return Math.max(60, baseHeight + textHeight + 16); // Min 60px, add padding
+                  const baseHeight = 24; // Height for reference (reduced)
+                  const textHeight = Math.ceil(result.verse.text.length / 75) * 14; // ~75 chars per line, 14px line height
+                  return Math.max(40, baseHeight + textHeight + 8); // Min 40px, reduced padding
                 }}
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
                 renderItem={(result) => (
-                  <div className={`border-l-2 pl-1.5 py-1 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
+                  <div className={`border-l-2 pl-3 py-1.5 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
                     <div className="mb-0.5">
                       <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                         {result.verse.reference}
@@ -476,13 +679,13 @@ export default function Home() {
                 items={pairings}
                 itemHeight={(pairing) => {
                   // Estimate height based on number of verses and text length
-                  const baseHeight = 50; // Height for pairing info
+                  const baseHeight = 0; // No extra height for pairing info since we removed it
                   const verseHeights = pairing.verses.map(verse =>
-                    Math.ceil(verse.text.length / 80) * 16 + 20 // text height + verse header
+                    Math.ceil(verse.text.length / 75) * 14 + 16 // text height + verse header (reduced)
                   );
                   const totalVerseHeight = verseHeights.reduce((sum, height) => sum + height, 0);
-                  const separatorHeight = pairing.verses.length > 1 ? 20 : 0; // border separator
-                  return Math.max(80, baseHeight + totalVerseHeight + separatorHeight);
+                  const spacingHeight = pairing.verses.length > 1 ? 6 : 0; // minimal spacing between verses
+                  return Math.max(32, baseHeight + totalVerseHeight + spacingHeight);
                 }}
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
