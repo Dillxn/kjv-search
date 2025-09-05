@@ -101,6 +101,9 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(
     activeTabState?.showFilters || false
   );
+  const [compactMode, setCompactMode] = useState(
+    activeTabState?.compactMode || false
+  );
   const [filterCounts, setFilterCounts] = useState<{
     total: number;
     oldTestament: number;
@@ -136,6 +139,7 @@ export default function Home() {
             showFilters,
             activeTab,
             isDarkMode,
+            compactMode,
           }
         );
 
@@ -147,6 +151,7 @@ export default function Home() {
         setShowFilters(newActiveTab.showFilters);
         setActiveTab(newActiveTab.activeTab);
         setIsDarkMode(newActiveTab.isDarkMode);
+        setCompactMode(newActiveTab.compactMode || false);
 
         // Clear current results since we're switching tabs
         setResults([]);
@@ -165,6 +170,7 @@ export default function Home() {
       showFilters,
       activeTab,
       isDarkMode,
+      compactMode,
     ]
   );
 
@@ -271,14 +277,15 @@ export default function Home() {
   // Set initial container height and handle resize
   useEffect(() => {
     const updateHeight = () => {
-      setContainerHeight(window.innerHeight - 250); // Account for tab bar
+      const baseOffset = compactMode ? 140 : 180; // Even more aggressive in compact mode
+      setContainerHeight(window.innerHeight - baseOffset);
     };
 
     updateHeight();
     window.addEventListener('resize', updateHeight);
 
     return () => window.removeEventListener('resize', updateHeight);
-  }, []);
+  }, [compactMode]);
 
   // Update tab state when local state changes
   useEffect(() => {
@@ -308,6 +315,10 @@ export default function Home() {
   useEffect(() => {
     updateCurrentTabState({ activeTab });
   }, [activeTab, updateCurrentTabState]);
+
+  useEffect(() => {
+    updateCurrentTabState({ compactMode });
+  }, [compactMode, updateCurrentTabState]);
 
   // Update search filters when testament or book selections change
   useEffect(() => {
@@ -570,13 +581,16 @@ export default function Home() {
 
     return (
       <div
-        className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${
-          isDarkMode ? 'border-green-400' : 'border-green-500'
-        }`}
+        className={`border-l-2 flex flex-col justify-center ${
+          compactMode ? 'pl-1.5 py-0.5 mb-0.5' : 'pl-2 py-1 mb-1'
+        } ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}
       >
         {pairing.verses.map((verse, verseIndex) => (
-          <div key={verse.position} className={verseIndex > 0 ? 'mt-1.5' : ''}>
-            <div className='mb-0.5'>
+          <div
+            key={verse.position}
+            className={verseIndex > 0 ? (compactMode ? 'mt-0.5' : 'mt-1') : ''}
+          >
+            <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
               <span
                 className={`font-semibold text-xs ${
                   isDarkMode ? 'text-gray-200' : 'text-gray-800'
@@ -586,9 +600,9 @@ export default function Home() {
               </span>
             </div>
             <div
-              className={`text-xs leading-relaxed ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
+              className={`${
+                compactMode ? 'text-xs leading-tight' : 'text-xs leading-snug'
+              } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
               dangerouslySetInnerHTML={{
                 __html: highlightPairingText(verse.text),
               }}
@@ -735,39 +749,65 @@ export default function Home() {
         tabManager={tabManager}
         onTabManagerChange={handleTabManagerChange}
         isDarkMode={isDarkMode}
+        compactMode={compactMode}
       />
-      <div className='max-w-6xl mx-auto px-2 py-4 h-full flex flex-col'>
+      <div
+        className={`max-w-6xl mx-auto px-2 h-full flex flex-col ${
+          compactMode ? 'py-1' : 'py-2'
+        }`}
+      >
         <div
-          className={`rounded-lg shadow-md p-2 mb-3 ${
-            isDarkMode ? 'bg-gray-800' : 'bg-white'
-          }`}
+          className={`rounded-lg shadow-md mb-2 ${
+            compactMode ? 'p-1' : 'p-1.5'
+          } ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
         >
-          <div className='flex justify-between items-center mb-2'>
+          <div className='flex justify-between items-center mb-1'>
             <h1
-              className={`text-lg font-bold ${
+              className={`text-base font-bold ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}
             >
               KJV Bible Search
             </h1>
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className={`p-0.5 rounded-full text-sm ${
-                isDarkMode
-                  ? 'bg-gray-700 text-yellow-400'
-                  : 'bg-gray-200 text-gray-700'
-              } hover:opacity-80 transition-opacity`}
-              title={
-                isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
-              }
-            >
-              {isDarkMode ? '☀️' : '🌙'}
-            </button>
+            <div className='flex gap-1'>
+              <button
+                onClick={() => setCompactMode(!compactMode)}
+                className={`p-0.5 rounded-full text-sm ${
+                  compactMode
+                    ? isDarkMode
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-500 text-white'
+                    : isDarkMode
+                    ? 'bg-gray-700 text-gray-400'
+                    : 'bg-gray-200 text-gray-600'
+                } hover:opacity-80 transition-opacity`}
+                title={
+                  compactMode
+                    ? 'Disable compact mode'
+                    : 'Enable compact mode for low resolution screens'
+                }
+              >
+                📱
+              </button>
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className={`p-0.5 rounded-full text-sm ${
+                  isDarkMode
+                    ? 'bg-gray-700 text-yellow-400'
+                    : 'bg-gray-200 text-gray-700'
+                } hover:opacity-80 transition-opacity`}
+                title={
+                  isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
+                }
+              >
+                {isDarkMode ? '☀️' : '🌙'}
+              </button>
+            </div>
           </div>
-          <div className='mb-2'>
+          <div className='mb-1.5'>
             <label
               htmlFor='search'
-              className={`block text-xs font-medium mb-1 ${
+              className={`block text-xs font-medium mb-0.5 ${
                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
               }`}
             >
@@ -932,10 +972,10 @@ export default function Home() {
           </div>
 
           {/* Filter Toggle */}
-          <div className='mb-2'>
+          <div className='mb-1.5'>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                 isDarkMode
                   ? 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600'
                   : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300'
@@ -1131,14 +1171,14 @@ export default function Home() {
 
         {(results.length > 0 || pairings.length > 0) && (
           <div
-            className={`rounded-lg shadow-md p-2 flex flex-col flex-1 min-h-0 ${
+            className={`rounded-lg shadow-md p-1.5 flex flex-col flex-1 min-h-0 ${
               isDarkMode ? 'bg-gray-800' : 'bg-white'
             }`}
           >
-            <div className='mb-2 flex-shrink-0'>
-              <div className='flex items-center justify-between mb-2'>
+            <div className='mb-1.5 flex-shrink-0'>
+              <div className='flex items-center justify-between mb-1.5'>
                 <h2
-                  className={`text-lg font-bold ${
+                  className={`text-base font-bold ${
                     isDarkMode ? 'text-white' : 'text-gray-900'
                   }`}
                 >
@@ -1178,10 +1218,10 @@ export default function Home() {
               </div>
 
               {activeTab === 'pairings' && (
-                <div className='mb-2'>
+                <div className='mb-1.5'>
                   <label
                     htmlFor='pairings-search'
-                    className={`block text-xs font-medium mb-1 ${
+                    className={`block text-xs font-medium mb-0.5 ${
                       isDarkMode ? 'text-gray-300' : 'text-gray-700'
                     }`}
                   >
@@ -1362,27 +1402,29 @@ export default function Home() {
                 items={results}
                 containerHeight={containerHeight}
                 className='flex-1 scrollbar-visible'
-                estimatedItemHeight={60}
+                estimatedItemHeight={compactMode ? 35 : 45}
                 localStorageKey={scrollPositionKey}
                 renderItem={(result) => (
                   <div
-                    className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${
-                      isDarkMode ? 'border-blue-400' : 'border-blue-500'
-                    }`}
+                    className={`border-l-2 flex flex-col justify-center ${
+                      compactMode ? 'pl-1.5 py-0.5 mb-0.5' : 'pl-2 py-1 mb-1'
+                    } ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}
                   >
-                    <div className='mb-0.5'>
+                    <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
                       <span
-                        className={`font-semibold text-xs ${
-                          isDarkMode ? 'text-gray-200' : 'text-gray-800'
-                        }`}
+                        className={`font-semibold ${
+                          compactMode ? 'text-xs' : 'text-xs'
+                        } ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}
                       >
                         {result.verse.reference}
                       </span>
                     </div>
                     <div
-                      className={`text-xs leading-relaxed ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}
+                      className={`${
+                        compactMode
+                          ? 'text-xs leading-tight'
+                          : 'text-xs leading-snug'
+                      } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
                       dangerouslySetInnerHTML={{
                         __html: highlightText(
                           result.verse.text,
@@ -1398,7 +1440,7 @@ export default function Home() {
                 items={pairings}
                 containerHeight={containerHeight}
                 className='flex-1 scrollbar-visible'
-                estimatedItemHeight={80}
+                estimatedItemHeight={compactMode ? 45 : 60}
                 localStorageKey={scrollPositionKey}
                 renderItem={renderPairing}
               />

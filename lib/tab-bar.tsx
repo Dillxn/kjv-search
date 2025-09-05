@@ -7,9 +7,10 @@ interface TabBarProps {
   tabManager: TabManager;
   onTabManagerChange: (tabManager: TabManager) => void;
   isDarkMode: boolean;
+  compactMode?: boolean;
 }
 
-export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarProps) {
+export function TabBar({ tabManager, onTabManagerChange, isDarkMode, compactMode = false }: TabBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +65,7 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
   };
 
   return (
-    <div className={`flex items-center gap-1 p-2 border-b ${
+    <div className={`flex items-center gap-1 px-2 border-b ${compactMode ? 'py-0.5' : 'py-1'} ${
       isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
     }`}>
       <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-thin">
@@ -75,7 +76,7 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
           return (
             <div
               key={tab.id}
-              className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-t-lg cursor-pointer transition-all duration-200 min-w-0 max-w-48 ${
+              className={`group relative flex items-center gap-1 px-2 rounded-t-lg cursor-pointer transition-all duration-200 min-w-0 max-w-48 ${compactMode ? 'py-0.5' : 'py-1'} ${
                 isActive
                   ? isDarkMode
                     ? 'bg-gray-700 text-white border-b-2 border-blue-400'

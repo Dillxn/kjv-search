@@ -9,6 +9,7 @@ export interface TabState {
   activeTab: 'all' | 'pairings';
   scrollPosition: number;
   isDarkMode: boolean;
+  compactMode: boolean;
 }
 
 export interface TabManager {
@@ -25,6 +26,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   activeTab: 'all',
   scrollPosition: 0,
   isDarkMode: false,
+  compactMode: false,
 };
 
 export class TabManagerService {
@@ -82,8 +84,9 @@ export class TabManagerService {
       id: this.generateTabId(),
       name: name || `Search ${tabManager.tabs.length + 1}`,
       ...DEFAULT_TAB_STATE,
-      // Inherit dark mode from current active tab
+      // Inherit dark mode and compact mode from current active tab
       isDarkMode: this.getActiveTab(tabManager)?.isDarkMode || false,
+      compactMode: this.getActiveTab(tabManager)?.compactMode || false,
     };
 
     const newTabManager = {
