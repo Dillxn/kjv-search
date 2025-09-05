@@ -233,7 +233,7 @@ export default function Home() {
     const pairingsSearchTermsArray = pairingsSearchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
 
     return (
-      <div className={`border-l-2 pl-3 py-1.5 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
+      <div className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}>
 
         {pairing.verses.map((verse, verseIndex) => (
           <div key={verse.position} className={verseIndex > 0 ? 'mt-1.5' : ''}>
@@ -650,16 +650,11 @@ export default function Home() {
             {activeTab === 'all' ? (
               <VirtualScroll
                 items={results}
-                itemHeight={(result) => {
-                  // Estimate height based on text length
-                  const baseHeight = 24; // Height for reference (reduced)
-                  const textHeight = Math.ceil(result.verse.text.length / 75) * 14; // ~75 chars per line, 14px line height
-                  return Math.max(40, baseHeight + textHeight + 8); // Min 40px, reduced padding
-                }}
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
+                estimatedItemHeight={60}
                 renderItem={(result) => (
-                  <div className={`border-l-2 pl-3 py-1.5 mb-1.5 h-full flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
+                  <div className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
                     <div className="mb-0.5">
                       <span className={`font-semibold text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                         {result.verse.reference}
@@ -677,18 +672,9 @@ export default function Home() {
             ) : (
               <VirtualScroll
                 items={pairings}
-                itemHeight={(pairing) => {
-                  // Estimate height based on number of verses and text length
-                  const baseHeight = 0; // No extra height for pairing info since we removed it
-                  const verseHeights = pairing.verses.map(verse =>
-                    Math.ceil(verse.text.length / 75) * 14 + 16 // text height + verse header (reduced)
-                  );
-                  const totalVerseHeight = verseHeights.reduce((sum, height) => sum + height, 0);
-                  const spacingHeight = pairing.verses.length > 1 ? 6 : 0; // minimal spacing between verses
-                  return Math.max(32, baseHeight + totalVerseHeight + spacingHeight);
-                }}
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
+                estimatedItemHeight={80}
                 renderItem={renderPairing}
               />
             )}

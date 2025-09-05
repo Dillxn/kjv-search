@@ -4,11 +4,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 interface VirtualScrollProps<T> {
   items: T[];
-  itemHeight: number | ((item: T, index: number) => number);
+  itemHeight?: number | ((item: T, index: number) => number);
   containerHeight: number;
   renderItem: (item: T, index: number) => React.ReactNode;
   overscan?: number;
   className?: string;
+  estimatedItemHeight?: number;
 }
 
 export function VirtualScroll<T>({
@@ -17,10 +18,13 @@ export function VirtualScroll<T>({
   containerHeight,
   renderItem,
   overscan = 5,
-  className = ''
+  className = '',
+  estimatedItemHeight = 50
 }: VirtualScrollProps<T>) {
   const [scrollTop, setScrollTop] = useState(0);
+  const [measuredHeights, setMeasuredHeights] = useState<Map<number, number>>(new Map());
   const scrollElementRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Calculate item heights and positions
   const { totalHeight, itemPositions } = useMemo(() => {
@@ -29,9 +33,18 @@ export function VirtualScroll<T>({
     
     for (let i = 0; i < items.length; i++) {
       positions[i] = currentPosition;
-      const height = typeof itemHeight === 'function' 
-        ? itemHeight(items[i], i) 
-        : itemHeight;
+      
+      let height: number;
+      if (itemHeight) {
+        // Use provided height function/value
+        height = typeof itemHeight === 'function' 
+          ? itemHeight(items[i], i) 
+          : itemHeight;
+      } else {
+        // Use measured height if available, otherwise use estimated height
+        height = measuredHeights.get(i) || estimatedItemHeight;
+      }
+      
       currentPosition += height;
     }
     
@@ -39,7 +52,7 @@ export function VirtualScroll<T>({
       totalHeight: currentPosition,
       itemPositions: positions
     };
-  }, [items, itemHeight]);
+  }, [items, itemHeight, measuredHeights, estimatedItemHeight]);
 
   // Find visible range using binary search for better performance
   const { startIndex, endIndex } = useMemo(() => {
@@ -77,6 +90,39 @@ export function VirtualScroll<T>({
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
+  // Measure item heights after render
+  useEffect(() => {
+    if (!itemHeight) { // Only measure if no height function provided
+      const newMeasuredHeights = new Map(measuredHeights);
+      let hasChanges = false;
+
+      itemRefs.current.forEach((element, index) => {
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          const currentHeight = measuredHeights.get(index);
+          
+          if (currentHeight !== rect.height) {
+            newMeasuredHeights.set(index, rect.height);
+            hasChanges = true;
+          }
+        }
+      });
+
+      if (hasChanges) {
+        setMeasuredHeights(newMeasuredHeights);
+      }
+    }
+  }, [visibleItems, itemHeight, measuredHeights]);
+
+  // Set item ref callback
+  const setItemRef = useCallback((index: number) => (element: HTMLDivElement | null) => {
+    if (element) {
+      itemRefs.current.set(index, element);
+    } else {
+      itemRefs.current.delete(index);
+    }
+  }, []);
+
   return (
     <div
       ref={scrollElementRef}
@@ -106,14 +152,21 @@ export function VirtualScroll<T>({
         >
           {visibleItems.map((item, index) => {
             const actualIndex = startIndex + index;
-            const height = typeof itemHeight === 'function' 
-              ? itemHeight(item, actualIndex) 
-              : itemHeight;
+            let height: number | undefined;
+            
+            if (itemHeight) {
+              height = typeof itemHeight === 'function' 
+                ? itemHeight(item, actualIndex) 
+                : itemHeight;
+            } else {
+              height = measuredHeights.get(actualIndex) || estimatedItemHeight;
+            }
             
             return (
               <div
                 key={actualIndex}
-                style={{ height }}
+                ref={!itemHeight ? setItemRef(actualIndex) : undefined}
+                style={{ height: itemHeight ? height : undefined }}
               >
                 {renderItem(item, actualIndex)}
               </div>
