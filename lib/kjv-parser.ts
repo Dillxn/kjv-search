@@ -38,6 +38,58 @@ const BOOK_ORDER: Record<string, number> = {
   '1 John': 62, '2 John': 63, '3 John': 64, 'Jude': 65, 'Revelation': 66
 };
 
+// Testament definitions
+export const OLD_TESTAMENT_BOOKS = [
+  'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
+  'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel',
+  '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles',
+  'Ezra', 'Nehemiah', 'Esther', 'Job', 'Psalms', 'Proverbs',
+  'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah',
+  'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel',
+  'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum',
+  'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'
+];
+
+export const NEW_TESTAMENT_BOOKS = [
+  'Matthew', 'Mark', 'Luke', 'John', 'Acts',
+  'Romans', '1 Corinthians', '2 Corinthians', 'Galatians',
+  'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians',
+  '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus',
+  'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter',
+  '1 John', '2 John', '3 John', 'Jude', 'Revelation'
+];
+
+export interface SearchFilters {
+  testament?: 'old' | 'new';
+  books?: string[];
+}
+
+// Helper functions for filtering
+function getBooksForTestament(testament?: 'old' | 'new'): string[] {
+  if (testament === 'old') return OLD_TESTAMENT_BOOKS;
+  if (testament === 'new') return NEW_TESTAMENT_BOOKS;
+  return [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
+}
+
+function shouldIncludeVerse(verse: Verse, filters: SearchFilters): boolean {
+  // Filter by testament
+  if (filters.testament) {
+    const allowedBooks = getBooksForTestament(filters.testament);
+    if (!allowedBooks.includes(verse.book)) {
+      return false;
+    }
+  }
+
+  // Filter by specific books
+  if (filters.books && filters.books.length > 0) {
+    if (!filters.books.includes(verse.book)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 class KJVParser {
   private verses: Verse[] = [];
   private wordIndex: Map<string, Verse[]> = new Map();
@@ -112,7 +164,7 @@ class KJVParser {
       .filter(word => word.length > 0);
   }
 
-  searchWords(searchTerms: string[]): SearchResult[] {
+  searchWords(searchTerms: string[], filters: SearchFilters = {}): SearchResult[] {
     const allResults = new Map<string, SearchResult>();
 
     for (const term of searchTerms) {
@@ -136,6 +188,11 @@ class KJVParser {
       }
 
       for (const verse of matchingVerses) {
+        // Apply filters
+        if (!shouldIncludeVerse(verse, filters)) {
+          continue;
+        }
+
         const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
         if (!allResults.has(key)) {
           allResults.set(key, {
@@ -154,7 +211,7 @@ class KJVParser {
     return results;
   }
 
-  findVersePairings(searchTerms: string[]): VersePairing[] {
+  findVersePairings(searchTerms: string[], filters: SearchFilters = {}): VersePairing[] {
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
     const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
@@ -186,7 +243,9 @@ class KJVParser {
         }
       }
 
-      termToVerses.set(term, Array.from(matchingVerses));
+      // Apply filters to matching verses
+      const filteredVerses = Array.from(matchingVerses).filter(verse => shouldIncludeVerse(verse, filters));
+      termToVerses.set(term, filteredVerses);
     }
 
     const termArray = Array.from(termToVerses.keys());
@@ -214,7 +273,7 @@ class KJVParser {
     return pairings;
   }
 
-  findVersePairingsBetweenGroups(group1Terms: string[], group2Terms: string[]): VersePairing[] {
+  findVersePairingsBetweenGroups(group1Terms: string[], group2Terms: string[], filters: SearchFilters = {}): VersePairing[] {
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
     const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
@@ -252,7 +311,9 @@ class KJVParser {
         }
       }
 
-      termToVerses.set(term, Array.from(matchingVerses));
+      // Apply filters to matching verses
+      const filteredVerses = Array.from(matchingVerses).filter(verse => shouldIncludeVerse(verse, filters));
+      termToVerses.set(term, filteredVerses);
     }
 
     // Generate pairings only between terms from different groups

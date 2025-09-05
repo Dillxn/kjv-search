@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { kjvParser, SearchResult, VersePairing } from '../lib/kjv-parser';
+import { kjvParser, SearchResult, VersePairing, SearchFilters, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
 import { VirtualScroll } from '../lib/virtual-scroll';
 
 const HIGHLIGHT_COLORS_LIGHT = [
@@ -41,6 +41,16 @@ export default function Home() {
   const [pairingsEditorRef, setPairingsEditorRef] = useState<HTMLDivElement | null>(null);
   const [containerHeight, setContainerHeight] = useState(400);
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
+  const [selectedTestament, setSelectedTestament] = useState<'all' | 'old' | 'new'>('all');
+  const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterCounts, setFilterCounts] = useState<{
+    total: number;
+    oldTestament: number;
+    newTestament: number;
+    books: Record<string, number>;
+  }>({ total: 0, oldTestament: 0, newTestament: 0, books: {} });
 
   const getHighlightColors = useCallback(() => {
     return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
@@ -132,6 +142,57 @@ export default function Home() {
     localStorage.setItem('kjv-dark-mode', isDarkMode.toString());
   }, [isDarkMode]);
 
+  // Update search filters when testament or book selections change
+  useEffect(() => {
+    const filters: SearchFilters = {};
+
+    if (selectedTestament !== 'all') {
+      filters.testament = selectedTestament;
+    }
+
+    if (selectedBooks.length > 0) {
+      filters.books = selectedBooks;
+    }
+
+    setSearchFilters(filters);
+  }, [selectedTestament, selectedBooks]);
+
+  // Calculate filter counts when search terms change
+  useEffect(() => {
+    const updateFilterCounts = () => {
+      if (!debouncedSearchTerms.trim() || debouncedSearchTerms.trim().length < 2) {
+        setFilterCounts({ total: 0, oldTestament: 0, newTestament: 0, books: {} });
+        return;
+      }
+
+      const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
+
+      // Calculate total results
+      const totalResults = kjvParser.searchWords(terms, {});
+
+      // Calculate testament counts
+      const oldTestamentResults = kjvParser.searchWords(terms, { testament: 'old' });
+      const newTestamentResults = kjvParser.searchWords(terms, { testament: 'new' });
+
+      // Calculate book counts
+      const bookCounts: Record<string, number> = {};
+      const allBooks = [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
+      allBooks.forEach(book => {
+        const bookResults = kjvParser.searchWords(terms, { books: [book] });
+        bookCounts[book] = bookResults.length;
+      });
+
+      setFilterCounts({
+        total: totalResults.length,
+        oldTestament: oldTestamentResults.length,
+        newTestament: newTestamentResults.length,
+        books: bookCounts
+      });
+    };
+
+    updateFilterCounts();
+  }, [debouncedSearchTerms, isInitialized]);
+
   // Debounce search terms
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -165,7 +226,7 @@ export default function Home() {
       try {
         const terms = debouncedSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
         console.log('Search terms:', terms, 'Original:', debouncedSearchTerms);
-        const searchResults = kjvParser.searchWords(terms);
+        const searchResults = kjvParser.searchWords(terms, searchFilters);
 
         // For pairings, use both search boxes when on pairings tab
         let versePairings: VersePairing[] = [];
@@ -174,7 +235,7 @@ export default function Home() {
           const pairingsTerms = debouncedPairingsSearchTerms.split(' ').map(term => term.trim()).filter(term => term);
 
           if (mainTerms.length > 0 && pairingsTerms.length > 0) {
-            versePairings = kjvParser.findVersePairingsBetweenGroups(mainTerms, pairingsTerms).sort((a, b) => {
+            versePairings = kjvParser.findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters).sort((a, b) => {
               // Sort by proximity (same verse first), then by first verse position
               if (a.proximity !== b.proximity) {
                 return a.proximity - b.proximity;
@@ -184,7 +245,7 @@ export default function Home() {
           }
         } else {
           // For all results tab, use traditional pairings logic
-          versePairings = kjvParser.findVersePairings(terms).sort((a, b) => {
+          versePairings = kjvParser.findVersePairings(terms, searchFilters).sort((a, b) => {
             // Sort by proximity (same verse first), then by first verse position
             if (a.proximity !== b.proximity) {
               return a.proximity - b.proximity;
@@ -207,7 +268,7 @@ export default function Home() {
     if (isInitialized) {
       performRealtimeSearch();
     }
-  }, [debouncedSearchTerms, debouncedPairingsSearchTerms, activeTab, isInitialized]);
+  }, [debouncedSearchTerms, debouncedPairingsSearchTerms, activeTab, isInitialized, searchFilters]);
 
   // Update contentEditable when searchTerms changes externally (like from localStorage)
   useEffect(() => {
@@ -227,6 +288,44 @@ export default function Home() {
   const getSearchTermsArray = () => {
     return searchTerms.split(' ').map(term => term.trim().toLowerCase()).filter(term => term);
   };
+
+  const getAvailableBooks = () => {
+    switch (selectedTestament) {
+      case 'old':
+        return OLD_TESTAMENT_BOOKS;
+      case 'new':
+        return NEW_TESTAMENT_BOOKS;
+      default:
+        return [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
+    }
+  };
+
+  const handleTestamentChange = (testament: 'all' | 'old' | 'new') => {
+    setSelectedTestament(testament);
+    setSelectedBooks([]); // Clear book selection when testament changes
+  };
+
+  const handleBookToggle = (book: string) => {
+    setSelectedBooks(prev => {
+      if (prev.includes(book)) {
+        return prev.filter(b => b !== book);
+      } else {
+        return [...prev, book];
+      }
+    });
+  };
+
+  // Helper functions to get cached result counts for filter badges
+  const getTotalResults = (): number => filterCounts.total;
+
+  const getResultsByTestament = (testament: 'old' | 'new'): number => {
+    return testament === 'old' ? filterCounts.oldTestament : filterCounts.newTestament;
+  };
+
+  const getResultsByBook = (book: string): number => {
+    return filterCounts.books[book] || 0;
+  };
+
 
   const renderPairing = (pairing: VersePairing) => {
     const searchTermsArray = getSearchTermsArray();
@@ -456,6 +555,138 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Filter Toggle */}
+          <div className="mb-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                isDarkMode
+                  ? 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600'
+                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span>Filters</span>
+                {(selectedTestament !== 'all' || selectedBooks.length > 0) && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                    isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                  }`}>
+                    {(selectedTestament !== 'all' ? 1 : 0) + selectedBooks.length}
+                  </span>
+                )}
+              </span>
+              <span className={`transform transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`}>
+                ⌄
+              </span>
+            </button>
+
+            {/* Collapsible Filter Content */}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              showFilters ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'
+            }`}>
+              <div className="space-y-2">
+                {/* Testament Filters */}
+                <div>
+                  <div className={`text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Filter by Testament:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { key: 'all', label: 'All Testaments', count: getTotalResults() },
+                      { key: 'old', label: 'Old Testament', count: getResultsByTestament('old') },
+                      { key: 'new', label: 'New Testament', count: getResultsByTestament('new') }
+                    ].map(({ key, label, count }) => (
+                      <button
+                        key={key}
+                        onClick={() => handleTestamentChange(key as 'all' | 'old' | 'new')}
+                        className={`px-1 py-0.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-0.5 ${
+                          selectedTestament === key
+                            ? isDarkMode
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-blue-500 text-white shadow-sm'
+                            : isDarkMode
+                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                        }`}
+                      >
+                        <span className={selectedTestament === key ? 'text-white' : ''}>{label}</span>
+                        <span className={`px-0.5 py-0.5 rounded-full text-xs font-semibold ${
+                          selectedTestament === key
+                            ? 'bg-white bg-opacity-25 text-gray-800'
+                            : isDarkMode
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-600'
+                        }`}>
+                          {count.toLocaleString()}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Book Filters */}
+                <div>
+                  <div className={`text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Filter by Book {selectedBooks.length > 0 && `(${selectedBooks.length} selected)`}:
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                    {getAvailableBooks().map(book => {
+                      const isSelected = selectedBooks.includes(book);
+                      const count = getResultsByBook(book);
+                      return (
+                        <button
+                          key={book}
+                          onClick={() => handleBookToggle(book)}
+                          className={`px-1 py-0.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-0.5 whitespace-nowrap ${
+                            isSelected
+                              ? isDarkMode
+                                ? 'bg-green-600 text-white shadow-sm'
+                                : 'bg-green-500 text-white shadow-sm'
+                              : count === 0
+                                ? isDarkMode
+                                  ? 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'
+                                  : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                                : isDarkMode
+                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                          }`}
+                          disabled={count === 0}
+                          title={count === 0 ? `${book} has no results for current search` : `Toggle ${book} filter`}
+                        >
+                          <span className={isSelected ? 'text-white' : ''}>{book}</span>
+                          <span className={`px-0.5 py-0.5 rounded-full text-xs font-semibold ${
+                            isSelected
+                              ? 'bg-white bg-opacity-25 text-gray-800'
+                              : count === 0
+                                ? isDarkMode
+                                  ? 'bg-gray-700 text-gray-500'
+                                  : 'bg-gray-300 text-gray-400'
+                                : isDarkMode
+                                  ? 'bg-gray-600 text-gray-300'
+                                  : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedBooks.length > 0 && (
+                    <button
+                      onClick={() => setSelectedBooks([])}
+                      className={`mt-1 px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                        isDarkMode
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300 border border-gray-300'
+                      }`}
+                    >
+                      Clear ({selectedBooks.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {error && (
             <div className={`mt-1.5 p-1 rounded text-xs ${isDarkMode ? 'bg-red-900 border border-red-700 text-red-300' : 'bg-red-100 border border-red-400 text-red-700'}`}>
