@@ -164,6 +164,11 @@ class KJVParser {
       .filter(word => word.length > 0);
   }
 
+  private escapeRegex(text: string): string {
+    // Escape special regex characters
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   searchWords(searchTerms: string[], filters: SearchFilters = {}): SearchResult[] {
     const allResults = new Map<string, SearchResult>();
 
@@ -171,28 +176,28 @@ class KJVParser {
       const normalizedTerm = term.toLowerCase().trim();
       if (!normalizedTerm) continue;
 
-      // For partial matching, check if the term is a substring of any indexed words
+      // For word-boundary matching, we need to check each verse's text directly
       const matchingVerses = new Set<Verse>();
 
-      // First try exact match
-      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
-      exactMatches.forEach(verse => matchingVerses.add(verse));
-
-      // Then try partial matches
       if (normalizedTerm.length >= 2) {
-        for (const [indexedWord, verses] of this.wordIndex.entries()) {
-          if (indexedWord.startsWith(normalizedTerm)) {
-            verses.forEach(verse => matchingVerses.add(verse));
+        // Check all verses for word-boundary matches
+        for (const verse of this.verses) {
+          // Apply filters first to avoid unnecessary processing
+          if (!shouldIncludeVerse(verse, filters)) {
+            continue;
+          }
+
+          // Create a regex that matches the term at word boundaries only
+          // This ensures 'faith' matches 'faithful' but 'heir' doesn't match 'their'
+          const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}`, 'i');
+          
+          if (wordBoundaryRegex.test(verse.text)) {
+            matchingVerses.add(verse);
           }
         }
       }
 
       for (const verse of matchingVerses) {
-        // Apply filters
-        if (!shouldIncludeVerse(verse, filters)) {
-          continue;
-        }
-
         const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
         if (!allResults.has(key)) {
           allResults.set(key, {
@@ -223,29 +228,30 @@ class KJVParser {
       console.warn(`Limited search terms from ${searchTerms.length} to ${MAX_SEARCH_TERMS} to prevent memory issues`);
     }
 
-    // Get verses for each search term
+    // Get verses for each search term using word-boundary matching
     for (const term of limitedTerms) {
       const normalizedTerm = term.toLowerCase().trim();
-      if (!normalizedTerm) continue;
+      if (!normalizedTerm || normalizedTerm.length < 2) continue;
 
       const matchingVerses = new Set<Verse>();
 
-      // First try exact match
-      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
-      exactMatches.forEach(verse => matchingVerses.add(verse));
+      // Use word-boundary matching for all verses
+      for (const verse of this.verses) {
+        // Apply filters first to avoid unnecessary processing
+        if (!shouldIncludeVerse(verse, filters)) {
+          continue;
+        }
 
-      // Then try partial matches
-      if (normalizedTerm.length >= 2) {
-        for (const [indexedWord, verses] of this.wordIndex.entries()) {
-          if (indexedWord.startsWith(normalizedTerm)) {
-            verses.forEach(verse => matchingVerses.add(verse));
-          }
+        // Create a regex that matches the term at word boundaries only
+        const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}`, 'i');
+        
+        if (wordBoundaryRegex.test(verse.text)) {
+          matchingVerses.add(verse);
         }
       }
 
-      // Apply filters to matching verses
-      const filteredVerses = Array.from(matchingVerses).filter(verse => shouldIncludeVerse(verse, filters));
-      termToVerses.set(term, filteredVerses);
+      // Store filtered verses for this term
+      termToVerses.set(term, Array.from(matchingVerses));
     }
 
     const termArray = Array.from(termToVerses.keys());
@@ -290,30 +296,31 @@ class KJVParser {
       console.warn(`Limited group2 terms from ${group2Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`);
     }
 
-    // Get verses for each search term in both groups
+    // Get verses for each search term in both groups using word-boundary matching
     const allTerms = [...limitedGroup1, ...limitedGroup2];
     for (const term of allTerms) {
       const normalizedTerm = term.toLowerCase().trim();
-      if (!normalizedTerm) continue;
+      if (!normalizedTerm || normalizedTerm.length < 2) continue;
 
       const matchingVerses = new Set<Verse>();
 
-      // First try exact match
-      const exactMatches = this.wordIndex.get(normalizedTerm) || [];
-      exactMatches.forEach(verse => matchingVerses.add(verse));
+      // Use word-boundary matching for all verses
+      for (const verse of this.verses) {
+        // Apply filters first to avoid unnecessary processing
+        if (!shouldIncludeVerse(verse, filters)) {
+          continue;
+        }
 
-      // Then try partial matches
-      if (normalizedTerm.length >= 2) {
-        for (const [indexedWord, verses] of this.wordIndex.entries()) {
-          if (indexedWord.startsWith(normalizedTerm)) {
-            verses.forEach(verse => matchingVerses.add(verse));
-          }
+        // Create a regex that matches the term at word boundaries only
+        const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}`, 'i');
+        
+        if (wordBoundaryRegex.test(verse.text)) {
+          matchingVerses.add(verse);
         }
       }
 
-      // Apply filters to matching verses
-      const filteredVerses = Array.from(matchingVerses).filter(verse => shouldIncludeVerse(verse, filters));
-      termToVerses.set(term, filteredVerses);
+      // Store filtered verses for this term
+      termToVerses.set(term, Array.from(matchingVerses));
     }
 
     // Generate pairings only between terms from different groups

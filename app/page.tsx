@@ -476,13 +476,14 @@ export default function Home() {
 
     let result = text;
 
-    // For each search term, find and highlight all occurrences (including partial matches)
+    // For each search term, find and highlight all occurrences using word-boundary matching
     for (const [term, colorClass] of termToColor.entries()) {
       if (term.length >= 2) {
         // Escape special regex characters
         const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create a regex that matches the term as a substring, case insensitive
-        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+        // Create a regex that matches the term at word boundaries only (partial matches allowed)
+        // This ensures 'faith' matches 'faithful' but 'heir' doesn't match 'their'
+        const regex = new RegExp(`\\b(${escapedTerm}\\w*)`, 'gi');
         const borderClass = usePairingsColors ? 'border' : '';
         result = result.replace(regex, `<mark class="${colorClass} ${borderClass} px-0.5 rounded">$1</mark>`);
       }
