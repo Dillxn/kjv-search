@@ -28,41 +28,145 @@ export interface VersePairing {
 
 // Book name mappings to canonical order
 const BOOK_ORDER: Record<string, number> = {
-  'Genesis': 1, 'Exodus': 2, 'Leviticus': 3, 'Numbers': 4, 'Deuteronomy': 5,
-  'Joshua': 6, 'Judges': 7, 'Ruth': 8, '1 Samuel': 9, '2 Samuel': 10,
-  '1 Kings': 11, '2 Kings': 12, '1 Chronicles': 13, '2 Chronicles': 14,
-  'Ezra': 15, 'Nehemiah': 16, 'Esther': 17, 'Job': 18, 'Psalms': 19, 'Proverbs': 20,
-  'Ecclesiastes': 21, 'Song of Solomon': 22, 'Isaiah': 23, 'Jeremiah': 24,
-  'Lamentations': 25, 'Ezekiel': 26, 'Daniel': 27, 'Hosea': 28, 'Joel': 29,
-  'Amos': 30, 'Obadiah': 31, 'Jonah': 32, 'Micah': 33, 'Nahum': 34,
-  'Habakkuk': 35, 'Zephaniah': 36, 'Haggai': 37, 'Zechariah': 38, 'Malachi': 39,
-  'Matthew': 40, 'Mark': 41, 'Luke': 42, 'John': 43, 'Acts': 44,
-  'Romans': 45, '1 Corinthians': 46, '2 Corinthians': 47, 'Galatians': 48,
-  'Ephesians': 49, 'Philippians': 50, 'Colossians': 51, '1 Thessalonians': 52,
-  '2 Thessalonians': 53, '1 Timothy': 54, '2 Timothy': 55, 'Titus': 56,
-  'Philemon': 57, 'Hebrews': 58, 'James': 59, '1 Peter': 60, '2 Peter': 61,
-  '1 John': 62, '2 John': 63, '3 John': 64, 'Jude': 65, 'Revelation': 66
+  Genesis: 1,
+  Exodus: 2,
+  Leviticus: 3,
+  Numbers: 4,
+  Deuteronomy: 5,
+  Joshua: 6,
+  Judges: 7,
+  Ruth: 8,
+  '1 Samuel': 9,
+  '2 Samuel': 10,
+  '1 Kings': 11,
+  '2 Kings': 12,
+  '1 Chronicles': 13,
+  '2 Chronicles': 14,
+  Ezra: 15,
+  Nehemiah: 16,
+  Esther: 17,
+  Job: 18,
+  Psalms: 19,
+  Proverbs: 20,
+  Ecclesiastes: 21,
+  'Song of Solomon': 22,
+  Isaiah: 23,
+  Jeremiah: 24,
+  Lamentations: 25,
+  Ezekiel: 26,
+  Daniel: 27,
+  Hosea: 28,
+  Joel: 29,
+  Amos: 30,
+  Obadiah: 31,
+  Jonah: 32,
+  Micah: 33,
+  Nahum: 34,
+  Habakkuk: 35,
+  Zephaniah: 36,
+  Haggai: 37,
+  Zechariah: 38,
+  Malachi: 39,
+  Matthew: 40,
+  Mark: 41,
+  Luke: 42,
+  John: 43,
+  Acts: 44,
+  Romans: 45,
+  '1 Corinthians': 46,
+  '2 Corinthians': 47,
+  Galatians: 48,
+  Ephesians: 49,
+  Philippians: 50,
+  Colossians: 51,
+  '1 Thessalonians': 52,
+  '2 Thessalonians': 53,
+  '1 Timothy': 54,
+  '2 Timothy': 55,
+  Titus: 56,
+  Philemon: 57,
+  Hebrews: 58,
+  James: 59,
+  '1 Peter': 60,
+  '2 Peter': 61,
+  '1 John': 62,
+  '2 John': 63,
+  '3 John': 64,
+  Jude: 65,
+  Revelation: 66,
 };
 
 // Testament definitions
 export const OLD_TESTAMENT_BOOKS = [
-  'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
-  'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel',
-  '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles',
-  'Ezra', 'Nehemiah', 'Esther', 'Job', 'Psalms', 'Proverbs',
-  'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah',
-  'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel',
-  'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum',
-  'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'
+  'Genesis',
+  'Exodus',
+  'Leviticus',
+  'Numbers',
+  'Deuteronomy',
+  'Joshua',
+  'Judges',
+  'Ruth',
+  '1 Samuel',
+  '2 Samuel',
+  '1 Kings',
+  '2 Kings',
+  '1 Chronicles',
+  '2 Chronicles',
+  'Ezra',
+  'Nehemiah',
+  'Esther',
+  'Job',
+  'Psalms',
+  'Proverbs',
+  'Ecclesiastes',
+  'Song of Solomon',
+  'Isaiah',
+  'Jeremiah',
+  'Lamentations',
+  'Ezekiel',
+  'Daniel',
+  'Hosea',
+  'Joel',
+  'Amos',
+  'Obadiah',
+  'Jonah',
+  'Micah',
+  'Nahum',
+  'Habakkuk',
+  'Zephaniah',
+  'Haggai',
+  'Zechariah',
+  'Malachi',
 ];
 
 export const NEW_TESTAMENT_BOOKS = [
-  'Matthew', 'Mark', 'Luke', 'John', 'Acts',
-  'Romans', '1 Corinthians', '2 Corinthians', 'Galatians',
-  'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians',
-  '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus',
-  'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter',
-  '1 John', '2 John', '3 John', 'Jude', 'Revelation'
+  'Matthew',
+  'Mark',
+  'Luke',
+  'John',
+  'Acts',
+  'Romans',
+  '1 Corinthians',
+  '2 Corinthians',
+  'Galatians',
+  'Ephesians',
+  'Philippians',
+  'Colossians',
+  '1 Thessalonians',
+  '2 Thessalonians',
+  '1 Timothy',
+  '2 Timothy',
+  'Titus',
+  'Philemon',
+  'Hebrews',
+  'James',
+  '1 Peter',
+  '2 Peter',
+  '1 John',
+  '2 John',
+  '3 John',
+  'Jude',
+  'Revelation',
 ];
 
 export interface SearchFilters {
@@ -132,21 +236,19 @@ class KJVParser {
       if (verseMatch) {
         const [, book, chapter, verseNum, verseText] = verseMatch;
 
-
         const verse: Verse = {
           book: book.trim(),
           chapter: parseInt(chapter),
           verse: parseInt(verseNum),
           text: verseText.trim(),
           reference: `${book.trim()} ${chapter}:${verseNum}`,
-          position: this.verses.length
+          position: this.verses.length,
         };
 
         this.verses.push(verse);
       }
     }
   }
-
 
   private buildWordIndex(): void {
     for (const verse of this.verses) {
@@ -167,7 +269,7 @@ class KJVParser {
       .toLowerCase()
       .replace(/[^\w\s]/g, '')
       .split(/\s+/)
-      .filter(word => word.length > 0);
+      .filter((word) => word.length > 0);
   }
 
   private escapeRegex(text: string): string {
@@ -178,15 +280,19 @@ class KJVParser {
   private areTermsSameWord(term1: string, term2: string): boolean {
     // Normalize both terms for comparison
     const normalize = (term: string): string => {
-      return term.toLowerCase().trim()
-        // Remove common suffixes
-        .replace(/(ful|ly|ing|ed|er|est|s)$/, '')
-        // Handle irregular forms
-        .replace(/^faithf/, 'faith')
-        .replace(/^lov/, 'love')
-        .replace(/^runn/, 'run')
-        .replace(/^begun$/, 'begin')
-        .replace(/^began$/, 'begin');
+      return (
+        term
+          .toLowerCase()
+          .trim()
+          // Remove common suffixes
+          .replace(/(ful|ly|ing|ed|er|est|s)$/, '')
+          // Handle irregular forms
+          .replace(/^faithf/, 'faith')
+          .replace(/^lov/, 'love')
+          .replace(/^runn/, 'run')
+          .replace(/^begun$/, 'begin')
+          .replace(/^began$/, 'begin')
+      );
     };
 
     const normalized1 = normalize(term1);
@@ -199,16 +305,22 @@ class KJVParser {
 
     // Handle cases where one term is a direct substring of the other
     // (e.g., "faith" and "faithful", "love" and "loving")
-    if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+    if (
+      normalized1.includes(normalized2) ||
+      normalized2.includes(normalized1)
+    ) {
       return true;
     }
 
     return false;
   }
 
-  searchWords(searchTerms: string[], filters: SearchFilters = {}): SearchResult[] {
+  searchWords(
+    searchTerms: string[],
+    filters: SearchFilters = {}
+  ): SearchResult[] {
     const allResults = new Map<string, SearchResult>();
-    const validTerms = searchTerms.filter(term => {
+    const validTerms = searchTerms.filter((term) => {
       const normalized = term.toLowerCase().trim();
       return normalized && normalized.length >= 2;
     });
@@ -225,7 +337,10 @@ class KJVParser {
 
         // Create a regex that matches words starting with the term at word boundaries
         // This ensures 'faith' matches 'faithful', 'faithfully' but 'heir' doesn't match 'their'
-        const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}\\w*`, 'gi');
+        const wordBoundaryRegex = new RegExp(
+          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
+          'gi'
+        );
         const matches = [...verse.text.matchAll(wordBoundaryRegex)];
 
         if (matches.length > 0) {
@@ -233,7 +348,7 @@ class KJVParser {
           if (!allResults.has(key)) {
             allResults.set(key, {
               verse,
-              matches: []
+              matches: [],
             });
           }
 
@@ -242,7 +357,7 @@ class KJVParser {
             allResults.get(key)!.matches.push({
               term,
               start: match.index!,
-              end: match.index! + match[0].length
+              end: match.index! + match[0].length,
             });
           }
         }
@@ -256,7 +371,10 @@ class KJVParser {
     return results;
   }
 
-  findVersePairings(searchTerms: string[], filters: SearchFilters = {}): VersePairing[] {
+  findVersePairings(
+    searchTerms: string[],
+    filters: SearchFilters = {}
+  ): VersePairing[] {
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
     const processedPairings = new Set<string>();
@@ -264,13 +382,15 @@ class KJVParser {
     const MAX_SEARCH_TERMS = 8; // Limit number of terms to prevent combinatorial explosion
 
     // Filter and limit the number of search terms to prevent combinatorial explosion
-    const validTerms = searchTerms.filter(term => {
+    const validTerms = searchTerms.filter((term) => {
       const normalized = term.toLowerCase().trim();
       return normalized && normalized.length >= 2;
     });
     const limitedTerms = validTerms.slice(0, MAX_SEARCH_TERMS);
     if (searchTerms.length > MAX_SEARCH_TERMS) {
-      console.warn(`Limited search terms from ${searchTerms.length} to ${MAX_SEARCH_TERMS} to prevent memory issues`);
+      console.warn(
+        `Limited search terms from ${searchTerms.length} to ${MAX_SEARCH_TERMS} to prevent memory issues`
+      );
     }
 
     // Get verses for each search term using word-boundary matching
@@ -287,7 +407,10 @@ class KJVParser {
         }
 
         // Create a regex that matches words starting with the term at word boundaries
-        const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}\\w*`, 'i');
+        const wordBoundaryRegex = new RegExp(
+          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
+          'i'
+        );
 
         if (wordBoundaryRegex.test(verse.text)) {
           matchingVerses.add(verse);
@@ -304,7 +427,9 @@ class KJVParser {
     for (let i = 0; i < termArray.length; i++) {
       for (let j = i + 1; j < termArray.length; j++) {
         if (pairings.length >= MAX_TOTAL_PAIRINGS) {
-          console.warn(`Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`);
+          console.warn(
+            `Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
+          );
           break;
         }
 
@@ -320,13 +445,24 @@ class KJVParser {
         const verses2 = termToVerses.get(term2) || [];
 
         // Find pairings between these two terms
-        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2, false);
+        const pairPairings = this.findPairingsForTerms(
+          term1,
+          term2,
+          verses1,
+          verses2,
+          false
+        );
 
         // Filter out already processed pairings to prevent duplicates
         for (const pairing of pairPairings) {
-          const pairingKey = pairing.proximity === 0
-            ? `same-${pairing.verses[0].position}-${term1}-${term2}`
-            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}-${term1}-${term2}`;
+          const pairingKey =
+            pairing.proximity === 0
+              ? `same-${pairing.verses[0].position}-${term1}-${term2}`
+              : `pair-${Math.min(
+                  ...pairing.verses.map((v) => v.position)
+                )}-${Math.max(
+                  ...pairing.verses.map((v) => v.position)
+                )}-${term1}-${term2}`;
 
           if (!processedPairings.has(pairingKey)) {
             pairings.push(pairing);
@@ -340,7 +476,11 @@ class KJVParser {
     return pairings;
   }
 
-  findVersePairingsBetweenGroups(group1Terms: string[], group2Terms: string[], filters: SearchFilters = {}): VersePairing[] {
+  findVersePairingsBetweenGroups(
+    group1Terms: string[],
+    group2Terms: string[],
+    filters: SearchFilters = {}
+  ): VersePairing[] {
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
     const processedPairings = new Set<string>();
@@ -348,11 +488,11 @@ class KJVParser {
     const MAX_SEARCH_TERMS_PER_GROUP = 8; // Limit number of terms per group to prevent combinatorial explosion
 
     // Filter and limit the number of search terms per group
-    const validGroup1 = group1Terms.filter(term => {
+    const validGroup1 = group1Terms.filter((term) => {
       const normalized = term.toLowerCase().trim();
       return normalized && normalized.length >= 2;
     });
-    const validGroup2 = group2Terms.filter(term => {
+    const validGroup2 = group2Terms.filter((term) => {
       const normalized = term.toLowerCase().trim();
       return normalized && normalized.length >= 2;
     });
@@ -360,10 +500,14 @@ class KJVParser {
     const limitedGroup2 = validGroup2.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
 
     if (group1Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
-      console.warn(`Limited group1 terms from ${group1Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`);
+      console.warn(
+        `Limited group1 terms from ${group1Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`
+      );
     }
     if (group2Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
-      console.warn(`Limited group2 terms from ${group2Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`);
+      console.warn(
+        `Limited group2 terms from ${group2Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`
+      );
     }
 
     // Get verses for each search term in both groups using word-boundary matching
@@ -382,7 +526,10 @@ class KJVParser {
         }
 
         // Create a regex that matches words starting with the term at word boundaries
-        const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}\\w*`, 'i');
+        const wordBoundaryRegex = new RegExp(
+          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
+          'i'
+        );
 
         if (wordBoundaryRegex.test(verse.text)) {
           matchingVerses.add(verse);
@@ -397,7 +544,9 @@ class KJVParser {
     for (const term1 of limitedGroup1) {
       for (const term2 of limitedGroup2) {
         if (pairings.length >= MAX_TOTAL_PAIRINGS) {
-          console.warn(`Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`);
+          console.warn(
+            `Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
+          );
           break;
         }
 
@@ -410,13 +559,24 @@ class KJVParser {
         const verses2 = termToVerses.get(term2) || [];
 
         // Find pairings between these two terms from different groups
-        const pairPairings = this.findPairingsForTerms(term1, term2, verses1, verses2, true);
+        const pairPairings = this.findPairingsForTerms(
+          term1,
+          term2,
+          verses1,
+          verses2,
+          true
+        );
 
         // Filter out already processed pairings to prevent duplicates
         for (const pairing of pairPairings) {
-          const pairingKey = pairing.proximity === 0
-            ? `same-${pairing.verses[0].position}-${term1}-${term2}`
-            : `pair-${Math.min(...pairing.verses.map(v => v.position))}-${Math.max(...pairing.verses.map(v => v.position))}-${term1}-${term2}`;
+          const pairingKey =
+            pairing.proximity === 0
+              ? `same-${pairing.verses[0].position}-${term1}-${term2}`
+              : `pair-${Math.min(
+                  ...pairing.verses.map((v) => v.position)
+                )}-${Math.max(
+                  ...pairing.verses.map((v) => v.position)
+                )}-${term1}-${term2}`;
 
           if (!processedPairings.has(pairingKey)) {
             pairings.push(pairing);
@@ -430,7 +590,13 @@ class KJVParser {
     return pairings;
   }
 
-  private findPairingsForTerms(term1: string, term2: string, verses1: Verse[], verses2: Verse[], isBetweenGroups: boolean = false): VersePairing[] {
+  private findPairingsForTerms(
+    term1: string,
+    term2: string,
+    verses1: Verse[],
+    verses2: Verse[],
+    isBetweenGroups: boolean = false
+  ): VersePairing[] {
     const pairings: VersePairing[] = [];
     const MAX_PAIRINGS_PER_TERM_PAIR = 5000; // Limit to prevent memory explosion
 
@@ -438,13 +604,13 @@ class KJVParser {
     for (const verse of verses1) {
       if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
 
-      if (verses2.some(v => v.position === verse.position)) {
+      if (verses2.some((v) => v.position === verse.position)) {
         pairings.push({
           verses: [verse],
           term1,
           term2,
           proximity: 0,
-          isBetweenGroups
+          isBetweenGroups,
         });
       }
     }
@@ -464,11 +630,14 @@ class KJVParser {
         if (proximity > MAX_PROXIMITY) continue;
 
         pairings.push({
-          verses: verse1.position < verse2.position ? [verse1, verse2] : [verse2, verse1],
+          verses:
+            verse1.position < verse2.position
+              ? [verse1, verse2]
+              : [verse2, verse1],
           term1,
           term2,
           proximity,
-          isBetweenGroups
+          isBetweenGroups,
         });
       }
     }

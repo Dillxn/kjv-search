@@ -13,6 +13,7 @@ import {
 import { VirtualScroll } from '../lib/virtual-scroll';
 import { TabBar } from '../lib/tab-bar';
 import { TabManager, TabState, TabManagerService } from '../lib/tab-manager';
+import { GraphVisualizer } from '../lib/graph-visualizer';
 
 const HIGHLIGHT_COLORS_LIGHT = [
   'bg-yellow-200 text-yellow-900',
@@ -109,6 +110,12 @@ export default function Home() {
     newTestament: number;
     books: Record<string, number>;
   }>({ total: 0, oldTestament: 0, newTestament: 0, books: {} });
+  const [showGraph, setShowGraph] = useState(false);
+  const [selectedConnections, setSelectedConnections] = useState<Array<{
+    word1: string;
+    word2: string;
+    reference: string;
+  }>>([]);
 
   // Generate unique localStorage key for scroll position based on tab ID and active tab
   const scrollPositionKey = useMemo(() => {
@@ -588,36 +595,76 @@ export default function Home() {
       );
     };
 
+    // Check if this pairing is already in the graph
+    const isInGraph = selectedConnections.some(conn => 
+      (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+      (conn.word1 === pairing.term2 && conn.word2 === pairing.term1)
+    );
+
+    const handleAddToGraph = () => {
+      if (!isInGraph) {
+        const verseRef = pairing.verses.length === 1 
+          ? pairing.verses[0].reference
+          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+        
+        setSelectedConnections(prev => [...prev, {
+          word1: pairing.term1,
+          word2: pairing.term2,
+          reference: verseRef
+        }]);
+      }
+    };
+
     return (
       <div
-        className={`border-l-2 flex flex-col justify-center ${
+        className={`border-l-2 flex justify-between items-start ${
           compactMode ? 'pl-1.5 py-0.5 mb-0.5' : 'pl-2 py-1 mb-1'
         } ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}
       >
-        {pairing.verses.map((verse, verseIndex) => (
-          <div
-            key={verse.position}
-            className={verseIndex > 0 ? (compactMode ? 'mt-0.5' : 'mt-1') : ''}
-          >
-            <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
-              <span
-                className={`font-semibold text-xs ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-800'
-                }`}
-              >
-                {verse.reference}
-              </span>
-            </div>
+        <div className="flex-1">
+          {pairing.verses.map((verse, verseIndex) => (
             <div
-              className={`${
-                compactMode ? 'text-xs leading-tight' : 'text-xs leading-snug'
-              } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
-              dangerouslySetInnerHTML={{
-                __html: highlightPairingText(verse.text),
-              }}
-            />
-          </div>
-        ))}
+              key={verse.position}
+              className={verseIndex > 0 ? (compactMode ? 'mt-0.5' : 'mt-1') : ''}
+            >
+              <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
+                <span
+                  className={`font-semibold text-xs ${
+                    isDarkMode ? 'text-gray-200' : 'text-gray-800'
+                  }`}
+                >
+                  {verse.reference}
+                </span>
+              </div>
+              <div
+                className={`${
+                  compactMode ? 'text-xs leading-tight' : 'text-xs leading-snug'
+                } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                dangerouslySetInnerHTML={{
+                  __html: highlightPairingText(verse.text),
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        {showGraph && (
+          <button
+            onClick={handleAddToGraph}
+            disabled={isInGraph}
+            className={`ml-2 px-1.5 py-0.5 text-xs rounded ${
+              isInGraph
+                ? isDarkMode
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : isDarkMode
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-blue-500 text-white hover:bg-blue-600'
+            } transition-colors`}
+            title={isInGraph ? 'Already in graph' : 'Add to graph'}
+          >
+            {isInGraph ? '✓' : '+'}
+          </button>
+        )}
       </div>
     );
   };
@@ -767,6 +814,25 @@ export default function Home() {
               KJV Bible Search
             </h1>
             <div className='flex gap-1'>
+              <button
+                onClick={() => setShowGraph(!showGraph)}
+                className={`p-0.5 rounded-full text-sm ${
+                  showGraph
+                    ? isDarkMode
+                      ? 'bg-green-600 text-white'
+                      : 'bg-green-500 text-white'
+                    : isDarkMode
+                    ? 'bg-gray-700 text-gray-400'
+                    : 'bg-gray-200 text-gray-600'
+                } hover:opacity-80 transition-opacity`}
+                title={
+                  showGraph
+                    ? 'Hide graph visualizer'
+                    : 'Show graph visualizer'
+                }
+              >
+                🕸️
+              </button>
               <button
                 onClick={() => setCompactMode(!compactMode)}
                 className={`p-0.5 rounded-full text-sm ${
@@ -1167,11 +1233,13 @@ export default function Home() {
         </div>
 
         {(results.length > 0 || pairings.length > 0) && (
-          <div
-            className={`rounded-lg shadow-md p-1.5 flex flex-col flex-1 min-h-0 ${
-              isDarkMode ? 'bg-gray-800' : 'bg-white'
-            }`}
-          >
+          <div className={`flex gap-2 flex-1 min-h-0`}>
+            {/* Main Results Panel */}
+            <div
+              className={`rounded-lg shadow-md p-1.5 flex flex-col flex-1 min-h-0 ${
+                isDarkMode ? 'bg-gray-800' : 'bg-white'
+              } ${showGraph ? 'min-w-0' : ''}`}
+            >
             <div className='mb-1.5 flex-shrink-0'>
               <div className='flex items-center justify-between mb-1.5'>
                 <h2
@@ -1441,6 +1509,47 @@ export default function Home() {
                 localStorageKey={scrollPositionKey}
                 renderItem={renderPairing}
               />
+            )}
+            </div>
+
+            {/* Graph Panel */}
+            {showGraph && (
+              <div
+                className={`rounded-lg shadow-md flex flex-col overflow-hidden ${
+                  isDarkMode ? 'bg-gray-800' : 'bg-white'
+                } ${compactMode ? 'w-80' : 'w-96'}`}
+              >
+                <div className={`p-2 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Connection Graph ({selectedConnections.length})
+                      </h3>
+                      <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Select word pairs from results to build your graph
+                      </p>
+                    </div>
+                    {selectedConnections.length > 0 && (
+                      <button
+                        onClick={() => setSelectedConnections([])}
+                        className={`px-2 py-1 text-xs rounded ${
+                          isDarkMode
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-red-500 text-white hover:bg-red-600'
+                        } transition-colors`}
+                        title="Clear graph"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 p-2">
+                  <GraphVisualizer
+                    connections={selectedConnections}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}

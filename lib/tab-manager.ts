@@ -34,6 +34,11 @@ export class TabManagerService {
   private static readonly MAX_TABS = 10;
 
   static loadTabManager(): TabManager {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return this.createDefaultTabManager();
+    }
+
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (stored) {
@@ -55,6 +60,11 @@ export class TabManagerService {
   }
 
   static saveTabManager(tabManager: TabManager): void {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(tabManager));
     } catch (error) {
