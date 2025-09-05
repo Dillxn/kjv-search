@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { kjvParser, SearchResult, VersePairing, SearchFilters, MatchBounds, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
 import { VirtualScroll } from '../lib/virtual-scroll';
 
@@ -74,6 +74,14 @@ export default function Home() {
     newTestament: number;
     books: Record<string, number>;
   }>({ total: 0, oldTestament: 0, newTestament: 0, books: {} });
+
+  // Generate unique localStorage key for scroll position based on search terms and active tab
+  const scrollPositionKey = useMemo(() => {
+    const searchKey = searchTerms.trim().toLowerCase().replace(/\s+/g, '-');
+    const pairingsKey = pairingsSearchTerms.trim().toLowerCase().replace(/\s+/g, '-');
+    const combinedKey = searchKey || pairingsKey ? `${searchKey}_${pairingsKey}_${activeTab}` : `default_${activeTab}`;
+    return `kjv-scroll-${combinedKey}`;
+  }, [searchTerms, pairingsSearchTerms, activeTab]);
 
   const getHighlightColors = useCallback(() => {
     return isDarkMode ? HIGHLIGHT_COLORS_DARK : HIGHLIGHT_COLORS_LIGHT;
@@ -519,8 +527,8 @@ export default function Home() {
     for (const [term, colorClass] of pairingsTermToColor.entries()) {
       if (term.length >= 2) {
         const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\b(${escapedTerm}\\w*)`, 'gi');
-        result = result.replace(regex, `<mark class="${colorClass} border px-0.5 rounded">$1</mark>`);
+        const regex = new RegExp(`\\b${escapedTerm}\\w*`, 'gi');
+        result = result.replace(regex, `<mark class="${colorClass} border px-0.5 rounded">$&</mark>`);
       }
     }
 
@@ -528,8 +536,8 @@ export default function Home() {
     for (const [term, colorClass] of mainTermToColor.entries()) {
       if (term.length >= 2) {
         const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\b(${escapedTerm}\\w*)`, 'gi');
-        result = result.replace(regex, `<mark class="${colorClass} px-0.5 rounded">$1</mark>`);
+        const regex = new RegExp(`\\b${escapedTerm}\\w*`, 'gi');
+        result = result.replace(regex, `<mark class="${colorClass} px-0.5 rounded">$&</mark>`);
       }
     }
 
@@ -1039,6 +1047,7 @@ export default function Home() {
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
                 estimatedItemHeight={60}
+                localStorageKey={scrollPositionKey}
                 renderItem={(result) => (
                   <div className={`border-l-2 pl-3 py-1.5 mb-1.5 flex flex-col justify-center ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}>
                     <div className="mb-0.5">
@@ -1061,6 +1070,7 @@ export default function Home() {
                 containerHeight={containerHeight}
                 className="flex-1 scrollbar-visible"
                 estimatedItemHeight={80}
+                localStorageKey={scrollPositionKey}
                 renderItem={renderPairing}
               />
             )}

@@ -10,6 +10,7 @@ interface VirtualScrollProps<T> {
   overscan?: number;
   className?: string;
   estimatedItemHeight?: number;
+  localStorageKey?: string;
 }
 
 export function VirtualScroll<T>({
@@ -19,12 +20,34 @@ export function VirtualScroll<T>({
   renderItem,
   overscan = 5,
   className = '',
-  estimatedItemHeight = 50
+  estimatedItemHeight = 50,
+  localStorageKey
 }: VirtualScrollProps<T>) {
   const [scrollTop, setScrollTop] = useState(0);
   const [measuredHeights, setMeasuredHeights] = useState<Map<number, number>>(new Map());
   const scrollElementRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Restore scroll position from localStorage on mount
+  useEffect(() => {
+    if (localStorageKey && isInitialLoad && scrollElementRef.current) {
+      const savedScrollTop = localStorage.getItem(localStorageKey);
+      if (savedScrollTop) {
+        const scrollPosition = parseInt(savedScrollTop, 10);
+        if (!isNaN(scrollPosition) && scrollPosition > 0) {
+          // Use setTimeout to ensure DOM is ready
+          setTimeout(() => {
+            if (scrollElementRef.current) {
+              scrollElementRef.current.scrollTop = scrollPosition;
+              setScrollTop(scrollPosition);
+            }
+          }, 0);
+        }
+      }
+      setIsInitialLoad(false);
+    }
+  }, [localStorageKey, isInitialLoad]);
 
   // Calculate item heights and positions
   const { totalHeight, itemPositions } = useMemo(() => {
@@ -87,8 +110,14 @@ export function VirtualScroll<T>({
   const offsetY = itemPositions[startIndex] || 0;
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  }, []);
+    const newScrollTop = e.currentTarget.scrollTop;
+    setScrollTop(newScrollTop);
+
+    // Save scroll position to localStorage
+    if (localStorageKey) {
+      localStorage.setItem(localStorageKey, newScrollTop.toString());
+    }
+  }, [localStorageKey]);
 
   // Measure item heights after render
   useEffect(() => {
