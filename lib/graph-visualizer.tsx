@@ -25,23 +25,52 @@ interface GraphVisualizerProps {
 
 export function GraphVisualizer({ connections }: GraphVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  // Pan and zoom state
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+
+  // Update canvas size when container resizes
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const width = Math.max(400, Math.floor(rect.width - 8)); // Account for border and padding
+        const height = Math.max(300, Math.floor(rect.height - 8));
+        setCanvasSize({ width, height });
+      }
+    };
+
+    // Initial size update with a small delay to ensure container is rendered
+    const timer = setTimeout(updateCanvasSize, 100);
+
+    // Also update on resize
+    window.addEventListener('resize', updateCanvasSize);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateCanvasSize);
+    };
+  }, []);
 
   // Generate a position for a new node that doesn't overlap with existing nodes
-  const generateNodePosition = (
-    existingNodes: Node[],
-    canvasWidth: number,
-    canvasHeight: number
-  ) => {
-    const margin = 60;
-    const minDistance = 120;
+  const generateNodePosition = (existingNodes: Node[]) => {
+    // Use a larger virtual space for better node distribution
+    const virtualWidth = 1200;
+    const virtualHeight = 900;
+    const margin = 100;
+    const minDistance = 150;
     let attempts = 0;
     const maxAttempts = 100;
 
     while (attempts < maxAttempts) {
-      const x = margin + Math.random() * (canvasWidth - 2 * margin);
-      const y = margin + Math.random() * (canvasHeight - 2 * margin);
+      const x = margin + Math.random() * (virtualWidth - 2 * margin);
+      const y = margin + Math.random() * (virtualHeight - 2 * margin);
 
       // Check if this position is far enough from existing nodes
       const tooClose = existingNodes.some((node) => {
@@ -57,8 +86,8 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
     // Fallback: use a grid-based position
     const gridSize = Math.ceil(Math.sqrt(existingNodes.length + 1));
-    const cellWidth = (canvasWidth - 2 * margin) / gridSize;
-    const cellHeight = (canvasHeight - 2 * margin) / gridSize;
+    const cellWidth = (virtualWidth - 2 * margin) / gridSize;
+    const cellHeight = (virtualHeight - 2 * margin) / gridSize;
     const index = existingNodes.length;
     const row = Math.floor(index / gridSize);
     const col = index % gridSize;
@@ -69,6 +98,10 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     };
   };
 
+  const resetView = () => {
+    setTransform({ x: 0, y: 0, scale: 1 });
+  };
+
   // Update graph when connections change
   useEffect(() => {
     if (connections.length === 0) {
@@ -76,10 +109,6 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       setEdges([]);
       return;
     }
-
-    const canvas = canvasRef.current;
-    const canvasWidth = canvas?.width || 800;
-    const canvasHeight = canvas?.height || 600;
 
     setNodes((prevNodes) => {
       const nodeMap = new Map<string, Node>();
@@ -95,11 +124,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       connections.forEach((conn) => {
         // Create nodes if they don't exist
         if (!nodeMap.has(conn.word1)) {
-          const position = generateNodePosition(
-            newNodes,
-            canvasWidth,
-            canvasHeight
-          );
+          const position = generateNodePosition(newNodes);
           const node: Node = {
             id: conn.word1,
             x: position.x,
@@ -111,11 +136,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         }
 
         if (!nodeMap.has(conn.word2)) {
-          const position = generateNodePosition(
-            newNodes,
-            canvasWidth,
-            canvasHeight
-          );
+          const position = generateNodePosition(newNodes);
           const node: Node = {
             id: conn.word2,
             x: position.x,
@@ -149,6 +170,139 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     });
   }, [connections]);
 
+  // Pan and zoom event handlers
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let initialScale = 1;
+    let initialTransform = { x: 0, y: 0, scale: 1 };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      setTransform((prev) => {
+        // Detect zoom gestures: ctrlKey (pinch), metaKey (cmd+scroll), or deltaZ
+        const isZoomGesture = e.ctrlKey || e.metaKey || Math.abs(e.deltaZ) > 0;
+
+        // Also detect zoom if deltaX and deltaY are both 0 but deltaY is significant (mouse wheel)
+        const isMouseWheel =
+          e.deltaX === 0 && Math.abs(e.deltaY) > 0 && e.deltaZ === 0;
+
+        if (isZoomGesture || isMouseWheel) {
+          // Zoom
+          let zoomDelta = e.deltaY;
+
+          // Use deltaZ if available (some trackpads)
+          if (Math.abs(e.deltaZ) > Math.abs(e.deltaY)) {
+            zoomDelta = e.deltaZ;
+          }
+
+          const zoomFactor = 1 - zoomDelta * 0.01;
+          const newScale = Math.max(0.1, Math.min(5, prev.scale * zoomFactor));
+
+          // Zoom towards mouse position
+          const scaleChange = newScale / prev.scale;
+          const newX = mouseX - (mouseX - prev.x) * scaleChange;
+          const newY = mouseY - (mouseY - prev.y) * scaleChange;
+
+          return { x: newX, y: newY, scale: newScale };
+        } else {
+          // Pan - trackpad scroll gestures
+          return {
+            ...prev,
+            x: prev.x - e.deltaX,
+            y: prev.y - e.deltaY,
+          };
+        }
+      });
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setLastPanPoint({ x: transform.x, y: transform.y });
+      canvas.style.cursor = 'grabbing';
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+
+      setTransform((prev) => ({
+        ...prev,
+        x: lastPanPoint.x + deltaX,
+        y: lastPanPoint.y + deltaY,
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      canvas.style.cursor = 'grab';
+    };
+
+    // Handle Safari/WebKit gesture events for better trackpad support
+    const handleGestureStart = (e: any) => {
+      e.preventDefault();
+      initialScale = e.scale;
+      initialTransform = { ...transform };
+    };
+
+    const handleGestureChange = (e: any) => {
+      e.preventDefault();
+      const scaleChange = e.scale / initialScale;
+      const newScale = Math.max(
+        0.1,
+        Math.min(5, initialTransform.scale * scaleChange)
+      );
+
+      setTransform({
+        ...initialTransform,
+        scale: newScale,
+      });
+    };
+
+    const handleGestureEnd = (e: any) => {
+      e.preventDefault();
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseUp);
+
+    // Add gesture event listeners for Safari/WebKit
+    canvas.addEventListener('gesturestart', handleGestureStart, {
+      passive: false,
+    });
+    canvas.addEventListener('gesturechange', handleGestureChange, {
+      passive: false,
+    });
+    canvas.addEventListener('gestureend', handleGestureEnd, { passive: false });
+
+    // Set initial cursor
+    canvas.style.cursor = 'grab';
+
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mouseleave', handleMouseUp);
+      canvas.removeEventListener('gesturestart', handleGestureStart);
+      canvas.removeEventListener('gesturechange', handleGestureChange);
+      canvas.removeEventListener('gestureend', handleGestureEnd);
+    };
+  }, [isDragging, dragStart, lastPanPoint, transform]);
+
+  // Drawing effect with transform applied
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -159,8 +313,14 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Apply transform
+    ctx.save();
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.scale, transform.scale);
+
     if (nodes.length === 0) {
-      // Show empty state message
+      // Show empty state message (reset transform for centered text)
+      ctx.restore();
       ctx.fillStyle = '#666';
       ctx.font = '16px Arial';
       ctx.textAlign = 'center';
@@ -174,7 +334,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
     // Draw edges
     ctx.strokeStyle = '#666';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 / transform.scale; // Keep line width consistent
     edges.forEach((edge) => {
       const sourceNode = nodes.find((n) => n.id === edge.source);
       const targetNode = nodes.find((n) => n.id === edge.target);
@@ -201,12 +361,13 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
         // Background for text
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        const fontSize = 10 / transform.scale;
+        ctx.font = `${fontSize}px Arial`;
         const textWidth = ctx.measureText(edge.reference).width;
         ctx.fillRect(-textWidth / 2 - 2, -8, textWidth + 4, 12);
 
         // Text
         ctx.fillStyle = '#333';
-        ctx.font = '10px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(edge.reference, 0, -2);
         ctx.restore();
@@ -221,25 +382,43 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       ctx.fillStyle = '#f8f9fa';
       ctx.fill();
       ctx.strokeStyle = '#333';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 / transform.scale; // Keep stroke width consistent
       ctx.stroke();
 
       // Draw text
       ctx.fillStyle = '#333';
-      ctx.font = '12px Arial';
+      const fontSize = 12 / transform.scale;
+      ctx.font = `${fontSize}px Arial`;
       ctx.textAlign = 'center';
       ctx.fillText(node.word, node.x, node.y + 4);
     });
-  }, [nodes, edges]);
+
+    ctx.restore();
+  }, [nodes, edges, transform]);
 
   return (
-    <div className='w-full h-full'>
+    <div ref={containerRef} className='w-full h-full p-1 relative'>
       <canvas
         ref={canvasRef}
-        width={800}
-        height={600}
-        className='border border-gray-300 w-full h-full bg-white'
+        width={canvasSize.width}
+        height={canvasSize.height}
+        className='border border-gray-300 bg-white block'
+        style={{
+          width: canvasSize.width,
+          height: canvasSize.height,
+        }}
       />
+      {nodes.length > 0 && (
+        <div className='absolute top-2 right-2 flex gap-1'>
+          <button
+            onClick={resetView}
+            className='px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors'
+            title='Reset view (zoom and pan)'
+          >
+            Reset View
+          </button>
+        </div>
+      )}
     </div>
   );
 }
