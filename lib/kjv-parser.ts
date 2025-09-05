@@ -175,6 +175,37 @@ class KJVParser {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  private areTermsSameWord(term1: string, term2: string): boolean {
+    // Normalize both terms for comparison
+    const normalize = (term: string): string => {
+      return term.toLowerCase().trim()
+        // Remove common suffixes
+        .replace(/(ful|ly|ing|ed|er|est|s)$/, '')
+        // Handle irregular forms
+        .replace(/^faithf/, 'faith')
+        .replace(/^lov/, 'love')
+        .replace(/^runn/, 'run')
+        .replace(/^begun$/, 'begin')
+        .replace(/^began$/, 'begin');
+    };
+
+    const normalized1 = normalize(term1);
+    const normalized2 = normalize(term2);
+
+    // If terms are identical after normalization, they're the same word
+    if (normalized1 === normalized2) {
+      return true;
+    }
+
+    // Handle cases where one term is a direct substring of the other
+    // (e.g., "faith" and "faithful", "love" and "loving")
+    if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+      return true;
+    }
+
+    return false;
+  }
+
   searchWords(searchTerms: string[], filters: SearchFilters = {}): SearchResult[] {
     const allResults = new Map<string, SearchResult>();
     const validTerms = searchTerms.filter(term => {
@@ -279,6 +310,12 @@ class KJVParser {
 
         const term1 = termArray[i];
         const term2 = termArray[j];
+
+        // Filter out pairings where both terms are the same word
+        if (this.areTermsSameWord(term1, term2)) {
+          continue;
+        }
+
         const verses1 = termToVerses.get(term1) || [];
         const verses2 = termToVerses.get(term2) || [];
 
@@ -362,6 +399,11 @@ class KJVParser {
         if (pairings.length >= MAX_TOTAL_PAIRINGS) {
           console.warn(`Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`);
           break;
+        }
+
+        // Filter out pairings where both terms are the same word
+        if (this.areTermsSameWord(term1, term2)) {
+          continue;
         }
 
         const verses1 = termToVerses.get(term1) || [];
