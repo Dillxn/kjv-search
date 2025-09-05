@@ -7,9 +7,15 @@ export interface Verse {
   position: number; // Position in the original text for canonical ordering
 }
 
+export interface MatchBounds {
+  term: string;
+  start: number;
+  end: number;
+}
+
 export interface SearchResult {
   verse: Verse;
-  matches: string[];
+  matches: MatchBounds[];
 }
 
 export interface VersePairing {
@@ -176,11 +182,8 @@ class KJVParser {
       const normalizedTerm = term.toLowerCase().trim();
       if (!normalizedTerm) continue;
 
-      // For word-boundary matching, we need to check each verse's text directly
-      const matchingVerses = new Set<Verse>();
-
       if (normalizedTerm.length >= 2) {
-        // Check all verses for word-boundary matches
+        // Check all verses for word-boundary matches and capture bounds
         for (const verse of this.verses) {
           // Apply filters first to avoid unnecessary processing
           if (!shouldIncludeVerse(verse, filters)) {
@@ -189,23 +192,28 @@ class KJVParser {
 
           // Create a regex that matches the term at word boundaries only
           // This ensures 'faith' matches 'faithful' but 'heir' doesn't match 'their'
-          const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}`, 'i');
-          
-          if (wordBoundaryRegex.test(verse.text)) {
-            matchingVerses.add(verse);
+          const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(normalizedTerm)}`, 'gi');
+          const matches = [...verse.text.matchAll(wordBoundaryRegex)];
+
+          if (matches.length > 0) {
+            const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
+            if (!allResults.has(key)) {
+              allResults.set(key, {
+                verse,
+                matches: []
+              });
+            }
+
+            // Add each match with its bounds
+            for (const match of matches) {
+              allResults.get(key)!.matches.push({
+                term,
+                start: match.index!,
+                end: match.index! + match[0].length
+              });
+            }
           }
         }
-      }
-
-      for (const verse of matchingVerses) {
-        const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
-        if (!allResults.has(key)) {
-          allResults.set(key, {
-            verse,
-            matches: []
-          });
-        }
-        allResults.get(key)!.matches.push(term);
       }
     }
 

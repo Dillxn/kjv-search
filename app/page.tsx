@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { kjvParser, SearchResult, VersePairing, SearchFilters, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
+import { kjvParser, SearchResult, VersePairing, SearchFilters, MatchBounds, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
 import { VirtualScroll } from '../lib/virtual-scroll';
 
 const HIGHLIGHT_COLORS_LIGHT = [
@@ -431,13 +431,10 @@ export default function Home() {
 
     // Function to highlight text with both color schemes
     const highlightPairingText = (text: string): string => {
-      // First highlight with main search terms (original colors)
-      let result = highlightText(text, [], searchTermsArray, false);
-
-      // Then highlight with pairings search terms (pairings colors)
-      result = highlightText(result, [], pairingsSearchTermsArray, true);
-
-      return result;
+      // For pairings, we need to combine matches from both search groups
+      // Since pairing results don't include match bounds, we'll need to fall back to regex for now
+      // TODO: Update VersePairing to include match bounds
+      return highlightTextWithRegex(text, searchTermsArray, pairingsSearchTermsArray);
     };
 
     return (
@@ -462,30 +459,77 @@ export default function Home() {
     );
   };
 
-  const highlightText = (text: string, matches: string[], searchTerms: string[], usePairingsColors: boolean = false): string => {
+  const highlightText = (text: string, matches: MatchBounds[], usePairingsColors: boolean = false): string => {
     const colors = usePairingsColors ? getPairingsHighlightColors() : getHighlightColors();
 
     // Create a map of search terms to colors
     const termToColor = new Map<string, string>();
-    searchTerms.forEach((term, index) => {
+    const uniqueTerms = [...new Set(matches.map(m => m.term.toLowerCase().trim()))];
+    uniqueTerms.forEach((term, index) => {
+      if (term) {
+        termToColor.set(term, colors[index % colors.length]);
+      }
+    });
+
+    // Sort matches by start position (reverse order to avoid index shifting)
+    const sortedMatches = matches.slice().sort((a, b) => b.start - a.start);
+
+    let result = text;
+
+    // Apply highlights using the provided bounds
+    for (const match of sortedMatches) {
+      const term = match.term.toLowerCase().trim();
+      const colorClass = termToColor.get(term);
+      if (colorClass) {
+        const before = result.slice(0, match.start);
+        const matchedText = result.slice(match.start, match.end);
+        const after = result.slice(match.end);
+        const borderClass = usePairingsColors ? 'border' : '';
+        result = `${before}<mark class="${colorClass} ${borderClass} px-0.5 rounded">${matchedText}</mark>${after}`;
+      }
+    }
+
+    return result;
+  };
+
+  const highlightTextWithRegex = (text: string, mainTerms: string[], pairingsTerms: string[]): string => {
+    const mainColors = getHighlightColors();
+    const pairingsColors = getPairingsHighlightColors();
+
+    // Create maps of terms to colors
+    const mainTermToColor = new Map<string, string>();
+    mainTerms.forEach((term, index) => {
       const normalizedTerm = term.toLowerCase().trim();
       if (normalizedTerm) {
-        termToColor.set(normalizedTerm, colors[index % colors.length]);
+        mainTermToColor.set(normalizedTerm, mainColors[index % mainColors.length]);
+      }
+    });
+
+    const pairingsTermToColor = new Map<string, string>();
+    pairingsTerms.forEach((term, index) => {
+      const normalizedTerm = term.toLowerCase().trim();
+      if (normalizedTerm) {
+        pairingsTermToColor.set(normalizedTerm, pairingsColors[index % pairingsColors.length]);
       }
     });
 
     let result = text;
 
-    // For each search term, find and highlight all occurrences using word-boundary matching
-    for (const [term, colorClass] of termToColor.entries()) {
+    // First highlight pairings terms (they get borders)
+    for (const [term, colorClass] of pairingsTermToColor.entries()) {
       if (term.length >= 2) {
-        // Escape special regex characters
         const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create a regex that matches the term at word boundaries only (partial matches allowed)
-        // This ensures 'faith' matches 'faithful' but 'heir' doesn't match 'their'
         const regex = new RegExp(`\\b(${escapedTerm}\\w*)`, 'gi');
-        const borderClass = usePairingsColors ? 'border' : '';
-        result = result.replace(regex, `<mark class="${colorClass} ${borderClass} px-0.5 rounded">$1</mark>`);
+        result = result.replace(regex, `<mark class="${colorClass} border px-0.5 rounded">$1</mark>`);
+      }
+    }
+
+    // Then highlight main terms (no borders)
+    for (const [term, colorClass] of mainTermToColor.entries()) {
+      if (term.length >= 2) {
+        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b(${escapedTerm}\\w*)`, 'gi');
+        result = result.replace(regex, `<mark class="${colorClass} px-0.5 rounded">$1</mark>`);
       }
     }
 
@@ -1005,7 +1049,7 @@ export default function Home() {
                     <div
                       className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
                       dangerouslySetInnerHTML={{
-                        __html: highlightText(result.verse.text, result.matches, getSearchTermsArray())
+                        __html: highlightText(result.verse.text, result.matches)
                       }}
                     />
                   </div>
