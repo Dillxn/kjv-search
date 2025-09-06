@@ -196,7 +196,7 @@ export class PairingGenerator {
     console.log(
       `Completed processing ${termPairs.length} term pairs, found ${pairings.length} verse pairings.`
     );
-    return PairingGenerator.consolidatePairings(pairings, termToVerses);
+    return pairings;
   }
 
   static async generateBetweenGroupsPairingsAsync(
@@ -285,7 +285,7 @@ export class PairingGenerator {
     console.log(
       `Completed processing ${termPairs.length} term pairs, found ${pairings.length} verse pairings.`
     );
-    return PairingGenerator.consolidatePairings(pairings, termToVerses, group1Terms, group2Terms);
+    return pairings;
   }
 
 
@@ -305,126 +305,5 @@ export class PairingGenerator {
     )}-${term1}-${term2}`;
   }
 
-  // Consolidate pairings that share verses but have different word combinations
-  static consolidatePairings(pairings: VersePairing[], termToVerses?: Map<string, Verse[]>, group1Terms?: string[], group2Terms?: string[]): VersePairing[] {
-    
 
-    const verseGroupMap = new Map<string, VersePairing[]>();
-
-    // Group pairings by their verse positions
-    for (const pairing of pairings) {
-      const verseKey = pairing.verses
-        .map((v) => v.position)
-        .sort((a, b) => a - b)
-        .join(',');
-      if (!verseGroupMap.has(verseKey)) {
-        verseGroupMap.set(verseKey, []);
-      }
-      verseGroupMap.get(verseKey)!.push(pairing);
-    }
-
-    console.log(
-      'Verse groups:',
-      Array.from(verseGroupMap.entries()).map(([key, pairings]) => ({
-        verseKey: key,
-        pairingCount: pairings.length,
-        pairings: pairings.map((p) => `${p.term1} ↔ ${p.term2}`),
-      }))
-    );
-
-    const consolidatedPairings: VersePairing[] = [];
-
-    // Process each verse group
-    for (const [, groupPairings] of verseGroupMap) {
-      const firstPairing = groupPairings[0];
-      
-      // Collect all unique terms that appear in these verses
-      const allTermsSet = new Set<string>();
-      
-      // Add all terms from all pairings in this group
-      for (const pairing of groupPairings) {
-        allTermsSet.add(pairing.term1);
-        allTermsSet.add(pairing.term2);
-      }
-      
-      // If we have access to the full term-to-verses mapping, find ALL search terms in these verses
-      if (termToVerses) {
-        const versePositions = new Set(firstPairing.verses.map(v => v.position));
-        
-        // Check each search term to see if it appears in any of these verses
-        for (const [term, verses] of termToVerses) {
-          const termAppearsInTheseVerses = verses.some(v => versePositions.has(v.position));
-          if (termAppearsInTheseVerses) {
-            allTermsSet.add(term);
-          }
-        }
-      }
-      
-      // Convert terms set to array for easier processing
-      const allTerms = Array.from(allTermsSet);
-      
-      // Generate valid term pairs based on the pairing type
-      const validPairs: string[] = [];
-      const pairSet = new Set<string>(); // Track pairs to avoid duplicates
-      
-      if (firstPairing.isBetweenGroups && group1Terms && group2Terms) {
-        // For between-groups pairings, only create pairs between different groups
-        const group1Set = new Set(group1Terms);
-        const group2Set = new Set(group2Terms);
-        
-        for (const term1 of allTerms) {
-          for (const term2 of allTerms) {
-            if (term1 !== term2) {
-              // Only create pairs between different groups
-              const term1InGroup1 = group1Set.has(term1);
-              const term1InGroup2 = group2Set.has(term1);
-              const term2InGroup1 = group1Set.has(term2);
-              const term2InGroup2 = group2Set.has(term2);
-              
-              // Valid if one term is in group1 and the other is in group2
-              if ((term1InGroup1 && term2InGroup2) || (term1InGroup2 && term2InGroup1)) {
-                // Ensure consistent ordering to avoid duplicates (alphabetical)
-                const [first, second] = [term1, term2].sort();
-                const pairKey = `${first}↔${second}`;
-                
-                if (!pairSet.has(pairKey)) {
-                  pairSet.add(pairKey);
-                  validPairs.push(`${first} ↔ ${second}`);
-                }
-              }
-            }
-          }
-        }
-      } else {
-        // For within-group pairings, create all possible pairs
-        for (let i = 0; i < allTerms.length; i++) {
-          for (let j = i + 1; j < allTerms.length; j++) {
-            // Already in correct order (i < j), so no duplicates possible
-            const pair = `${allTerms[i]} ↔ ${allTerms[j]}`;
-            validPairs.push(pair);
-          }
-        }
-      }
-      
-      
-      
-
-      // Create consolidated pairing with valid term pairs
-      const consolidatedPairing: VersePairing = {
-        verses: firstPairing.verses,
-        term1: firstPairing.term1,
-        term2: firstPairing.term2,
-        proximity: firstPairing.proximity,
-        isBetweenGroups: firstPairing.isBetweenGroups,
-        allTermPairs: validPairs.length > 0 ? validPairs : [`${firstPairing.term1} ↔ ${firstPairing.term2}`],
-      };
-
-      consolidatedPairings.push(consolidatedPairing);
-    }
-
-    console.log(
-      `Consolidated ${pairings.length} pairings into ${consolidatedPairings.length} consolidated pairings`
-    );
-    return consolidatedPairings;
-  }
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { VersePairing } from '../lib';
 
 interface GraphConnection {
@@ -28,35 +28,24 @@ export function useGraphState() {
           ? pairing.verses[0].reference
           : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
-      // Get all term pairs
-      const termPairs =
-        pairing.allTermPairs && pairing.allTermPairs.length > 0
-          ? pairing.allTermPairs.map((pairStr) => {
-              const [term1, term2] = pairStr.split(' ↔ ');
-              return { term1: term1.trim(), term2: term2.trim() };
-            })
-          : [{ term1: pairing.term1, term2: pairing.term2 }];
+      // Check if this pairing is already in the graph
+      const exists = connections.some((conn) => {
+        const positionsMatch =
+          conn.versePositions &&
+          conn.versePositions.length === versePositions.length &&
+          conn.versePositions.every((pos: number) =>
+            versePositions.includes(pos)
+          );
 
-      // Check if ALL term pairs are already in the graph
-      const allExist = termPairs.every(({ term1, term2 }) => {
-        return connections.some((conn) => {
-          const positionsMatch =
-            conn.versePositions &&
-            conn.versePositions.length === versePositions.length &&
-            conn.versePositions.every((pos: number) =>
-              versePositions.includes(pos)
-            );
+        const wordsMatch =
+          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
 
-          const wordsMatch =
-            (conn.word1 === term1 && conn.word2 === term2) ||
-            (conn.word1 === term2 && conn.word2 === term1);
-
-          return wordsMatch && positionsMatch;
-        });
+        return wordsMatch && positionsMatch;
       });
 
-      if (allExist) {
-        // Remove all term pairs from graph
+      if (exists) {
+        // Remove from graph
         setSelectedConnections((prev) => {
           const prevArray = Array.isArray(prev) ? prev : [];
           const filteredConnections = prevArray.filter((conn) => {
@@ -69,49 +58,27 @@ export function useGraphState() {
 
             if (!positionsMatch) return true;
 
-            return !termPairs.some(({ term1, term2 }) => {
-              return (
-                (conn.word1 === term1 && conn.word2 === term2) ||
-                (conn.word1 === term2 && conn.word2 === term1)
-              );
-            });
+            const wordsMatch =
+              (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+              (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+            return !wordsMatch;
           });
           return cleanupOrphanedNodes(filteredConnections);
         });
       } else {
-        // Add all term pairs to graph
-        const newConnections = termPairs
-          .filter(({ term1, term2 }) => {
-            const exists = connections.some((conn) => {
-              const positionsMatch =
-                conn.versePositions &&
-                conn.versePositions.length === versePositions.length &&
-                conn.versePositions.every((pos: number) =>
-                  versePositions.includes(pos)
-                );
+        // Add to graph
+        const newConnection: GraphConnection = {
+          word1: pairing.term1,
+          word2: pairing.term2,
+          reference: verseRef,
+          versePositions: versePositions,
+        };
 
-              const wordsMatch =
-                (conn.word1 === term1 && conn.word2 === term2) ||
-                (conn.word1 === term2 && conn.word2 === term1);
-
-              return wordsMatch && positionsMatch;
-            });
-
-            return !exists;
-          })
-          .map(({ term1, term2 }) => ({
-            word1: term1,
-            word2: term2,
-            reference: verseRef,
-            versePositions: versePositions,
-          }));
-
-        if (newConnections.length > 0) {
-          setSelectedConnections((prev) => {
-            const prevArray = Array.isArray(prev) ? prev : [];
-            return cleanupOrphanedNodes([...prevArray, ...newConnections]);
-          });
-        }
+        setSelectedConnections((prev) => {
+          const prevArray = Array.isArray(prev) ? prev : [];
+          return cleanupOrphanedNodes([...prevArray, newConnection]);
+        });
       }
     },
     [selectedConnections, cleanupOrphanedNodes]
@@ -143,42 +110,20 @@ export function useGraphState() {
             ? pairing.verses[0].reference
             : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
-        if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
-          pairing.allTermPairs.forEach((pairStr) => {
-            const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
-            const sortedPositions = versePositions
-              .slice()
-              .sort((a, b) => a - b)
-              .join(',');
-            const [word1, word2] = [term1, term2].sort();
-            const key = `${word1}-${word2}-${sortedPositions}`;
+        const sortedPositions = versePositions
+          .slice()
+          .sort((a, b) => a - b)
+          .join(',');
+        const [word1, word2] = [pairing.term1, pairing.term2].sort();
+        const key = `${word1}-${word2}-${sortedPositions}`;
 
-            if (!existingKeys.has(key)) {
-              newConnections.push({
-                word1: term1,
-                word2: term2,
-                reference: verseRef,
-                versePositions: versePositions,
-              });
-              existingKeys.add(key);
-            }
+        if (!existingKeys.has(key)) {
+          newConnections.push({
+            word1: pairing.term1,
+            word2: pairing.term2,
+            reference: verseRef,
+            versePositions: versePositions,
           });
-        } else {
-          const sortedPositions = versePositions
-            .slice()
-            .sort((a, b) => a - b)
-            .join(',');
-          const [word1, word2] = [pairing.term1, pairing.term2].sort();
-          const key = `${word1}-${word2}-${sortedPositions}`;
-
-          if (!existingKeys.has(key)) {
-            newConnections.push({
-              word1: pairing.term1,
-              word2: pairing.term2,
-              reference: verseRef,
-              versePositions: versePositions,
-            });
-          }
         }
       });
 
@@ -195,25 +140,13 @@ export function useGraphState() {
   const handleDeselectAllPairings = useCallback(
     (pairings: VersePairing[]) => {
       const currentPairingKeys = new Set(
-        pairings.flatMap((pairing) => {
-          if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
-            const versePositions = pairing.verses
-              .map((v) => v.position)
-              .sort((a, b) => a - b)
-              .join(',');
-            return pairing.allTermPairs.map((pairStr) => {
-              const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
-              const [word1, word2] = [term1, term2].sort();
-              return `${word1}-${word2}-${versePositions}`;
-            });
-          } else {
-            const versePositions = pairing.verses
-              .map((v) => v.position)
-              .sort((a, b) => a - b)
-              .join(',');
-            const [word1, word2] = [pairing.term1, pairing.term2].sort();
-            return [`${word1}-${word2}-${versePositions}`];
-          }
+        pairings.map((pairing) => {
+          const versePositions = pairing.verses
+            .map((v) => v.position)
+            .sort((a, b) => a - b)
+            .join(',');
+          const [word1, word2] = [pairing.term1, pairing.term2].sort();
+          return `${word1}-${word2}-${versePositions}`;
         })
       );
 
@@ -282,16 +215,8 @@ export function useGraphState() {
         .sort((a, b) => a - b)
         .join(',');
       
-      if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
-        pairing.allTermPairs.forEach((pairStr) => {
-          const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
-          const [word1, word2] = [term1, term2].sort();
-          validConnectionKeys.add(`${word1}-${word2}-${versePositions}`);
-        });
-      } else {
-        const [word1, word2] = [pairing.term1, pairing.term2].sort();
-        validConnectionKeys.add(`${word1}-${word2}-${versePositions}`);
-      }
+      const [word1, word2] = [pairing.term1, pairing.term2].sort();
+      validConnectionKeys.add(`${word1}-${word2}-${versePositions}`);
     });
 
     setSelectedConnections((prev) => {

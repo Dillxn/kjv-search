@@ -24,7 +24,6 @@ export interface VersePairing {
   term2: string;
   proximity: number; // 0 for same verse, otherwise verse distance
   isBetweenGroups?: boolean; // true if pairing is between two different search groups
-  allTermPairs?: string[]; // All term combinations when consolidated
 }
 
 export interface SearchFilters {
