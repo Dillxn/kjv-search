@@ -703,6 +703,98 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     ctx.restore();
   }, [nodes, edges, transform]);
 
+  if (selectedEdge) {
+    // Show modal view
+    return (
+      <div ref={containerRef} className='w-full h-full flex flex-col bg-white'>
+        {/* Header */}
+        <div className='px-3 py-2 border-b bg-white shadow-sm flex justify-between items-center flex-shrink-0'>
+          <h3 className='text-sm font-semibold text-gray-800'>
+            {selectedEdge.edge.source} ↔ {selectedEdge.edge.target}
+          </h3>
+          <button
+            onClick={() => setSelectedEdge(null)}
+            className='text-gray-500 hover:text-gray-700 text-lg font-bold px-1 py-0.5 rounded hover:bg-gray-100'
+          >
+            ×
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className='flex-1 overflow-y-auto p-4'>
+          <div className='text-sm text-gray-600 mb-4'>
+            {(() => {
+              // Get current connections for this word pair (real-time)
+              const currentConnections = connectionsRef.current.filter(conn => 
+                (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
+                (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
+              );
+              
+              return currentConnections.length > 0 
+                ? `Found ${currentConnections.length} connection(s) between these words (updates in real-time)`
+                : 'No connections currently selected for these words';
+            })()}
+          </div>
+          
+          {(() => {
+            // Get current connections and verses (real-time)
+            const currentConnections = connectionsRef.current.filter(conn => 
+              (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
+              (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
+            );
+            
+            if (currentConnections.length === 0) {
+              return (
+                <div className='text-center py-8 text-gray-500'>
+                  <p>No verses currently selected for this word pair.</p>
+                  <p className='text-sm mt-2'>Add pairings from the search results to see verses here.</p>
+                </div>
+              );
+            }
+            
+            // Collect all unique verse positions from current connections
+            const allVersePositions = new Set<number>();
+            currentConnections.forEach(conn => {
+              conn.versePositions?.forEach(pos => allVersePositions.add(pos));
+            });
+
+            const verses = kjvParser.getVerses();
+            const sortedPositions = Array.from(allVersePositions).sort((a, b) => a - b);
+            
+            return (
+              <div className='space-y-4'>
+                {sortedPositions.map((position) => {
+                  const verse = verses.find(v => v.position === position);
+                  if (!verse) return null;
+                  
+                  // Highlight the two connected words in the verse text
+                  const searchTerms = [selectedEdge.edge.source, selectedEdge.edge.target];
+                  const highlightedText = UnifiedHighlighter.highlightText(verse.text, {
+                    mainTerms: searchTerms,
+                    isDarkMode: false, // Modal is always light mode
+                  });
+                  
+                  return (
+                    <div key={position} className='p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500'>
+                      <div className='font-semibold text-sm text-gray-700 mb-2'>
+                        {verse.reference}
+                      </div>
+                      <div 
+                        className='text-sm text-gray-800 leading-relaxed'
+                        dangerouslySetInnerHTML={{ __html: highlightedText }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    );
+  }
+
+  // Show graph view
   return (
     <div ref={containerRef} className='w-full h-full relative overflow-hidden'>
       <canvas
@@ -732,95 +824,6 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
           >
             Reset View
           </button>
-        </div>
-      )}
-
-      {/* Edge Details Modal - Full Component Overlay */}
-      {selectedEdge && (
-        <div className='absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col'>
-          {/* Header */}
-          <div className='p-4 border-b bg-white shadow-sm flex justify-between items-center flex-shrink-0'>
-            <h3 className='text-lg font-semibold text-gray-800'>
-              Connection: {selectedEdge.edge.source} ↔ {selectedEdge.edge.target}
-            </h3>
-            <button
-              onClick={() => setSelectedEdge(null)}
-              className='text-gray-500 hover:text-gray-700 text-xl font-bold px-2 py-1 rounded hover:bg-gray-100'
-            >
-              ×
-            </button>
-          </div>
-          
-          {/* Content */}
-          <div className='flex-1 overflow-y-auto p-4'>
-            <div className='text-sm text-gray-600 mb-4'>
-              {(() => {
-                // Get current connections for this word pair (real-time)
-                const currentConnections = connectionsRef.current.filter(conn => 
-                  (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
-                  (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
-                );
-                
-                return currentConnections.length > 0 
-                  ? `Found ${currentConnections.length} connection(s) between these words (updates in real-time)`
-                  : 'No connections currently selected for these words';
-              })()}
-            </div>
-            
-            {(() => {
-              // Get current connections and verses (real-time)
-              const currentConnections = connectionsRef.current.filter(conn => 
-                (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
-                (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
-              );
-              
-              if (currentConnections.length === 0) {
-                return (
-                  <div className='text-center py-8 text-gray-500'>
-                    <p>No verses currently selected for this word pair.</p>
-                    <p className='text-sm mt-2'>Add pairings from the search results to see verses here.</p>
-                  </div>
-                );
-              }
-              
-              // Collect all unique verse positions from current connections
-              const allVersePositions = new Set<number>();
-              currentConnections.forEach(conn => {
-                conn.versePositions?.forEach(pos => allVersePositions.add(pos));
-              });
-
-              const verses = kjvParser.getVerses();
-              const sortedPositions = Array.from(allVersePositions).sort((a, b) => a - b);
-              
-              return (
-                <div className='space-y-4'>
-                  {sortedPositions.map((position) => {
-                    const verse = verses.find(v => v.position === position);
-                    if (!verse) return null;
-                    
-                    // Highlight the two connected words in the verse text
-                    const searchTerms = [selectedEdge.edge.source, selectedEdge.edge.target];
-                    const highlightedText = UnifiedHighlighter.highlightText(verse.text, {
-                      mainTerms: searchTerms,
-                      isDarkMode: false, // Modal is always light mode
-                    });
-                    
-                    return (
-                      <div key={position} className='p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500'>
-                        <div className='font-semibold text-sm text-gray-700 mb-2'>
-                          {verse.reference}
-                        </div>
-                        <div 
-                          className='text-sm text-gray-800 leading-relaxed'
-                          dangerouslySetInnerHTML={{ __html: highlightedText }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
         </div>
       )}
     </div>

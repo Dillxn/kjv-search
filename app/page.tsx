@@ -325,7 +325,7 @@ export default function Home() {
         isDarkMode={isDarkMode}
       />
 
-      <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col`}>
+      <div className={`max-w-6xl mx-auto px-2 flex flex-col`} style={{ height: 'calc(100vh - 40px)' }}>
         {/* Header */}
         <div
           className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(isDarkMode, 'card')}`}
