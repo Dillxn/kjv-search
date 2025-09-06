@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { VersePairing } from '../lib';
 
 interface GraphConnection {
@@ -267,6 +267,53 @@ export function useGraphState() {
     };
   }, [selectedConnections]);
 
+  // Function to clean up connections that are no longer valid based on current pairings
+  const cleanupInvalidConnections = useCallback((currentPairings: VersePairing[]) => {
+    if (currentPairings.length === 0) {
+      // If no pairings, keep all connections (they might be from other search terms)
+      return;
+    }
+
+    const validConnectionKeys = new Set<string>();
+    
+    currentPairings.forEach((pairing) => {
+      const versePositions = pairing.verses
+        .map((v) => v.position)
+        .sort((a, b) => a - b)
+        .join(',');
+      
+      if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
+        pairing.allTermPairs.forEach((pairStr) => {
+          const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
+          const [word1, word2] = [term1, term2].sort();
+          validConnectionKeys.add(`${word1}-${word2}-${versePositions}`);
+        });
+      } else {
+        const [word1, word2] = [pairing.term1, pairing.term2].sort();
+        validConnectionKeys.add(`${word1}-${word2}-${versePositions}`);
+      }
+    });
+
+    setSelectedConnections((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : [];
+      const filteredConnections = prevArray.filter((conn) => {
+        const versePositions = conn.versePositions
+          ?.slice()
+          .sort((a, b) => a - b)
+          .join(',') || '';
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        const key = `${word1}-${word2}-${versePositions}`;
+        return validConnectionKeys.has(key);
+      });
+      
+      // Only update if there's actually a change
+      if (filteredConnections.length !== prevArray.length) {
+        return cleanupOrphanedNodes(filteredConnections);
+      }
+      return prevArray;
+    });
+  }, [cleanupOrphanedNodes]);
+
   return {
     selectedConnections,
     setSelectedConnections,
@@ -274,5 +321,6 @@ export function useGraphState() {
     handleSelectAllPairings,
     handleDeselectAllPairings,
     allPairingsSelected,
+    cleanupInvalidConnections,
   };
 }

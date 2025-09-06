@@ -7,6 +7,7 @@ interface TabStatePersistenceProps {
   pairingsSearchTerms: string;
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
+  maxProximity: number;
   showFilters: boolean;
   activeTab: 'all' | 'pairings';
   isDarkMode: boolean;
@@ -17,6 +18,11 @@ interface TabStatePersistenceProps {
     reference: string;
     versePositions: number[];
   }>;
+  graphTransform: {
+    x: number;
+    y: number;
+    scale: number;
+  };
   hasMounted: boolean;
 }
 
@@ -26,11 +32,13 @@ export function useTabStatePersistence({
   pairingsSearchTerms,
   selectedTestament,
   selectedBooks,
+  maxProximity,
   showFilters,
   activeTab,
   isDarkMode,
   showGraph,
   selectedConnections,
+  graphTransform,
   hasMounted,
 }: TabStatePersistenceProps) {
   
@@ -40,6 +48,7 @@ export function useTabStatePersistence({
     pairingsSearchTerms,
     selectedTestament,
     selectedBooks,
+    maxProximity,
     showFilters,
     activeTab,
     isDarkMode,
@@ -48,16 +57,19 @@ export function useTabStatePersistence({
       ...conn,
       versePositions: conn.versePositions || [],
     })),
+    graphTransform,
   }), [
     searchTerms,
     pairingsSearchTerms,
     selectedTestament,
     selectedBooks,
+    maxProximity,
     showFilters,
     activeTab,
     isDarkMode,
     showGraph,
     selectedConnections,
+    graphTransform,
   ]);
 
   // Update current tab state helper with debouncing

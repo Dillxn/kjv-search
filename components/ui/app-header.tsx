@@ -14,6 +14,7 @@ interface AppHeaderProps {
   activeTab: 'all' | 'pairings';
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
+  maxProximity: number;
   showFilters: boolean;
   filterCounts: {
     total: number;
@@ -27,6 +28,7 @@ interface AppHeaderProps {
   onPairingsSearchTermsChange: (terms: string) => void;
   onTestamentChange: (testament: 'all' | 'old' | 'new') => void;
   onBookToggle: (book: string) => void;
+  onProximityChange: (proximity: number) => void;
   onToggleFilters: () => void;
 }
 
@@ -38,6 +40,7 @@ export function AppHeader({
   activeTab,
   selectedTestament,
   selectedBooks,
+  maxProximity,
   showFilters,
   filterCounts,
   onDarkModeToggle,
@@ -46,6 +49,7 @@ export function AppHeader({
   onPairingsSearchTermsChange,
   onTestamentChange,
   onBookToggle,
+  onProximityChange,
   onToggleFilters,
 }: AppHeaderProps) {
   return (
@@ -106,11 +110,13 @@ export function AppHeader({
       <FilterControls
         selectedTestament={selectedTestament}
         selectedBooks={selectedBooks}
+        maxProximity={maxProximity}
         showFilters={showFilters}
         filterCounts={filterCounts}
         isDarkMode={isDarkMode}
         onTestamentChange={onTestamentChange}
         onBookToggle={onBookToggle}
+        onProximityChange={onProximityChange}
         onToggleFilters={onToggleFilters}
       />
     </div>

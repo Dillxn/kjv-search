@@ -2,7 +2,9 @@
 
 import { OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../../lib/kjv-parser';
 import { FilterButton, Button } from '../ui/button';
+import { Slider } from '../ui/slider';
 import { getTextClass } from '../../lib/theme-utils';
+import { APP_CONFIG } from '../../lib/constants';
 
 interface FilterCounts {
   total: number;
@@ -14,22 +16,26 @@ interface FilterCounts {
 interface FilterControlsProps {
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
+  maxProximity: number;
   showFilters: boolean;
   filterCounts: FilterCounts;
   isDarkMode: boolean;
   onTestamentChange: (testament: 'all' | 'old' | 'new') => void;
   onBookToggle: (book: string) => void;
+  onProximityChange: (proximity: number) => void;
   onToggleFilters: () => void;
 }
 
 export function FilterControls({
   selectedTestament,
   selectedBooks,
+  maxProximity,
   showFilters,
   filterCounts,
   isDarkMode,
   onTestamentChange,
   onBookToggle,
+  onProximityChange,
   onToggleFilters,
 }: FilterControlsProps) {
   const getAvailableBooks = () => {
@@ -133,6 +139,18 @@ export function FilterControls({
                 );
               })}
             </div>
+          </div>
+
+          {/* Proximity Filter */}
+          <div>
+            <Slider
+              value={maxProximity}
+              min={0}
+              max={APP_CONFIG.PAIRINGS.MAX_PROXIMITY}
+              onChange={onProximityChange}
+              label="Verse Distance"
+              isDarkMode={isDarkMode}
+            />
           </div>
         </div>
       )}

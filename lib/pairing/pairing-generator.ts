@@ -20,7 +20,8 @@ export class PairingGenerator {
     term2: string,
     verses1: Verse[],
     verses2: Verse[],
-    isBetweenGroups: boolean = false
+    isBetweenGroups: boolean = false,
+    maxProximity: number = CONFIG.MAX_PROXIMITY
   ): VersePairing[] {
     const pairings: VersePairing[] = [];
     const processedPairs = new Set<string>();
@@ -48,14 +49,15 @@ export class PairingGenerator {
       }
     }
 
-    // Find proximity pairings
-    let proximityPairings = 0;
-    for (const verse1 of verses1) {
-      for (const verse2 of verses2) {
-        if (verse1.position === verse2.position) continue;
+    // Find proximity pairings (only if maxProximity > 0, since 0 means "same verse only")
+    if (maxProximity > 0) {
+      let proximityPairings = 0;
+      for (const verse1 of verses1) {
+        for (const verse2 of verses2) {
+          if (verse1.position === verse2.position) continue;
 
-        const distance = Math.abs(verse1.position - verse2.position);
-        if (distance <= CONFIG.MAX_PROXIMITY) {
+          const distance = Math.abs(verse1.position - verse2.position);
+          if (distance <= maxProximity) {
           const minPos = Math.min(verse1.position, verse2.position);
           const maxPos = Math.max(verse1.position, verse2.position);
           const pairingKey = `pair-${minPos}-${maxPos}-${term1}-${term2}`;
@@ -77,8 +79,9 @@ export class PairingGenerator {
           }
         }
       }
-      if (proximityPairings >= CONFIG.MAX_PAIRINGS_PER_TERM_PAIR) {
-        break;
+        if (proximityPairings >= CONFIG.MAX_PAIRINGS_PER_TERM_PAIR) {
+          break;
+        }
       }
     }
 
@@ -88,7 +91,8 @@ export class PairingGenerator {
   static async generateAllPairingsAsync(
     termToVerses: Map<string, Verse[]>,
     isBetweenGroups: boolean = false,
-    onProgress?: (processed: number, total: number, pairings: number) => void
+    onProgress?: (processed: number, total: number, pairings: number) => void,
+    maxProximity: number = CONFIG.MAX_PROXIMITY
   ): Promise<VersePairing[]> {
     const pairings: VersePairing[] = [];
     const processedPairings = new Set<string>();
@@ -164,7 +168,8 @@ export class PairingGenerator {
         term2,
         verses1,
         verses2,
-        isBetweenGroups
+        isBetweenGroups,
+        maxProximity
       );
 
       if (termPairings.length > 0) {
@@ -198,7 +203,8 @@ export class PairingGenerator {
     group1Terms: string[],
     group2Terms: string[],
     termToVerses: Map<string, Verse[]>,
-    onProgress?: (processed: number, total: number, pairings: number) => void
+    onProgress?: (processed: number, total: number, pairings: number) => void,
+    maxProximity: number = CONFIG.MAX_PROXIMITY
   ): Promise<VersePairing[]> {
     const pairings: VersePairing[] = [];
     const processedPairings = new Set<string>();
@@ -255,7 +261,8 @@ export class PairingGenerator {
         term2,
         verses1,
         verses2,
-        true
+        true,
+        maxProximity
       );
 
       for (const pairing of termPairings) {

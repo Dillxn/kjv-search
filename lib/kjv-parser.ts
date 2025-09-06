@@ -75,7 +75,12 @@ export class KJVParser {
     const limitedTerms = SearchUtils.validateAndLimitTerms(terms);
     const termToVerses = this.verseSearcher.findVersesForTerms(limitedTerms, filters);
 
-    return PairingGenerator.generateAllPairingsAsync(termToVerses, false);
+    return PairingGenerator.generateAllPairingsAsync(
+      termToVerses, 
+      false, 
+      undefined, 
+      filters.maxProximity
+    );
   }
 
   async findVersePairingsBetweenGroups(
@@ -97,7 +102,9 @@ export class KJVParser {
     return PairingGenerator.generateBetweenGroupsPairingsAsync(
       limitedGroup1,
       limitedGroup2,
-      termToVerses
+      termToVerses,
+      undefined,
+      filters.maxProximity
     );
   }
 
@@ -122,7 +129,8 @@ export class KJVParser {
       limitedGroup1,
       limitedGroup2,
       termToVerses,
-      onProgress
+      onProgress,
+      filters.maxProximity
     );
   }
 

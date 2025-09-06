@@ -44,6 +44,8 @@ export default function Home() {
     setSelectedTestament,
     selectedBooks,
     setSelectedBooks,
+    maxProximity,
+    setMaxProximity,
     filterCounts,
     performSearch,
   } = useSearchState();
@@ -56,6 +58,7 @@ export default function Home() {
     handleSelectAllPairings,
     handleDeselectAllPairings,
     allPairingsSelected,
+    cleanupInvalidConnections,
   } = useGraphState();
 
   // UI state
@@ -65,6 +68,12 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
+  const [graphTransform, setGraphTransform] = useState({ x: 0, y: 0, scale: 1 });
+
+  // Debounced graph transform update to avoid excessive saves
+  const handleGraphTransformChange = useCallback((newTransform: { x: number; y: number; scale: number }) => {
+    setGraphTransform(newTransform);
+  }, []);
 
   // Generate unique localStorage key for scroll position
   const scrollPositionKey = useMemo(() => {
@@ -89,10 +98,12 @@ export default function Home() {
         setPairingsSearchTerms(currentTabState.pairingsSearchTerms);
         setSelectedTestament(currentTabState.selectedTestament);
         setSelectedBooks(currentTabState.selectedBooks);
+        setMaxProximity(currentTabState.maxProximity || 100);
         setShowFilters(currentTabState.showFilters);
         setActiveTab(currentTabState.activeTab);
         setIsDarkMode(currentTabState.isDarkMode);
         setShowGraph(currentTabState.showGraph || false);
+        setGraphTransform(currentTabState.graphTransform || { x: 0, y: 0, scale: 1 });
         const connections = currentTabState.selectedConnections || [];
         setSelectedConnections(
           connections.map((conn) => ({
@@ -139,6 +150,17 @@ export default function Home() {
     performSearch,
   ]);
 
+  // Clean up invalid graph connections when search results change
+  useEffect(() => {
+    if (isInitialized && hasMounted) {
+      // Clean up connections based on current active tab results
+      if (activeTab === 'pairings') {
+        cleanupInvalidConnections(pairings);
+      }
+      // Note: For 'all' tab, we keep all connections as they might be from pairings searches
+    }
+  }, [pairings, results, isInitialized, hasMounted, activeTab, cleanupInvalidConnections]);
+
   // Use the tab persistence hook
   useTabStatePersistence({
     tabManager,
@@ -146,11 +168,13 @@ export default function Home() {
     pairingsSearchTerms,
     selectedTestament,
     selectedBooks,
+    maxProximity,
     showFilters,
     activeTab,
     isDarkMode,
     showGraph,
     selectedConnections,
+    graphTransform,
     hasMounted,
   });
 
@@ -170,21 +194,25 @@ export default function Home() {
           pairingsSearchTerms,
           selectedTestament,
           selectedBooks,
+          maxProximity,
           showFilters,
           activeTab,
           isDarkMode,
           showGraph,
           selectedConnections,
+          graphTransform,
         });
 
         setSearchTerms(newActiveTab.searchTerms);
         setPairingsSearchTerms(newActiveTab.pairingsSearchTerms);
         setSelectedTestament(newActiveTab.selectedTestament);
         setSelectedBooks(newActiveTab.selectedBooks);
+        setMaxProximity(newActiveTab.maxProximity || 100);
         setShowFilters(newActiveTab.showFilters);
         setActiveTab(newActiveTab.activeTab);
         setIsDarkMode(newActiveTab.isDarkMode);
         setShowGraph(newActiveTab.showGraph || false);
+        setGraphTransform(newActiveTab.graphTransform || { x: 0, y: 0, scale: 1 });
         const connections = newActiveTab.selectedConnections;
         setSelectedConnections(Array.isArray(connections) ? connections : []);
       }
@@ -197,11 +225,13 @@ export default function Home() {
       pairingsSearchTerms,
       selectedTestament,
       selectedBooks,
+      maxProximity,
       showFilters,
       activeTab,
       isDarkMode,
       showGraph,
       selectedConnections,
+      graphTransform,
       setSearchTerms,
       setPairingsSearchTerms,
       setSelectedTestament,
@@ -263,6 +293,7 @@ export default function Home() {
           activeTab={activeTab}
           selectedTestament={selectedTestament}
           selectedBooks={selectedBooks}
+          maxProximity={maxProximity}
           showFilters={showFilters}
           filterCounts={filterCounts}
           onDarkModeToggle={() => setIsDarkMode(!isDarkMode)}
@@ -271,6 +302,7 @@ export default function Home() {
           onPairingsSearchTermsChange={setPairingsSearchTerms}
           onTestamentChange={handleTestamentChange}
           onBookToggle={handleBookToggle}
+          onProximityChange={setMaxProximity}
           onToggleFilters={() => setShowFilters(!showFilters)}
         />
 
@@ -361,6 +393,8 @@ export default function Home() {
                   searchTerms={searchTerms}
                   pairingsSearchTerms={pairingsSearchTerms}
                   isDarkMode={isDarkMode}
+                  initialTransform={graphTransform}
+                  onTransformChange={handleGraphTransformChange}
                 />
               </div>
             </div>

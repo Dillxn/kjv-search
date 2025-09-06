@@ -7,6 +7,7 @@ export interface TabState {
   pairingsSearchTerms: string;
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
+  maxProximity: number;
   showFilters: boolean;
   activeTab: 'all' | 'pairings';
   scrollPosition: number;
@@ -18,6 +19,11 @@ export interface TabState {
     reference: string;
     versePositions: number[]; // Array of verse positions to uniquely identify this pairing
   }>;
+  graphTransform?: {
+    x: number;
+    y: number;
+    scale: number;
+  };
 }
 
 export interface TabManager {
@@ -30,12 +36,14 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   pairingsSearchTerms: '',
   selectedTestament: 'all',
   selectedBooks: [],
+  maxProximity: APP_CONFIG.PAIRINGS.MAX_PROXIMITY,
   showFilters: false,
   activeTab: 'all',
   scrollPosition: 0,
   isDarkMode: false,
   showGraph: false,
   selectedConnections: [],
+  graphTransform: { x: 0, y: 0, scale: 1 },
 };
 
 export class TabManagerService {
@@ -69,13 +77,15 @@ export class TabManagerService {
           parsed.activeTabId = parsed.tabs[0].id;
         }
         
-        // Migrate old tab data to include selectedConnections if missing
+        // Migrate old tab data to include selectedConnections, maxProximity, and graphTransform if missing
         parsed.tabs = parsed.tabs.map(tab => ({
           ...tab,
+          maxProximity: tab.maxProximity ?? APP_CONFIG.PAIRINGS.MAX_PROXIMITY,
           selectedConnections: (tab.selectedConnections || []).map(conn => ({
             ...conn,
             versePositions: conn.versePositions || [], // Add versePositions for existing connections
           })),
+          graphTransform: tab.graphTransform ?? { x: 0, y: 0, scale: 1 },
         }));
         
         

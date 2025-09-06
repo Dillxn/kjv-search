@@ -30,4 +30,5 @@ export interface VersePairing {
 export interface SearchFilters {
   testament?: 'old' | 'new';
   books?: string[];
+  maxProximity?: number;
 }

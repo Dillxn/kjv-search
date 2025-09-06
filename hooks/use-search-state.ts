@@ -24,6 +24,7 @@ export function useSearchState() {
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
   const [selectedTestament, setSelectedTestament] = useState<'all' | 'old' | 'new'>('all');
   const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
+  const [maxProximity, setMaxProximity] = useState<number>(APP_CONFIG.PAIRINGS.MAX_PROXIMITY);
   const [filterCounts, setFilterCounts] = useState<FilterCounts>({
     total: 0,
     oldTestament: 0,
@@ -47,7 +48,7 @@ export function useSearchState() {
     return () => clearTimeout(timer);
   }, [pairingsSearchTerms]);
 
-  // Update search filters when testament or book selections change
+  // Update search filters when testament, book selections, or proximity change
   useEffect(() => {
     const filters: SearchFilters = {};
 
@@ -59,8 +60,12 @@ export function useSearchState() {
       filters.books = selectedBooks;
     }
 
+    if (maxProximity !== APP_CONFIG.PAIRINGS.MAX_PROXIMITY) {
+      filters.maxProximity = maxProximity;
+    }
+
     setSearchFilters(filters);
-  }, [selectedTestament, selectedBooks]);
+  }, [selectedTestament, selectedBooks, maxProximity]);
 
   // Calculate filter counts when search terms change
   useEffect(() => {
@@ -185,6 +190,8 @@ export function useSearchState() {
     setSelectedTestament,
     selectedBooks,
     setSelectedBooks,
+    maxProximity,
+    setMaxProximity,
     filterCounts,
     performSearch,
   };

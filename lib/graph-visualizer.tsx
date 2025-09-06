@@ -30,19 +30,27 @@ interface GraphVisualizerProps {
   searchTerms?: string;
   pairingsSearchTerms?: string;
   isDarkMode?: boolean;
+  initialTransform?: {
+    x: number;
+    y: number;
+    scale: number;
+  };
+  onTransformChange?: (transform: { x: number; y: number; scale: number }) => void;
 }
 
 export function GraphVisualizer({ 
   connections, 
   searchTerms = '', 
   pairingsSearchTerms = '', 
-  isDarkMode = false 
+  isDarkMode = false,
+  initialTransform = { x: 0, y: 0, scale: 1 },
+  onTransformChange
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [transform, setTransform] = useState(initialTransform);
   const [selectedEdge, setSelectedEdge] = useState<{
     edge: Edge;
     connection: typeof connections[0];
@@ -75,8 +83,16 @@ export function GraphVisualizer({
   }, []);
 
   const resetView = () => {
-    setTransform({ x: 0, y: 0, scale: 1 });
+    const newTransform = { x: 0, y: 0, scale: 1 };
+    setTransform(newTransform);
+    onTransformChange?.(newTransform);
   };
+
+  // Handle transform changes with persistence
+  const handleTransformChange = useCallback((newTransform: { x: number; y: number; scale: number }) => {
+    setTransform(newTransform);
+    onTransformChange?.(newTransform);
+  }, [onTransformChange]);
 
   const [shouldAutoFit, setShouldAutoFit] = useState(false);
 
@@ -112,7 +128,9 @@ export function GraphVisualizer({
     const x = canvasCenterX - contentCenterX * scale;
     const y = canvasCenterY - contentCenterY * scale;
 
-    setTransform({ x, y, scale });
+    const newTransform = { x, y, scale };
+    setTransform(newTransform);
+    onTransformChange?.(newTransform);
   }, [nodes, canvasSize]);
 
   // Update graph when connections change
@@ -226,7 +244,7 @@ export function GraphVisualizer({
         canvasSize={canvasSize}
         transform={transform}
         onEdgeClick={handleEdgeClick}
-        onTransformChange={setTransform}
+        onTransformChange={handleTransformChange}
       />
       
       {/* Empty state message */}
