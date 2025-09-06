@@ -2,7 +2,8 @@
 
 import { SearchResult, VersePairing } from '../../lib/kjv-parser';
 import { VirtualScroll } from '../../lib/virtual-scroll';
-import { highlightText, highlightTextWithRegex } from '../../lib/highlighting-utils';
+import { UnifiedHighlighter } from '../../lib/highlighting';
+import { SearchResultsHelper } from '../../lib/search-utils';
 
 interface SearchResultsProps {
   results: SearchResult[];
@@ -18,6 +19,7 @@ interface SearchResultsProps {
     word1: string;
     word2: string;
     reference: string;
+    versePositions: number[];
   }>;
   onAddToGraph: (pairing: VersePairing) => void;
 }
@@ -36,10 +38,7 @@ export function SearchResults({
   onAddToGraph,
 }: SearchResultsProps) {
   const getSearchTermsArray = () => {
-    return searchTerms
-      .split(' ')
-      .map((term) => term.trim().toLowerCase())
-      .filter((term) => term);
+    return SearchResultsHelper.processSearchString(searchTerms);
   };
 
   const renderResult = (result: SearchResult) => (
@@ -59,7 +58,10 @@ export function SearchResults({
       <div
         className={`text-xs leading-snug ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
         dangerouslySetInnerHTML={{
-          __html: highlightText(result.verse.text, result.matches, isDarkMode),
+          __html: UnifiedHighlighter.highlightText(result.verse.text, {
+            matches: result.matches,
+            isDarkMode,
+          }),
         }}
       />
     </div>
@@ -67,21 +69,16 @@ export function SearchResults({
 
   const renderPairing = (pairing: VersePairing) => {
     const searchTermsArray = getSearchTermsArray();
-    const pairingsSearchTermsArray = pairingsSearchTerms
-      .split(' ')
-      .map((term) => term.trim().toLowerCase())
-      .filter((term) => term);
+    const pairingsSearchTermsArray = SearchResultsHelper.processSearchString(pairingsSearchTerms);
 
     // Function to highlight text with both color schemes
     const highlightPairingText = (text: string): string => {
-      // For pairings, we need to combine matches from both search groups
-      // Since pairing results don't include match bounds, we'll need to fall back to regex for now
-      return highlightTextWithRegex(
-        text,
-        searchTermsArray,
-        pairingsSearchTermsArray,
-        isDarkMode
-      );
+      return UnifiedHighlighter.highlightText(text, {
+        mainTerms: searchTermsArray,
+        pairingsTerms: pairingsSearchTermsArray,
+        isDarkMode,
+        usePairingsColors: true,
+      });
     };
 
     // Check if this specific pairing is already in the graph
@@ -157,9 +154,7 @@ export function SearchResults({
           }`}
         >
           <p className='text-sm'>
-            {searchTerms.trim().length < 2
-              ? 'Enter at least 2 characters to search'
-              : 'No results found'}
+            {SearchResultsHelper.getEmptyStateMessage(searchTerms, 'results')}
           </p>
         </div>
       );
@@ -186,9 +181,7 @@ export function SearchResults({
           }`}
         >
           <p className='text-sm'>
-            {searchTerms.trim().length < 2
-              ? 'Enter at least 2 characters to search'
-              : 'No pairings found'}
+            {SearchResultsHelper.getEmptyStateMessage(searchTerms, 'pairings')}
           </p>
         </div>
       );

@@ -1,5 +1,7 @@
 'use client';
 
+import { getBackgroundClass, getTextClass } from '../../lib/theme-utils';
+
 interface LoadingSpinnerProps {
   message?: string;
   isDarkMode?: boolean;
@@ -7,10 +9,10 @@ interface LoadingSpinnerProps {
 
 export function LoadingSpinner({ message = 'Loading...', isDarkMode = false }: LoadingSpinnerProps) {
   return (
-    <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen flex items-center justify-center ${getBackgroundClass(isDarkMode)}`}>
       <div className='text-center'>
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 mx-auto mb-1 border-blue-600"></div>
-        <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        <p className={`text-sm ${getTextClass(isDarkMode, 'secondary')}`}>
           {message}
         </p>
       </div>

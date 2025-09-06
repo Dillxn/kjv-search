@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { kjvParser, SearchResult, VersePairing, SearchFilters, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
+import { APP_CONFIG } from '../lib/constants';
+import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 
 interface FilterCounts {
   total: number;
@@ -33,7 +35,7 @@ export function useSearchState() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerms(searchTerms);
-    }, 500);
+    }, APP_CONFIG.SEARCH.DEBOUNCE_DELAY);
     return () => clearTimeout(timer);
   }, [searchTerms]);
 
@@ -41,7 +43,7 @@ export function useSearchState() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedPairingsSearchTerms(pairingsSearchTerms);
-    }, 500);
+    }, APP_CONFIG.SEARCH.DEBOUNCE_DELAY);
     return () => clearTimeout(timer);
   }, [pairingsSearchTerms]);
 
@@ -63,7 +65,7 @@ export function useSearchState() {
   // Calculate filter counts when search terms change
   useEffect(() => {
     const updateFilterCounts = () => {
-      if (!debouncedSearchTerms.trim() || debouncedSearchTerms.trim().length < 2) {
+      if (!SearchStateValidator.canPerformSearch(debouncedSearchTerms)) {
         setFilterCounts({
           total: 0,
           oldTestament: 0,
@@ -78,10 +80,7 @@ export function useSearchState() {
         return;
       }
 
-      const terms = debouncedSearchTerms
-        .split(' ')
-        .map((term) => term.trim())
-        .filter((term) => term);
+      const terms = SearchTermProcessor.processSearchString(debouncedSearchTerms);
 
       // Calculate total results
       const totalResults = kjvParser.searchWords(terms, {});
@@ -111,7 +110,7 @@ export function useSearchState() {
 
   // Perform search
   const performSearch = useCallback(async (activeTab: 'all' | 'pairings') => {
-    if (!debouncedSearchTerms.trim() || debouncedSearchTerms.trim().length < 2) {
+    if (!SearchStateValidator.canPerformSearch(debouncedSearchTerms)) {
       setResults([]);
       setPairings([]);
       setError('');
@@ -127,27 +126,18 @@ export function useSearchState() {
     setError('');
 
     try {
-      const terms = debouncedSearchTerms
-        .split(' ')
-        .map((term) => term.trim())
-        .filter((term) => term);
+      const terms = SearchTermProcessor.processSearchString(debouncedSearchTerms);
 
       const searchResults = kjvParser.searchWords(terms, searchFilters);
 
       // For pairings, use both search boxes when on pairings tab
       let versePairings: VersePairing[] = [];
       if (activeTab === 'pairings') {
-        const mainTerms = debouncedSearchTerms
-          .split(/\s+/)
-          .map((term) => term.trim())
-          .filter((term) => term);
-        const pairingsTerms = debouncedPairingsSearchTerms
-          .split(/\s+/)
-          .map((term) => term.trim())
-          .filter((term) => term);
+        const { mainTerms, pairingsTerms, hasValidMain, hasValidPairings } = 
+          SearchTermProcessor.processBothSearchStrings(debouncedSearchTerms, debouncedPairingsSearchTerms);
 
 
-        if (mainTerms.length > 0 && pairingsTerms.length > 0) {
+        if (hasValidMain && hasValidPairings) {
 
           versePairings = kjvParser
             .findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters);

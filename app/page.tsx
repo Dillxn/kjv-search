@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { kjvParser, VersePairing } from '../lib/kjv-parser';
 import { TabBar } from '../lib/tab-bar';
-import { TabManager, TabState, TabManagerService } from '../lib/tab-manager';
+import { TabManager, TabManagerService } from '../lib/tab-manager';
 import { GraphVisualizer } from '../lib/graph-visualizer';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { ToggleButton } from '../components/ui/toggle-button';
@@ -11,9 +11,12 @@ import { SearchInput } from '../components/search/search-input';
 import { FilterControls } from '../components/search/filter-controls';
 import { SearchResults } from '../components/search/search-results';
 import { useSearchState } from '../hooks/use-search-state';
+import { useTabStatePersistence } from '../hooks/use-tab-state-persistence';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 import { MoonStarIcon, SunIcon, WorkflowIcon } from 'lucide-react';
+import { getBackgroundClass, getTextClass, getBorderClass } from '../lib/theme-utils';
+import { APP_CONFIG } from '../lib/constants';
 
 export default function Home() {
   // Tab management
@@ -132,8 +135,7 @@ export default function Home() {
   // Set container height and handle resize
   useEffect(() => {
     const updateHeight = () => {
-      const baseOffset = 180;
-      setContainerHeight(window.innerHeight - baseOffset);
+      setContainerHeight(window.innerHeight - APP_CONFIG.UI.CONTAINER_BASE_OFFSET);
     };
     updateHeight();
     window.addEventListener('resize', updateHeight);
@@ -153,25 +155,20 @@ export default function Home() {
     performSearch,
   ]);
 
-  // Update current tab state helper with debouncing
-  const updateCurrentTabState = useCallback(
-    (updates: Partial<Omit<TabState, 'id'>>) => {
-      if (!hasMounted) return; // Prevent updates before component is fully mounted
-
-      setTabManager((prevTabManager) => {
-        const activeTab = TabManagerService.getActiveTab(prevTabManager);
-        if (activeTab) {
-          return TabManagerService.updateTabState(
-            prevTabManager,
-            activeTab.id,
-            updates
-          );
-        }
-        return prevTabManager;
-      });
-    },
-    [hasMounted]
-  );
+  // Use the tab persistence hook
+  useTabStatePersistence({
+    tabManager,
+    searchTerms,
+    pairingsSearchTerms,
+    selectedTestament,
+    selectedBooks,
+    showFilters,
+    activeTab,
+    isDarkMode,
+    showGraph,
+    selectedConnections,
+    hasMounted,
+  });
 
   // Handle tab manager changes
   const handleTabManagerChange = useCallback(
@@ -231,105 +228,16 @@ export default function Home() {
     ]
   );
 
-  // Debounced update of tab state to prevent excessive localStorage writes
+
+
+  // Stop dev backup on unmount
   useEffect(() => {
-    if (!hasMounted) return; // Don't save during initial load
-
-    const timeoutId = setTimeout(() => {
-      updateCurrentTabState({
-        searchTerms,
-        pairingsSearchTerms,
-        selectedTestament,
-        selectedBooks,
-        showFilters,
-        activeTab,
-        isDarkMode,
-        showGraph,
-        selectedConnections: selectedConnections.map((conn) => ({
-          ...conn,
-          versePositions: conn.versePositions || [],
-        })),
-      });
-    }, 300); // Reduced debounce time for better responsiveness
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    searchTerms,
-    pairingsSearchTerms,
-    selectedTestament,
-    selectedBooks,
-    showFilters,
-    activeTab,
-    isDarkMode,
-    showGraph,
-    selectedConnections,
-    hasMounted,
-    updateCurrentTabState,
-  ]);
-
-  // Save current tab state on unmount or page refresh
-  useEffect(() => {
-    const saveCurrentState = () => {
-      if (!hasMounted) return; // Don't save if not fully mounted
-
-      const currentActiveTab = TabManagerService.getActiveTab(tabManager);
-      if (currentActiveTab) {
-        TabManagerService.updateTabState(tabManager, currentActiveTab.id, {
-          searchTerms,
-          pairingsSearchTerms,
-          selectedTestament,
-          selectedBooks,
-          showFilters,
-          activeTab,
-          isDarkMode,
-          showGraph,
-          selectedConnections: selectedConnections.map((conn) => ({
-            ...conn,
-            versePositions: conn.versePositions || [],
-          })),
-        });
-      }
-    };
-
-    // Save state before page unload
-    const handleBeforeUnload = () => {
-      saveCurrentState();
-    };
-
-    // Save state on visibility change (when tab becomes hidden)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        saveCurrentState();
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup function to save state on unmount
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      saveCurrentState();
-
-      // Stop dev backup on unmount
       if (process.env.NODE_ENV === 'development') {
         DevStorageHelper.stopDevBackup();
       }
     };
-  }, [
-    tabManager,
-    searchTerms,
-    pairingsSearchTerms,
-    selectedTestament,
-    selectedBooks,
-    showFilters,
-    activeTab,
-    isDarkMode,
-    showGraph,
-    selectedConnections,
-    hasMounted,
-  ]);
+  }, []);
 
   // Event handlers
   const handleTestamentChange = (testament: 'all' | 'old' | 'new') => {
@@ -402,9 +310,7 @@ export default function Home() {
 
   return (
     <div
-      className={`h-screen overflow-hidden ${
-        isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
-      }`}
+      className={`h-screen overflow-hidden ${getBackgroundClass(isDarkMode)}`}
     >
       <TabBar
         tabManager={tabManager}
@@ -415,15 +321,11 @@ export default function Home() {
       <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col`}>
         {/* Header */}
         <div
-          className={`rounded-lg shadow-md mb-2 p-1.5 ${
-            isDarkMode ? 'bg-gray-800' : 'bg-white'
-          }`}
+          className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(isDarkMode, 'card')}`}
         >
           <div className='flex justify-between items-center mb-1'>
             <h1
-              className={`text-base font-bold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}
+              className={`text-base font-bold ${getTextClass(isDarkMode)}`}
             >
               KJV Bible Search
             </h1>
@@ -499,12 +401,8 @@ export default function Home() {
                 onClick={() => setActiveTab('all')}
                 className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                   activeTab === 'all'
-                    ? isDarkMode
-                      ? 'bg-gray-700 text-white border-b-2 border-blue-400'
-                      : 'bg-white text-gray-900 border-b-2 border-blue-500'
-                    : isDarkMode
-                    ? 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                    : 'bg-gray-100 text-gray-600 hover:text-gray-800'
+                    ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
+                    : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
                 }`}
               >
                 All Results ({results.length})
@@ -513,12 +411,8 @@ export default function Home() {
                 onClick={() => setActiveTab('pairings')}
                 className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                   activeTab === 'pairings'
-                    ? isDarkMode
-                      ? 'bg-gray-700 text-white border-b-2 border-blue-400'
-                      : 'bg-white text-gray-900 border-b-2 border-blue-500'
-                    : isDarkMode
-                    ? 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                    : 'bg-gray-100 text-gray-600 hover:text-gray-800'
+                    ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
+                    : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
                 }`}
               >
                 Pairings ({pairings.length})
@@ -529,9 +423,7 @@ export default function Home() {
             <div className='flex-1 min-h-0'>
               {error ? (
                 <div
-                  className={`flex items-center justify-center h-full ${
-                    isDarkMode ? 'text-red-400' : 'text-red-600'
-                  }`}
+                  className={`flex items-center justify-center h-full ${getTextClass(isDarkMode, 'error')}`}
                 >
                   <p className='text-sm'>{error}</p>
                 </div>
@@ -556,20 +448,14 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${
-                isDarkMode ? 'bg-gray-800' : 'bg-white'
-              }`}
+              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${getBackgroundClass(isDarkMode, 'card')}`}
             >
               <div
-                className={`p-2 border-b flex-shrink-0 ${
-                  isDarkMode ? 'border-gray-700' : 'border-gray-200'
-                }`}
+                className={`p-2 border-b flex-shrink-0 ${getBorderClass(isDarkMode)}`}
               >
                 <div className='flex justify-between items-center'>
                   <h3
-                    className={`text-sm font-medium ${
-                      isDarkMode ? 'text-white' : 'text-gray-900'
-                    }`}
+                    className={`text-sm font-medium ${getTextClass(isDarkMode)}`}
                   >
                     Word Connections Graph
                   </h3>

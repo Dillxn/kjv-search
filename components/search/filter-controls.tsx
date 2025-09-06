@@ -1,6 +1,8 @@
 'use client';
 
 import { OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../../lib/kjv-parser';
+import { FilterButton, Button } from '../ui/button';
+import { getTextClass } from '../../lib/theme-utils';
 
 interface FilterCounts {
   total: number;
@@ -55,22 +57,18 @@ export function FilterControls({
     <div className='mb-1.5'>
       <div className='flex items-center justify-between mb-1'>
         <span
-          className={`text-xs font-medium ${
-            isDarkMode ? 'text-gray-300' : 'text-gray-700'
-          }`}
+          className={`text-xs font-medium ${getTextClass(isDarkMode, 'secondary')}`}
         >
           Filters
         </span>
-        <button
+        <Button
           onClick={onToggleFilters}
-          className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
-            isDarkMode
-              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
+          variant="secondary"
+          size="sm"
+          isDarkMode={isDarkMode}
         >
           {showFilters ? 'Hide' : 'Show'}
-        </button>
+        </Button>
       </div>
 
       {showFilters && (
@@ -78,33 +76,31 @@ export function FilterControls({
           {/* Testament Filter */}
           <div>
             <label
-              className={`block text-xs font-medium mb-1 ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
+              className={`block text-xs font-medium mb-1 ${getTextClass(isDarkMode, 'secondary')}`}
             >
               Testament
             </label>
             <div className='flex gap-1 flex-wrap'>
               {(['all', 'old', 'new'] as const).map((testament) => (
-                <button
+                <FilterButton
                   key={testament}
+                  isSelected={selectedTestament === testament}
                   onClick={() => onTestamentChange(testament)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    selectedTestament === testament
-                      ? isDarkMode
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-blue-500 text-white'
-                      : isDarkMode
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  isDarkMode={isDarkMode}
+                  count={
+                    testament === 'all'
+                      ? filterCounts.total
+                      : testament === 'old'
+                      ? getResultsByTestament('old')
+                      : getResultsByTestament('new')
+                  }
                 >
                   {testament === 'all'
-                    ? `All (${filterCounts.total})`
+                    ? 'All'
                     : testament === 'old'
-                    ? `Old Testament (${getResultsByTestament('old')})`
-                    : `New Testament (${getResultsByTestament('new')})`}
-                </button>
+                    ? 'Old Testament'
+                    : 'New Testament'}
+                </FilterButton>
               ))}
             </div>
           </div>
@@ -112,9 +108,7 @@ export function FilterControls({
           {/* Book Filter */}
           <div>
             <label
-              className={`block text-xs font-medium mb-1 ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
+              className={`block text-xs font-medium mb-1 ${getTextClass(isDarkMode, 'secondary')}`}
             >
               Books
             </label>
@@ -125,27 +119,17 @@ export function FilterControls({
                 const isDisabled = count === 0;
 
                 return (
-                  <button
+                  <FilterButton
                     key={book}
+                    isSelected={isSelected}
                     onClick={() => !isDisabled && onBookToggle(book)}
                     disabled={isDisabled}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      isDisabled
-                        ? isDarkMode
-                          ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                          : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                        : isSelected
-                        ? isDarkMode
-                          ? 'bg-green-600 text-white'
-                          : 'bg-green-500 text-white'
-                        : isDarkMode
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                    isDarkMode={isDarkMode}
+                    count={count}
                     title={isDisabled ? 'No results in this book' : undefined}
                   >
-                    {book} ({count})
-                  </button>
+                    {book}
+                  </FilterButton>
                 );
               })}
             </div>

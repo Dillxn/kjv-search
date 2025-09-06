@@ -26,7 +26,13 @@ export interface VersePairing {
   isBetweenGroups?: boolean; // true if pairing is between two different search groups
 }
 
+export interface SearchFilters {
+  testament?: 'old' | 'new';
+  books?: string[];
+}
 
+import { RegexUtils } from './shared/regex-utils';
+import { APP_CONFIG } from './constants';
 
 // Testament definitions
 export const OLD_TESTAMENT_BOOKS = [
@@ -101,102 +107,58 @@ export const NEW_TESTAMENT_BOOKS = [
   'Revelation',
 ];
 
-export interface SearchFilters {
-  testament?: 'old' | 'new';
-  books?: string[];
-}
+// Use centralized configuration
+const CONFIG = {
+  MAX_TOTAL_PAIRINGS: APP_CONFIG.PAIRINGS.MAX_TOTAL_PAIRINGS,
+  MAX_SEARCH_TERMS: APP_CONFIG.SEARCH.MAX_SEARCH_TERMS,
+  MAX_SEARCH_TERMS_PER_GROUP: APP_CONFIG.SEARCH.MAX_SEARCH_TERMS_PER_GROUP,
+  MAX_PAIRINGS_PER_TERM_PAIR: APP_CONFIG.PAIRINGS.MAX_PAIRINGS_PER_TERM_PAIR,
+  MAX_PROXIMITY: APP_CONFIG.PAIRINGS.MAX_PROXIMITY,
+  MIN_TERM_LENGTH: APP_CONFIG.SEARCH.MIN_TERM_LENGTH,
+} as const;
 
-// Helper functions for filtering
-function getBooksForTestament(testament?: 'old' | 'new'): string[] {
-  if (testament === 'old') return OLD_TESTAMENT_BOOKS;
-  if (testament === 'new') return NEW_TESTAMENT_BOOKS;
-  return [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
-}
-
-function shouldIncludeVerse(verse: Verse, filters: SearchFilters): boolean {
-  // Filter by testament
-  if (filters.testament) {
-    const allowedBooks = getBooksForTestament(filters.testament);
-    if (!allowedBooks.includes(verse.book)) {
-      return false;
-    }
+// Utility functions
+class SearchUtils {
+  static normalizeWord(word: string): string {
+    return word
+      .toLowerCase()
+      .trim()
+      .replace(/(ful|ly|ing|ed|er|est|s)$/, '')
+      .replace(/^faithf/, 'faith')
+      .replace(/^lov/, 'love')
+      .replace(/^runn/, 'run')
+      .replace(/^begun$/, 'begin')
+      .replace(/^began$/, 'begin');
   }
 
-  // Filter by specific books
-  if (filters.books && filters.books.length > 0) {
-    if (!filters.books.includes(verse.book)) {
-      return false;
-    }
+  static areTermsSameWord(term1: string, term2: string): boolean {
+    const normalized1 = SearchUtils.normalizeWord(term1);
+    const normalized2 = SearchUtils.normalizeWord(term2);
+
+    if (normalized1 === normalized2) return true;
+
+    return (
+      normalized1.includes(normalized2) || normalized2.includes(normalized1)
+    );
   }
 
-  return true;
-}
+  static validateAndLimitTerms(
+    terms: string[],
+    maxTerms: number = CONFIG.MAX_SEARCH_TERMS
+  ): string[] {
+    const validTerms = RegexUtils.normalizeSearchTerms(terms);
+    const limitedTerms = validTerms.slice(0, maxTerms);
 
-class KJVParser {
-  private verses: Verse[] = [];
-  private wordIndex: Map<string, Verse[]> = new Map();
-
-  async fetchAndParse(): Promise<void> {
-    try {
-      const response = await fetch('/kjv.txt');
-      if (!response.ok) {
-        throw new Error(`Failed to load KJV text: ${response.status}`);
-      }
-      const text = await response.text();
-      this.parseText(text);
-      this.buildWordIndex();
-    } catch (error) {
-      console.error('Error loading KJV text:', error);
-      throw error;
+    if (terms.length > maxTerms) {
+      console.warn(
+        `Limited search terms from ${terms.length} to ${maxTerms} to prevent memory issues`
+      );
     }
+
+    return limitedTerms;
   }
 
-  private parseText(text: string): void {
-    const lines = text.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // Skip header lines
-      if (trimmed.startsWith('KJV') || trimmed.includes('BibleProtector.com')) {
-        continue;
-      }
-
-      // Parse verse lines with format: "Book Chapter:Verse Text"
-      const verseMatch = trimmed.match(/^(.+?)\s+(\d+):(\d+)\s+(.+)$/);
-      if (verseMatch) {
-        const [, book, chapter, verseNum, verseText] = verseMatch;
-
-        const verse: Verse = {
-          book: book.trim(),
-          chapter: parseInt(chapter),
-          verse: parseInt(verseNum),
-          text: verseText.trim(),
-          reference: `${book.trim()} ${chapter}:${verseNum}`,
-          position: this.verses.length,
-        };
-
-        this.verses.push(verse);
-      }
-    }
-  }
-
-  private buildWordIndex(): void {
-    for (const verse of this.verses) {
-      const words = this.getWords(verse.text);
-      for (const word of words) {
-        const normalizedWord = word.toLowerCase();
-        if (!this.wordIndex.has(normalizedWord)) {
-          this.wordIndex.set(normalizedWord, []);
-        }
-        this.wordIndex.get(normalizedWord)!.push(verse);
-      }
-    }
-  }
-
-  private getWords(text: string): string[] {
-    // Remove punctuation and split into words
+  static getWords(text: string): string[] {
     return text
       .toLowerCase()
       .replace(/[^\w\s]/g, '')
@@ -204,334 +166,73 @@ class KJVParser {
       .filter((word) => word.length > 0);
   }
 
-  private escapeRegex(text: string): string {
-    // Escape special regex characters
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Use shared RegexUtils for consistent processing
+  static processSearchString(searchString: string): string[] {
+    return RegexUtils.processSearchString(searchString);
+  }
+}
+
+class FilterUtils {
+  static getBooksForTestament(testament?: 'old' | 'new'): string[] {
+    if (testament === 'old') return OLD_TESTAMENT_BOOKS;
+    if (testament === 'new') return NEW_TESTAMENT_BOOKS;
+    return [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
   }
 
-  private areTermsSameWord(term1: string, term2: string): boolean {
-    // Normalize both terms for comparison
-    const normalize = (term: string): string => {
-      return (
-        term
-          .toLowerCase()
-          .trim()
-          // Remove common suffixes
-          .replace(/(ful|ly|ing|ed|er|est|s)$/, '')
-          // Handle irregular forms
-          .replace(/^faithf/, 'faith')
-          .replace(/^lov/, 'love')
-          .replace(/^runn/, 'run')
-          .replace(/^begun$/, 'begin')
-          .replace(/^began$/, 'begin')
-      );
-    };
-
-    const normalized1 = normalize(term1);
-    const normalized2 = normalize(term2);
-
-    // If terms are identical after normalization, they're the same word
-    if (normalized1 === normalized2) {
-      return true;
+  static shouldIncludeVerse(verse: Verse, filters: SearchFilters): boolean {
+    if (filters.testament) {
+      const allowedBooks = FilterUtils.getBooksForTestament(filters.testament);
+      if (!allowedBooks.includes(verse.book)) return false;
     }
 
-    // Handle cases where one term is a direct substring of the other
-    // (e.g., "faith" and "faithful", "love" and "loving")
-    if (
-      normalized1.includes(normalized2) ||
-      normalized2.includes(normalized1)
-    ) {
-      return true;
+    if (filters.books?.length && !filters.books.includes(verse.book)) {
+      return false;
     }
 
-    return false;
+    return true;
   }
 
-  searchWords(
-    searchTerms: string[],
-    filters: SearchFilters = {}
-  ): SearchResult[] {
-    const allResults = new Map<string, SearchResult>();
-    const validTerms = searchTerms.filter((term) => {
-      const normalized = term.toLowerCase().trim();
-      return normalized && normalized.length >= 2;
-    });
+  static filterVerses(verses: Verse[], filters: SearchFilters): Verse[] {
+    return verses.filter((verse) =>
+      FilterUtils.shouldIncludeVerse(verse, filters)
+    );
+  }
+}
 
-    for (const term of validTerms) {
-      const normalizedTerm = term.toLowerCase().trim();
+class VerseSearcher {
+  constructor(private verses: Verse[]) {}
 
-      // Check all verses for word-boundary matches and capture bounds
-      for (const verse of this.verses) {
-        // Apply filters first to avoid unnecessary processing
-        if (!shouldIncludeVerse(verse, filters)) {
-          continue;
-        }
+  findVersesForTerm(term: string, filters: SearchFilters = {}): Verse[] {
+    const matchingVerses: Verse[] = [];
 
-        // Create a regex that matches words starting with the term at word boundaries
-        // This ensures 'faith' matches 'faithful', 'faithfully' but 'heir' doesn't match 'their'
-        const wordBoundaryRegex = new RegExp(
-          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
-          'gi'
-        );
-        const matches = [...verse.text.matchAll(wordBoundaryRegex)];
+    for (const verse of this.verses) {
+      if (!FilterUtils.shouldIncludeVerse(verse, filters)) continue;
 
-        if (matches.length > 0) {
-          const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
-          if (!allResults.has(key)) {
-            allResults.set(key, {
-              verse,
-              matches: [],
-            });
-          }
-
-          // Add each match with its bounds
-          for (const match of matches) {
-            allResults.get(key)!.matches.push({
-              term,
-              start: match.index!,
-              end: match.index! + match[0].length,
-            });
-          }
-        }
+      if (RegexUtils.testMatch(verse.text, term)) {
+        matchingVerses.push(verse);
       }
     }
 
-    // Convert to array and preserve the order from the original text
-    const results = Array.from(allResults.values());
-    results.sort((a, b) => a.verse.position - b.verse.position);
-
-    return results;
+    return matchingVerses;
   }
 
-  findVersePairings(
-    searchTerms: string[],
+  findVersesForTerms(
+    terms: string[],
     filters: SearchFilters = {}
-  ): VersePairing[] {
-    const pairings: VersePairing[] = [];
+  ): Map<string, Verse[]> {
     const termToVerses = new Map<string, Verse[]>();
-    const processedPairings = new Set<string>();
-    const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
-    const MAX_SEARCH_TERMS = 8; // Limit number of terms to prevent combinatorial explosion
 
-    // Filter and limit the number of search terms to prevent combinatorial explosion
-    const validTerms = searchTerms.filter((term) => {
-      const normalized = term.toLowerCase().trim();
-      return normalized && normalized.length >= 2;
-    });
-    const limitedTerms = validTerms.slice(0, MAX_SEARCH_TERMS);
-    if (searchTerms.length > MAX_SEARCH_TERMS) {
-      console.warn(
-        `Limited search terms from ${searchTerms.length} to ${MAX_SEARCH_TERMS} to prevent memory issues`
-      );
+    for (const term of terms) {
+      const verses = this.findVersesForTerm(term, filters);
+      termToVerses.set(term, verses);
     }
 
-    // Get verses for each search term using word-boundary matching
-    for (const term of limitedTerms) {
-      const normalizedTerm = term.toLowerCase().trim();
-
-      const matchingVerses = new Set<Verse>();
-
-      // Use word-boundary matching for all verses
-      for (const verse of this.verses) {
-        // Apply filters first to avoid unnecessary processing
-        if (!shouldIncludeVerse(verse, filters)) {
-          continue;
-        }
-
-        // Create a regex that matches words starting with the term at word boundaries
-        const wordBoundaryRegex = new RegExp(
-          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
-          'i'
-        );
-
-        if (wordBoundaryRegex.test(verse.text)) {
-          matchingVerses.add(verse);
-        }
-      }
-
-      // Store filtered verses for this term
-      termToVerses.set(term, Array.from(matchingVerses));
-    }
-
-    const termArray = Array.from(termToVerses.keys());
-
-    // Generate all possible pairs of terms
-    for (let i = 0; i < termArray.length; i++) {
-      for (let j = i + 1; j < termArray.length; j++) {
-        if (pairings.length >= MAX_TOTAL_PAIRINGS) {
-          console.warn(
-            `Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
-          );
-          break;
-        }
-
-        const term1 = termArray[i];
-        const term2 = termArray[j];
-
-        // Filter out pairings where both terms are the same word
-        if (this.areTermsSameWord(term1, term2)) {
-          continue;
-        }
-
-        const verses1 = termToVerses.get(term1) || [];
-        const verses2 = termToVerses.get(term2) || [];
-
-        // Find pairings between these two terms
-        const pairPairings = this.findPairingsForTerms(
-          term1,
-          term2,
-          verses1,
-          verses2,
-          false
-        );
-
-        // Filter out already processed pairings to prevent duplicates
-        for (const pairing of pairPairings) {
-          const pairingKey =
-            pairing.proximity === 0
-              ? `same-${pairing.verses[0].position}-${term1}-${term2}`
-              : `pair-${Math.min(
-                  ...pairing.verses.map((v) => v.position)
-                )}-${Math.max(
-                  ...pairing.verses.map((v) => v.position)
-                )}-${term1}-${term2}`;
-
-          if (!processedPairings.has(pairingKey)) {
-            pairings.push(pairing);
-            processedPairings.add(pairingKey);
-          }
-        }
-      }
-      if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
-    }
-
-    return pairings;
+    return termToVerses;
   }
+}
 
-  findVersePairingsBetweenGroups(
-    group1Terms: string[],
-    group2Terms: string[],
-    filters: SearchFilters = {}
-  ): VersePairing[] {
-
-    const pairings: VersePairing[] = [];
-    const termToVerses = new Map<string, Verse[]>();
-    const processedPairings = new Set<string>();
-    const MAX_TOTAL_PAIRINGS = 10000; // Overall limit to prevent memory explosion
-    const MAX_SEARCH_TERMS_PER_GROUP = 8; // Limit number of terms per group to prevent combinatorial explosion
-
-    // Filter and limit the number of search terms per group
-    const validGroup1 = group1Terms.filter((term) => {
-      const normalized = term.toLowerCase().trim();
-      return normalized && normalized.length >= 2;
-    });
-    const validGroup2 = group2Terms.filter((term) => {
-      const normalized = term.toLowerCase().trim();
-      return normalized && normalized.length >= 2;
-    });
-    const limitedGroup1 = validGroup1.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
-    const limitedGroup2 = validGroup2.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
-
-
-
-    if (group1Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
-      console.warn(
-        `Limited group1 terms from ${group1Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`
-      );
-    }
-    if (group2Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
-      console.warn(
-        `Limited group2 terms from ${group2Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`
-      );
-    }
-
-    // Get verses for each search term in both groups using word-boundary matching
-    const allTerms = [...limitedGroup1, ...limitedGroup2];
-
-    for (const term of allTerms) {
-      const normalizedTerm = term.toLowerCase().trim();
-      if (!normalizedTerm || normalizedTerm.length < 2) continue;
-
-      const matchingVerses = new Set<Verse>();
-
-      // Use word-boundary matching for all verses
-      for (const verse of this.verses) {
-        // Apply filters first to avoid unnecessary processing
-        if (!shouldIncludeVerse(verse, filters)) {
-          continue;
-        }
-
-        // Create a regex that matches words starting with the term at word boundaries
-        const wordBoundaryRegex = new RegExp(
-          `\\b${this.escapeRegex(normalizedTerm)}\\w*`,
-          'i'
-        );
-
-        if (wordBoundaryRegex.test(verse.text)) {
-          matchingVerses.add(verse);
-        }
-      }
-
-      // Store filtered verses for this term
-      const versesArray = Array.from(matchingVerses);
-      termToVerses.set(term, versesArray);
-      
-
-    }
-
-    // Generate pairings only between terms from different groups
-    for (const term1 of limitedGroup1) {
-      for (const term2 of limitedGroup2) {
-        if (pairings.length >= MAX_TOTAL_PAIRINGS) {
-          console.warn(
-            `Reached maximum pairing limit (${MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
-          );
-          break;
-        }
-
-        // Filter out pairings where both terms are the same word
-        if (this.areTermsSameWord(term1, term2)) {
-          continue;
-        }
-
-        const verses1 = termToVerses.get(term1) || [];
-        const verses2 = termToVerses.get(term2) || [];
-
-        // Find pairings between these two terms from different groups
-        const pairPairings = this.findPairingsForTerms(
-          term1,
-          term2,
-          verses1,
-          verses2,
-          true
-        );
-
-
-        // Filter out already processed pairings to prevent duplicates
-        for (const pairing of pairPairings) {
-          const pairingKey =
-            pairing.proximity === 0
-              ? `same-${pairing.verses[0].position}-${term1}-${term2}`
-              : `pair-${Math.min(
-                  ...pairing.verses.map((v) => v.position)
-                )}-${Math.max(
-                  ...pairing.verses.map((v) => v.position)
-                )}-${term1}-${term2}`;
-
-          if (!processedPairings.has(pairingKey)) {
-            pairings.push(pairing);
-            processedPairings.add(pairingKey);
-          }
-        }
-      }
-      if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
-    }
-
-    
-    return pairings;
-  }
-
-  private findPairingsForTerms(
+class PairingGenerator {
+  static findPairingsForTerms(
     term1: string,
     term2: string,
     verses1: Verse[],
@@ -539,13 +240,44 @@ class KJVParser {
     isBetweenGroups: boolean = false
   ): VersePairing[] {
     const pairings: VersePairing[] = [];
-    const MAX_PAIRINGS_PER_TERM_PAIR = 5000; // Limit to prevent memory explosion
 
-    // Find same verse pairings first (proximity 0)
+    // Same verse pairings (proximity 0)
+    pairings.push(
+      ...PairingGenerator.findSameVersePairings(
+        term1,
+        term2,
+        verses1,
+        verses2,
+        isBetweenGroups
+      )
+    );
+
+    // Different verse pairings
+    pairings.push(
+      ...PairingGenerator.findDifferentVersePairings(
+        term1,
+        term2,
+        verses1,
+        verses2,
+        isBetweenGroups
+      )
+    );
+
+    return pairings.slice(0, CONFIG.MAX_PAIRINGS_PER_TERM_PAIR);
+  }
+
+  private static findSameVersePairings(
+    term1: string,
+    term2: string,
+    verses1: Verse[],
+    verses2: Verse[],
+    isBetweenGroups: boolean
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const verse2Positions = new Set(verses2.map((v) => v.position));
+
     for (const verse of verses1) {
-      if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
-
-      if (verses2.some((v) => v.position === verse.position)) {
+      if (verse2Positions.has(verse.position)) {
         pairings.push({
           verses: [verse],
           term1,
@@ -556,19 +288,27 @@ class KJVParser {
       }
     }
 
-    // Find different verse pairings with proximity limits
-    const MAX_PROXIMITY = 100; // Only find pairings within 100 verses of each other
+    return pairings;
+  }
+
+  private static findDifferentVersePairings(
+    term1: string,
+    term2: string,
+    verses1: Verse[],
+    verses2: Verse[],
+    isBetweenGroups: boolean
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+
     for (const verse1 of verses1) {
-      if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
+      if (pairings.length >= CONFIG.MAX_PAIRINGS_PER_TERM_PAIR) break;
 
       for (const verse2 of verses2) {
-        if (pairings.length >= MAX_PAIRINGS_PER_TERM_PAIR) break;
+        if (pairings.length >= CONFIG.MAX_PAIRINGS_PER_TERM_PAIR) break;
+        if (verse1.position === verse2.position) continue;
 
-        if (verse1.position === verse2.position) continue; // Skip same verse (already handled above)
-
-        // Skip if verses are too far apart
         const proximity = Math.abs(verse1.position - verse2.position);
-        if (proximity > MAX_PROXIMITY) continue;
+        if (proximity > CONFIG.MAX_PROXIMITY) continue;
 
         pairings.push({
           verses:
@@ -586,7 +326,261 @@ class KJVParser {
     return pairings;
   }
 
+  static generateAllPairings(
+    termToVerses: Map<string, Verse[]>,
+    isBetweenGroups: boolean = false
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const processedPairings = new Set<string>();
+    const termArray = Array.from(termToVerses.keys());
 
+    for (let i = 0; i < termArray.length; i++) {
+      for (let j = i + 1; j < termArray.length; j++) {
+        if (pairings.length >= CONFIG.MAX_TOTAL_PAIRINGS) {
+          console.warn(
+            `Reached maximum pairing limit (${CONFIG.MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
+          );
+          return pairings;
+        }
+
+        const term1 = termArray[i];
+        const term2 = termArray[j];
+
+        if (SearchUtils.areTermsSameWord(term1, term2)) continue;
+
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        const termPairings = PairingGenerator.findPairingsForTerms(
+          term1,
+          term2,
+          verses1,
+          verses2,
+          isBetweenGroups
+        );
+
+        for (const pairing of termPairings) {
+          const pairingKey = PairingGenerator.createPairingKey(
+            pairing,
+            term1,
+            term2
+          );
+
+          if (!processedPairings.has(pairingKey)) {
+            pairings.push(pairing);
+            processedPairings.add(pairingKey);
+          }
+        }
+      }
+    }
+
+    return pairings;
+  }
+
+  static generateBetweenGroupsPairings(
+    group1Terms: string[],
+    group2Terms: string[],
+    termToVerses: Map<string, Verse[]>
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const processedPairings = new Set<string>();
+
+    for (const term1 of group1Terms) {
+      for (const term2 of group2Terms) {
+        if (pairings.length >= CONFIG.MAX_TOTAL_PAIRINGS) {
+          console.warn(
+            `Reached maximum pairing limit (${CONFIG.MAX_TOTAL_PAIRINGS}). Stopping to prevent memory issues.`
+          );
+          return pairings;
+        }
+
+        if (SearchUtils.areTermsSameWord(term1, term2)) continue;
+
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        const termPairings = PairingGenerator.findPairingsForTerms(
+          term1,
+          term2,
+          verses1,
+          verses2,
+          true
+        );
+
+        for (const pairing of termPairings) {
+          const pairingKey = PairingGenerator.createPairingKey(
+            pairing,
+            term1,
+            term2
+          );
+
+          if (!processedPairings.has(pairingKey)) {
+            pairings.push(pairing);
+            processedPairings.add(pairingKey);
+          }
+        }
+      }
+    }
+
+    return pairings;
+  }
+
+  private static createPairingKey(
+    pairing: VersePairing,
+    term1: string,
+    term2: string
+  ): string {
+    if (pairing.proximity === 0) {
+      return `same-${pairing.verses[0].position}-${term1}-${term2}`;
+    }
+
+    const positions = pairing.verses.map((v) => v.position);
+    return `pair-${Math.min(...positions)}-${Math.max(
+      ...positions
+    )}-${term1}-${term2}`;
+  }
+}
+
+class KJVParser {
+  private verses: Verse[] = [];
+  private wordIndex: Map<string, Verse[]> = new Map();
+  private verseSearcher?: VerseSearcher;
+
+  async fetchAndParse(): Promise<void> {
+    try {
+      const response = await fetch('/kjv.txt');
+      if (!response.ok) {
+        throw new Error(`Failed to load KJV text: ${response.status}`);
+      }
+      const text = await response.text();
+      this.parseText(text);
+      this.buildWordIndex();
+      this.verseSearcher = new VerseSearcher(this.verses);
+    } catch (error) {
+      console.error('Error loading KJV text:', error);
+      throw error;
+    }
+  }
+
+  private parseText(text: string): void {
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (
+        !trimmed ||
+        trimmed.startsWith('KJV') ||
+        trimmed.includes('BibleProtector.com')
+      ) {
+        continue;
+      }
+
+      const verseMatch = trimmed.match(/^(.+?)\s+(\d+):(\d+)\s+(.+)$/);
+      if (verseMatch) {
+        const [, book, chapter, verseNum, verseText] = verseMatch;
+
+        this.verses.push({
+          book: book.trim(),
+          chapter: parseInt(chapter),
+          verse: parseInt(verseNum),
+          text: verseText.trim(),
+          reference: `${book.trim()} ${chapter}:${verseNum}`,
+          position: this.verses.length,
+        });
+      }
+    }
+  }
+
+  private buildWordIndex(): void {
+    for (const verse of this.verses) {
+      const words = SearchUtils.getWords(verse.text);
+      for (const word of words) {
+        const normalizedWord = word.toLowerCase();
+        if (!this.wordIndex.has(normalizedWord)) {
+          this.wordIndex.set(normalizedWord, []);
+        }
+        this.wordIndex.get(normalizedWord)!.push(verse);
+      }
+    }
+  }
+
+  searchWords(
+    searchTerms: string[],
+    filters: SearchFilters = {}
+  ): SearchResult[] {
+    const allResults = new Map<string, SearchResult>();
+    const validTerms = SearchUtils.validateAndLimitTerms(searchTerms);
+
+    for (const term of validTerms) {
+      for (const verse of this.verses) {
+        if (!FilterUtils.shouldIncludeVerse(verse, filters)) continue;
+
+        const matches = RegexUtils.findMatches(verse.text, term);
+        if (matches.length > 0) {
+          const key = `${verse.book}-${verse.chapter}-${verse.verse}`;
+          if (!allResults.has(key)) {
+            allResults.set(key, { verse, matches: [] });
+          }
+
+          for (const match of matches) {
+            allResults.get(key)!.matches.push({
+              term,
+              start: match.start,
+              end: match.end,
+            });
+          }
+        }
+      }
+    }
+
+    const results = Array.from(allResults.values());
+    results.sort((a, b) => a.verse.position - b.verse.position);
+    return results;
+  }
+
+  findVersePairings(
+    searchTerms: string[],
+    filters: SearchFilters = {}
+  ): VersePairing[] {
+    if (!this.verseSearcher) throw new Error('Parser not initialized');
+
+    const limitedTerms = SearchUtils.validateAndLimitTerms(searchTerms);
+    const termToVerses = this.verseSearcher.findVersesForTerms(
+      limitedTerms,
+      filters
+    );
+
+    return PairingGenerator.generateAllPairings(termToVerses);
+  }
+
+  findVersePairingsBetweenGroups(
+    group1Terms: string[],
+    group2Terms: string[],
+    filters: SearchFilters = {}
+  ): VersePairing[] {
+    if (!this.verseSearcher) throw new Error('Parser not initialized');
+
+    const limitedGroup1 = SearchUtils.validateAndLimitTerms(
+      group1Terms,
+      CONFIG.MAX_SEARCH_TERMS_PER_GROUP
+    );
+    const limitedGroup2 = SearchUtils.validateAndLimitTerms(
+      group2Terms,
+      CONFIG.MAX_SEARCH_TERMS_PER_GROUP
+    );
+
+    const allTerms = [...limitedGroup1, ...limitedGroup2];
+    const termToVerses = this.verseSearcher.findVersesForTerms(
+      allTerms,
+      filters
+    );
+
+    return PairingGenerator.generateBetweenGroupsPairings(
+      limitedGroup1,
+      limitedGroup2,
+      termToVerses
+    );
+  }
 
   getVerses(): Verse[] {
     return [...this.verses];

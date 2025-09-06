@@ -1,5 +1,7 @@
 'use client';
 
+import { IconButton } from './button';
+
 interface ToggleButtonProps {
   isActive: boolean;
   onClick: () => void;
@@ -18,20 +20,14 @@ export function ToggleButton({
   isDarkMode = false,
 }: ToggleButtonProps) {
   return (
-    <button
+    <IconButton
+      isActive={isActive}
       onClick={onClick}
-      className={`p-0.5 px-2 text-sm transition-opacity hover:opacity-80 ${
-        isActive
-          ? isDarkMode
-            ? 'bg-slate-600 text-white'
-            : 'bg-blue-500 text-white'
-          : isDarkMode
-          ? 'bg-gray-700 text-gray-400'
-          : 'bg-gray-200 text-gray-600'
-      }`}
       title={title}
+      isDarkMode={isDarkMode}
+      className="hover:opacity-80"
     >
       {isActive ? <ActiveIcon size={16} /> : <InactiveIcon size={16} />}
-    </button>
+    </IconButton>
   );
 }

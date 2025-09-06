@@ -1,3 +1,5 @@
+import { APP_CONFIG } from './constants';
+
 export interface TabState {
   id: string;
   name: string;
@@ -38,7 +40,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
 
 export class TabManagerService {
   private static readonly STORAGE_KEY = 'kjv-tab-manager';
-  private static readonly MAX_TABS = 10;
+  private static readonly MAX_TABS = APP_CONFIG.TABS.MAX_TABS;
 
   static loadTabManager(): TabManager {
     // Check if we're in a browser environment

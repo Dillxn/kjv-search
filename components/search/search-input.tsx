@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, useCallback } from 'react';
-import { formatTextWithColors, formatPairingsTextWithColors } from '../../lib/highlighting-utils';
+import { formatTextWithColors, formatPairingsTextWithColors } from '../../lib/highlighting';
+import { getTextClass, getBackgroundClass, getBorderClass } from '../../lib/theme-utils';
 
 interface SearchInputProps {
   value: string;
@@ -111,9 +112,7 @@ export function SearchInput({
   return (
     <div className='mb-1.5'>
       <label
-        className={`block text-xs font-medium mb-0.5 ${
-          isDarkMode ? 'text-gray-300' : 'text-gray-700'
-        }`}
+        className={`block text-xs font-medium mb-0.5 ${getTextClass(isDarkMode, 'secondary')}`}
       >
         {label}
       </label>
@@ -124,11 +123,7 @@ export function SearchInput({
           suppressContentEditableWarning={true}
           data-placeholder={placeholder}
           onInput={handleInput}
-          className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[2.25rem] ${
-            isDarkMode
-              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-          } [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 [&:empty]:before:pointer-events-none`}
+          className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[2.25rem] ${getBackgroundClass(isDarkMode, 'input')} ${getBorderClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 [&:empty]:before:pointer-events-none`}
         />
       </div>
     </div>

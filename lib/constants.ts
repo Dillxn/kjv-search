@@ -1,3 +1,34 @@
+// Application Configuration
+export const APP_CONFIG = {
+  // Search Configuration
+  SEARCH: {
+    MIN_TERM_LENGTH: 2,
+    MAX_SEARCH_TERMS: 8,
+    MAX_SEARCH_TERMS_PER_GROUP: 8,
+    DEBOUNCE_DELAY: 500,
+  },
+  
+  // Pairing Configuration
+  PAIRINGS: {
+    MAX_TOTAL_PAIRINGS: 10000,
+    MAX_PAIRINGS_PER_TERM_PAIR: 5000,
+    MAX_PROXIMITY: 100,
+  },
+  
+  // Tab Management
+  TABS: {
+    MAX_TABS: 10,
+    AUTO_SAVE_DELAY: 300,
+  },
+  
+  // UI Configuration
+  UI: {
+    CONTAINER_BASE_OFFSET: 180,
+    ESTIMATED_ITEM_HEIGHT: 60,
+    DEV_BACKUP_INTERVAL: 2000,
+  },
+} as const;
+
 // Color schemes for highlighting search terms
 export const HIGHLIGHT_COLORS_LIGHT = [
   'bg-yellow-200 text-yellow-900',

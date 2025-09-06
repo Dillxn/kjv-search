@@ -1,3 +1,5 @@
+import { APP_CONFIG } from './constants';
+
 // Development helper to improve localStorage persistence during HMR
 export class DevStorageHelper {
   private static readonly DEV_BACKUP_KEY = 'kjv-dev-backup';
@@ -13,7 +15,7 @@ export class DevStorageHelper {
       clearInterval(this.backupInterval);
     }
 
-    // Backup localStorage every 2 seconds during development
+    // Backup localStorage during development
     this.backupInterval = setInterval(() => {
       try {
         const tabManagerData = localStorage.getItem('kjv-tab-manager');
@@ -27,7 +29,7 @@ export class DevStorageHelper {
       } catch (error) {
         console.warn('Dev backup failed:', error);
       }
-    }, 2000);
+    }, APP_CONFIG.UI.DEV_BACKUP_INTERVAL);
 
     
   }
