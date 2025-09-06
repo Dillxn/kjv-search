@@ -12,6 +12,14 @@ import { FilterControls } from '../components/search/filter-controls';
 import { SearchResults } from '../components/search/search-results';
 import { useSearchState } from '../hooks/use-search-state';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
+import {
+  MoonStar,
+  MoonStarIcon,
+  Sun,
+  SunIcon,
+  Workflow,
+  WorkflowIcon,
+} from 'lucide-react';
 
 export default function Home() {
   // Tab management
@@ -47,11 +55,13 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
-  const [selectedConnections, setSelectedConnections] = useState<Array<{
-    word1: string;
-    word2: string;
-    reference: string;
-  }>>([]);
+  const [selectedConnections, setSelectedConnections] = useState<
+    Array<{
+      word1: string;
+      word2: string;
+      reference: string;
+    }>
+  >([]);
 
   // Generate unique localStorage key for scroll position
   const scrollPositionKey = useMemo(() => {
@@ -67,7 +77,7 @@ export default function Home() {
       testLocalStorage();
       getLocalStorageInfo();
       console.log('==============================');
-      
+
       const currentTabState = TabManagerService.getActiveTab(tabManager);
       if (currentTabState) {
         console.log('Loading tab state:', currentTabState);
@@ -92,7 +102,10 @@ export default function Home() {
       try {
         console.log('Starting KJV initialization...');
         await kjvParser.fetchAndParse();
-        console.log('KJV initialization complete, verses loaded:', kjvParser.getVerses().length);
+        console.log(
+          'KJV initialization complete, verses loaded:',
+          kjvParser.getVerses().length
+        );
         setIsInitialized(true);
       } catch (err) {
         console.error('KJV initialization failed:', err);
@@ -119,7 +132,13 @@ export default function Home() {
     if (isInitialized) {
       performSearch(activeTab);
     }
-  }, [debouncedSearchTerms, debouncedPairingsSearchTerms, activeTab, isInitialized, performSearch]);
+  }, [
+    debouncedSearchTerms,
+    debouncedPairingsSearchTerms,
+    activeTab,
+    isInitialized,
+    performSearch,
+  ]);
 
   // Update current tab state helper with debouncing
   const updateCurrentTabState = useCallback(
@@ -200,7 +219,7 @@ export default function Home() {
   // Debounced update of tab state to prevent excessive localStorage writes
   useEffect(() => {
     if (!hasMounted) return; // Don't save during initial load
-    
+
     const timeoutId = setTimeout(() => {
       updateCurrentTabState({
         searchTerms,
@@ -235,21 +254,17 @@ export default function Home() {
     const saveCurrentState = () => {
       const currentActiveTab = TabManagerService.getActiveTab(tabManager);
       if (currentActiveTab) {
-        TabManagerService.updateTabState(
-          tabManager,
-          currentActiveTab.id,
-          {
-            searchTerms,
-            pairingsSearchTerms,
-            selectedTestament,
-            selectedBooks,
-            showFilters,
-            activeTab,
-            isDarkMode,
-            showGraph,
-            selectedConnections,
-          }
-        );
+        TabManagerService.updateTabState(tabManager, currentActiveTab.id, {
+          searchTerms,
+          pairingsSearchTerms,
+          selectedTestament,
+          selectedBooks,
+          showFilters,
+          activeTab,
+          isDarkMode,
+          showGraph,
+          selectedConnections,
+        });
       }
     };
 
@@ -294,77 +309,104 @@ export default function Home() {
     });
   };
 
-  const handleAddToGraph = useCallback((pairing: VersePairing) => {
-    const connections = Array.isArray(selectedConnections) ? selectedConnections : [];
-    const versePositions = pairing.verses.map(v => v.position);
-    
-    // Check if this specific pairing (with same verse positions) is already in graph
-    const isInGraph = connections.some(conn => {
-      const positionsMatch = conn.versePositions && 
-        conn.versePositions.length === versePositions.length &&
-        conn.versePositions.every(pos => versePositions.includes(pos));
-      
-      const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-                        (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-      
-      return wordsMatch && positionsMatch;
-    });
+  const handleAddToGraph = useCallback(
+    (pairing: VersePairing) => {
+      const connections = Array.isArray(selectedConnections)
+        ? selectedConnections
+        : [];
+      const versePositions = pairing.verses.map((v) => v.position);
 
-    if (!isInGraph) {
-      const verseRef = pairing.verses.length === 1 
-        ? pairing.verses[0].reference
-        : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
-      
-      setSelectedConnections(prev => {
-        const prevArray = Array.isArray(prev) ? prev : [];
-        return [...prevArray, {
-          word1: pairing.term1,
-          word2: pairing.term2,
-          reference: verseRef,
-          versePositions: versePositions
-        }];
+      // Check if this specific pairing (with same verse positions) is already in graph
+      const isInGraph = connections.some((conn) => {
+        const positionsMatch =
+          conn.versePositions &&
+          conn.versePositions.length === versePositions.length &&
+          conn.versePositions.every((pos) => versePositions.includes(pos));
+
+        const wordsMatch =
+          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+        return wordsMatch && positionsMatch;
       });
-    }
-  }, [selectedConnections]);
+
+      if (!isInGraph) {
+        const verseRef =
+          pairing.verses.length === 1
+            ? pairing.verses[0].reference
+            : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+
+        setSelectedConnections((prev) => {
+          const prevArray = Array.isArray(prev) ? prev : [];
+          return [
+            ...prevArray,
+            {
+              word1: pairing.term1,
+              word2: pairing.term2,
+              reference: verseRef,
+              versePositions: versePositions,
+            },
+          ];
+        });
+      }
+    },
+    [selectedConnections]
+  );
 
   // Loading state
   if (!isInitialized || !hasMounted) {
-    return <LoadingSpinner message="Loading KJV text..." isDarkMode={isDarkMode} />;
+    return (
+      <LoadingSpinner message='Loading KJV text...' isDarkMode={isDarkMode} />
+    );
   }
 
   return (
-    <div className={`h-screen overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div
+      className={`h-screen overflow-hidden ${
+        isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
+      }`}
+    >
       <TabBar
         tabManager={tabManager}
         onTabManagerChange={handleTabManagerChange}
         isDarkMode={isDarkMode}
       />
-      
+
       <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col`}>
         {/* Header */}
-        <div className={`rounded-lg shadow-md mb-2 p-1.5 ${
-          isDarkMode ? 'bg-gray-800' : 'bg-white'
-        }`}>
+        <div
+          className={`rounded-lg shadow-md mb-2 p-1.5 ${
+            isDarkMode ? 'bg-gray-800' : 'bg-white'
+          }`}
+        >
           <div className='flex justify-between items-center mb-1'>
-            <h1 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            <h1
+              className={`text-base font-bold ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}
+            >
               KJV Bible Search
             </h1>
-            <div className='flex gap-1'>
+            <div className='flex gap-0 rounded-sm overflow-clip'>
               <ToggleButton
                 isActive={showGraph}
                 onClick={() => setShowGraph(!showGraph)}
-                activeIcon="🕸️"
-                inactiveIcon="🕸️"
-                title={showGraph ? 'Hide graph visualizer' : 'Show graph visualizer'}
+                activeIcon={WorkflowIcon}
+                inactiveIcon={WorkflowIcon}
+                title={
+                  showGraph ? 'Hide graph visualizer' : 'Show graph visualizer'
+                }
                 isDarkMode={isDarkMode}
               />
 
               <ToggleButton
                 isActive={isDarkMode}
                 onClick={() => setIsDarkMode(!isDarkMode)}
-                activeIcon="☀️"
-                inactiveIcon="🌙"
-                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                activeIcon={SunIcon}
+                inactiveIcon={MoonStarIcon}
+                title={
+                  isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
+                }
                 isDarkMode={isDarkMode}
               />
             </div>
@@ -374,8 +416,8 @@ export default function Home() {
           <SearchInput
             value={searchTerms}
             onChange={setSearchTerms}
-            placeholder="Start typing to search... (min 2 characters)"
-            label="Enter search words (separated by spaces):"
+            placeholder='Start typing to search... (min 2 characters)'
+            label='Enter search words (separated by spaces):'
             isDarkMode={isDarkMode}
           />
 
@@ -383,8 +425,8 @@ export default function Home() {
             <SearchInput
               value={pairingsSearchTerms}
               onChange={setPairingsSearchTerms}
-              placeholder="Enter second group of words..."
-              label="Second search group (for pairings):"
+              placeholder='Enter second group of words...'
+              label='Second search group (for pairings):'
               isDarkMode={isDarkMode}
               isPairingsInput={true}
             />
@@ -406,7 +448,11 @@ export default function Home() {
         {/* Content Area */}
         <div className='flex-1 flex gap-2 min-h-0'>
           {/* Results Panel */}
-          <div className={`flex-1 flex flex-col min-h-0 ${showGraph ? 'w-1/2' : 'w-full'}`}>
+          <div
+            className={`flex-1 flex flex-col min-h-0 ${
+              showGraph ? 'w-1/2' : 'w-full'
+            }`}
+          >
             {/* Tab Navigation */}
             <div className={`flex mb-2 gap-1`}>
               <button
@@ -442,9 +488,11 @@ export default function Home() {
             {/* Search Results */}
             <div className='flex-1 min-h-0'>
               {error ? (
-                <div className={`flex items-center justify-center h-full ${
-                  isDarkMode ? 'text-red-400' : 'text-red-600'
-                }`}>
+                <div
+                  className={`flex items-center justify-center h-full ${
+                    isDarkMode ? 'text-red-400' : 'text-red-600'
+                  }`}
+                >
                   <p className='text-sm'>{error}</p>
                 </div>
               ) : (
@@ -467,14 +515,22 @@ export default function Home() {
 
           {/* Graph Panel */}
           {showGraph && (
-            <div className={`w-1/2 rounded-lg shadow-md ${
-              isDarkMode ? 'bg-gray-800' : 'bg-white'
-            }`}>
-              <div className={`p-2 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div
+              className={`w-1/2 rounded-lg shadow-md ${
+                isDarkMode ? 'bg-gray-800' : 'bg-white'
+              }`}
+            >
+              <div
+                className={`p-2 border-b ${
+                  isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                }`}
+              >
                 <div className='flex justify-between items-center'>
-                  <h3 className={`text-sm font-medium ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
+                  <h3
+                    className={`text-sm font-medium ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}
+                  >
                     Word Connections Graph
                   </h3>
                   <button

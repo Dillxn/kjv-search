@@ -3,8 +3,8 @@
 interface ToggleButtonProps {
   isActive: boolean;
   onClick: () => void;
-  activeIcon: string;
-  inactiveIcon: string;
+  activeIcon: React.ElementType;
+  inactiveIcon: React.ElementType;
   title: string;
   isDarkMode?: boolean;
 }
@@ -12,15 +12,15 @@ interface ToggleButtonProps {
 export function ToggleButton({
   isActive,
   onClick,
-  activeIcon,
-  inactiveIcon,
+  activeIcon: ActiveIcon,
+  inactiveIcon: InactiveIcon,
   title,
   isDarkMode = false,
 }: ToggleButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`p-0.5 rounded-full text-sm transition-opacity hover:opacity-80 ${
+      className={`p-0.5 px-2 text-sm transition-opacity hover:opacity-80 ${
         isActive
           ? isDarkMode
             ? 'bg-slate-600 text-white'
@@ -31,7 +31,7 @@ export function ToggleButton({
       }`}
       title={title}
     >
-      {isActive ? activeIcon : inactiveIcon}
+      {isActive ? <ActiveIcon size={16} /> : <InactiveIcon size={16} />}
     </button>
   );
 }
