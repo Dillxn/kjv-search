@@ -62,10 +62,14 @@ export function GraphCanvas({
   
   // Use a ref for immediate transform updates to avoid state update delays
   const currentTransform = useRef(transform);
+  const isInternalUpdate = useRef(false);
   
-  // Sync ref with prop changes
+  // Sync ref with prop changes only when not from internal updates
   useEffect(() => {
-    currentTransform.current = transform;
+    if (!isInternalUpdate.current) {
+      currentTransform.current = transform;
+    }
+    isInternalUpdate.current = false;
   }, [transform]);
 
   // Create color mappings for search terms
@@ -136,171 +140,6 @@ export function GraphCanvas({
     if (classes.includes('bg-gray-600')) return { bg: '#4b5563', text: '#e5e7eb', border: '#6b7280' };
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);
-
-  // Pan and zoom event handlers with direct updates
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    let updateTimeout: NodeJS.Timeout | null = null;
-
-    const updateTransform = (newTransform: { x: number; y: number; scale: number }) => {
-      // Update ref immediately for drawing
-      currentTransform.current = newTransform;
-      
-      // Debounce parent updates to avoid excessive re-renders
-      if (updateTimeout) clearTimeout(updateTimeout);
-      updateTimeout = setTimeout(() => {
-        onTransformChange(newTransform);
-      }, 10); // Very short debounce
-      
-      // Force a redraw immediately
-      const canvas = canvasRef.current;
-      if (canvas) {
-        // Trigger a redraw by dispatching a custom event
-        canvas.dispatchEvent(new CustomEvent('transform-update'));
-      }
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      const current = currentTransform.current;
-
-      if (e.metaKey || e.ctrlKey) {
-        // Zoom with Cmd/Ctrl+scroll
-        const zoomSensitivity = 0.01;
-        const zoomFactor = 1 - e.deltaY * zoomSensitivity;
-        const newScale = Math.max(0.1, Math.min(5, current.scale * zoomFactor));
-
-        if (Math.abs(newScale - current.scale) > 0.001) {
-          const scaleChange = newScale / current.scale;
-          const newX = mouseX - (mouseX - current.x) * scaleChange;
-          const newY = mouseY - (mouseY - current.y) * scaleChange;
-
-          updateTransform({ x: newX, y: newY, scale: newScale });
-        }
-      } else {
-        // Direct panning with balanced sensitivity
-        const panSensitivity = 1.5; // More reasonable sensitivity
-        
-        const deltaX = e.deltaX * panSensitivity;
-        const deltaY = e.deltaY * panSensitivity;
-        
-        const newX = current.x - deltaX;
-        const newY = current.y - deltaY;
-
-        updateTransform({ x: newX, y: newY, scale: current.scale });
-      }
-    };
-
-    const handleMouseDown = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const current = currentTransform.current;
-      const graphX = (mouseX - current.x) / current.scale;
-      const graphY = (mouseY - current.y) / current.scale;
-
-      // Check if click is on an edge
-      let clickedEdge = null;
-      for (const edge of edges) {
-        const sourceNode = nodes.find((n) => n.id === edge.source);
-        const targetNode = nodes.find((n) => n.id === edge.target);
-
-        if (sourceNode && targetNode) {
-          const A = graphX - sourceNode.x;
-          const B = graphY - sourceNode.y;
-          const C = targetNode.x - sourceNode.x;
-          const D = targetNode.y - sourceNode.y;
-
-          const dot = A * C + B * D;
-          const lenSq = C * C + D * D;
-          let param = -1;
-          if (lenSq !== 0) param = dot / lenSq;
-
-          let xx, yy;
-          if (param < 0) {
-            xx = sourceNode.x;
-            yy = sourceNode.y;
-          } else if (param > 1) {
-            xx = targetNode.x;
-            yy = targetNode.y;
-          } else {
-            xx = sourceNode.x + param * C;
-            yy = sourceNode.y + param * D;
-          }
-
-          const dx = graphX - xx;
-          const dy = graphY - yy;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < 15) {
-            clickedEdge = edge;
-            break;
-          }
-        }
-      }
-
-      if (clickedEdge) {
-        const allConnections = connections.filter(conn => 
-          (conn.word1 === clickedEdge.source && conn.word2 === clickedEdge.target) ||
-          (conn.word1 === clickedEdge.target && conn.word2 === clickedEdge.source)
-        );
-        
-        if (allConnections.length > 0) {
-          onEdgeClick(clickedEdge, allConnections);
-          return;
-        }
-      }
-
-      setIsDragging(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
-      setLastPanPoint({ x: current.x, y: current.y });
-      canvas.style.cursor = 'grabbing';
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-
-      const deltaX = e.clientX - dragStart.x;
-      const deltaY = e.clientY - dragStart.y;
-
-      updateTransform({
-        ...currentTransform.current,
-        x: lastPanPoint.x + deltaX,
-        y: lastPanPoint.y + deltaY,
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      canvas.style.cursor = 'grab';
-    };
-
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseUp);
-
-    canvas.style.cursor = 'grab';
-
-    return () => {
-      if (updateTimeout) {
-        clearTimeout(updateTimeout);
-      }
-      canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('mouseleave', handleMouseUp);
-    };
-  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick]);
 
   // Drawing function
   const draw = useCallback(() => {
@@ -421,25 +260,180 @@ export function GraphCanvas({
     ctx.restore();
   }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, canvasSize]);
 
+  // Pan and zoom event handlers with smooth updates
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let rafId: number | null = null;
+    let pendingUpdate: { x: number; y: number; scale: number } | null = null;
+
+    const scheduleUpdate = (newTransform: { x: number; y: number; scale: number }) => {
+      // Always update the ref immediately for smooth visual feedback
+      currentTransform.current = newTransform;
+      isInternalUpdate.current = true;
+      
+      // Schedule parent update and redraw
+      pendingUpdate = newTransform;
+      
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          if (pendingUpdate) {
+            draw();
+            onTransformChange(pendingUpdate);
+            pendingUpdate = null;
+          }
+          rafId = null;
+        });
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const current = currentTransform.current;
+
+      if (e.metaKey || e.ctrlKey) {
+        // Zoom with Cmd/Ctrl+scroll
+        const zoomSensitivity = 0.005;
+        const zoomFactor = 1 - e.deltaY * zoomSensitivity;
+        const newScale = Math.max(0.1, Math.min(5, current.scale * zoomFactor));
+
+        if (Math.abs(newScale - current.scale) > 0.001) {
+          const scaleChange = newScale / current.scale;
+          const newX = mouseX - (mouseX - current.x) * scaleChange;
+          const newY = mouseY - (mouseY - current.y) * scaleChange;
+
+          scheduleUpdate({ x: newX, y: newY, scale: newScale });
+        }
+      } else {
+        // Trackpad panning
+        const panSensitivity = 1.0;
+        
+        const deltaX = e.deltaX * panSensitivity;
+        const deltaY = e.deltaY * panSensitivity;
+        
+        const newX = current.x - deltaX;
+        const newY = current.y - deltaY;
+
+        scheduleUpdate({ x: newX, y: newY, scale: current.scale });
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const current = currentTransform.current;
+      const graphX = (mouseX - current.x) / current.scale;
+      const graphY = (mouseY - current.y) / current.scale;
+
+      // Check if click is on an edge
+      let clickedEdge = null;
+      for (const edge of edges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        const targetNode = nodes.find((n) => n.id === edge.target);
+
+        if (sourceNode && targetNode) {
+          const A = graphX - sourceNode.x;
+          const B = graphY - sourceNode.y;
+          const C = targetNode.x - sourceNode.x;
+          const D = targetNode.y - sourceNode.y;
+
+          const dot = A * C + B * D;
+          const lenSq = C * C + D * D;
+          let param = -1;
+          if (lenSq !== 0) param = dot / lenSq;
+
+          let xx, yy;
+          if (param < 0) {
+            xx = sourceNode.x;
+            yy = sourceNode.y;
+          } else if (param > 1) {
+            xx = targetNode.x;
+            yy = targetNode.y;
+          } else {
+            xx = sourceNode.x + param * C;
+            yy = sourceNode.y + param * D;
+          }
+
+          const dx = graphX - xx;
+          const dy = graphY - yy;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < 15) {
+            clickedEdge = edge;
+            break;
+          }
+        }
+      }
+
+      if (clickedEdge) {
+        const allConnections = connections.filter(conn => 
+          (conn.word1 === clickedEdge.source && conn.word2 === clickedEdge.target) ||
+          (conn.word1 === clickedEdge.target && conn.word2 === clickedEdge.source)
+        );
+        
+        if (allConnections.length > 0) {
+          onEdgeClick(clickedEdge, allConnections);
+          return;
+        }
+      }
+
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setLastPanPoint({ x: current.x, y: current.y });
+      canvas.style.cursor = 'grabbing';
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+
+      scheduleUpdate({
+        ...currentTransform.current,
+        x: lastPanPoint.x + deltaX,
+        y: lastPanPoint.y + deltaY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      canvas.style.cursor = 'grab';
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseUp);
+
+    canvas.style.cursor = 'grab';
+
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mouseleave', handleMouseUp);
+    };
+  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick]);
+
   // Effect to handle drawing
   useEffect(() => {
     draw();
   }, [draw, transform]);
 
-  // Effect to set up custom event listener for immediate redraws
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
 
-    const handleTransformUpdate = () => {
-      draw();
-    };
-
-    canvas.addEventListener('transform-update', handleTransformUpdate);
-    return () => {
-      canvas.removeEventListener('transform-update', handleTransformUpdate);
-    };
-  }, [draw]);
 
   return (
     <canvas

@@ -45,7 +45,7 @@ function resolveOverlaps(nodes: Node[]) {
         const dx = nodeB.x - nodeA.x;
         const dy = nodeB.y - nodeA.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = nodeA.radius + nodeB.radius + 25;
+        const minDistance = nodeA.radius + nodeB.radius + 25; // Now always 125 (50 + 50 + 25)
         
         if (distance < minDistance && distance > 0) {
           hasOverlaps = true;
@@ -256,7 +256,7 @@ export function applyForceDirectedLayout(nodes: Node[], edges: Edge[]): Node[] {
           const distributionForce = (targetDistance - distance) * 0.08;
           
           // Stronger force when nodes are too close (overlap prevention)
-          const minDistance = nodeA.radius + nodeB.radius + 25;
+          const minDistance = nodeA.radius + nodeB.radius + 25; // Now always 125 (50 + 50 + 25)
           let repulsionForce = 0;
           
           if (distance < minDistance) {
@@ -507,15 +507,8 @@ export function generateInitialPosition(word: string, existingNodes: Node[]) {
   };
 }
 
-// Calculate node radius based on text width
+// Calculate standardized node radius - all nodes have the same size
 export function calculateNodeRadius(word: string, fontSize: number = 12): number {
-  // Use a more predictable calculation to avoid canvas creation issues
-  const estimatedCharWidth = fontSize * 0.6; // Approximate character width
-  const textWidth = word.length * estimatedCharWidth;
-  
-  const padding = 25; // Padding around text
-  const minRadius = Math.max(40, (textWidth / 2) + padding);
-  
-  // Ensure reasonable bounds
-  return Math.min(Math.max(minRadius, 40), 85);
+  // Return a fixed radius for all nodes to standardize their size
+  return 50;
 }
