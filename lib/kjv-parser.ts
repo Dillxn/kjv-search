@@ -24,6 +24,7 @@ export interface VersePairing {
   term2: string;
   proximity: number; // 0 for same verse, otherwise verse distance
   isBetweenGroups?: boolean; // true if pairing is between two different search groups
+  allTermPairs?: string[]; // All term combinations when consolidated
 }
 
 export interface SearchFilters {
@@ -374,7 +375,62 @@ class PairingGenerator {
       }
     }
 
-    return pairings;
+    return PairingGenerator.consolidatePairings(pairings);
+  }
+
+  // Consolidate pairings that share verses but have different word combinations
+  static consolidatePairings(pairings: VersePairing[]): VersePairing[] {
+    const verseGroupMap = new Map<string, VersePairing[]>();
+    
+    // Group pairings by their verse positions
+    for (const pairing of pairings) {
+      const verseKey = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
+      if (!verseGroupMap.has(verseKey)) {
+        verseGroupMap.set(verseKey, []);
+      }
+      verseGroupMap.get(verseKey)!.push(pairing);
+    }
+
+    const consolidatedPairings: VersePairing[] = [];
+
+    // Process each verse group
+    for (const [verseKey, groupPairings] of verseGroupMap) {
+      if (groupPairings.length === 1) {
+        // Single pairing, no consolidation needed
+        consolidatedPairings.push(groupPairings[0]);
+      } else {
+        // Multiple pairings for same verses - consolidate them
+        const firstPairing = groupPairings[0];
+        
+        // Collect all unique term combinations
+        const termPairs = new Set<string>();
+        let isBetweenGroups = false;
+        
+        for (const pairing of groupPairings) {
+          const [term1, term2] = [pairing.term1, pairing.term2].sort();
+          termPairs.add(`${term1} ↔ ${term2}`);
+          if (pairing.isBetweenGroups) isBetweenGroups = true;
+        }
+
+        // Create consolidated pairing with combined term information
+        const termPairsList = Array.from(termPairs);
+        // Extract first individual terms for backward compatibility
+        const firstPair = termPairsList[0].split(' ↔ ');
+        const consolidatedPairing: VersePairing = {
+          verses: firstPairing.verses,
+          term1: firstPair[0].trim(), // Use first individual word
+          term2: firstPair[1].trim(), // Use second individual word
+          proximity: firstPairing.proximity,
+          isBetweenGroups,
+          // Add metadata for all term combinations
+          allTermPairs: termPairsList,
+        };
+
+        consolidatedPairings.push(consolidatedPairing);
+      }
+    }
+
+    return consolidatedPairings;
   }
 
   static generateBetweenGroupsPairings(
@@ -422,7 +478,7 @@ class PairingGenerator {
       }
     }
 
-    return pairings;
+    return PairingGenerator.consolidatePairings(pairings);
   }
 
   private static createPairingKey(

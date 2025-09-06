@@ -90,18 +90,47 @@ export function SearchResults({
     const versePositions = pairing.verses.map((v) => v.position);
     const isInGraph =
       Array.isArray(selectedConnections) &&
-      selectedConnections.some((conn) => {
-        const positionsMatch =
-          conn.versePositions &&
-          conn.versePositions.length === versePositions.length &&
-          conn.versePositions.every((pos) => versePositions.includes(pos));
+      (() => {
+        // Handle consolidated pairings
+        if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
+          // Parse all term pairs and check if ALL are in the graph
+          const termPairs = pairing.allTermPairs.map((pairStr) => {
+            const [term1, term2] = pairStr.split(' ↔ ');
+            return { term1: term1.trim(), term2: term2.trim() };
+          });
 
-        const wordsMatch =
-          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+          return termPairs.every(({ term1, term2 }) => {
+            return selectedConnections.some((conn) => {
+              const positionsMatch =
+                conn.versePositions &&
+                conn.versePositions.length === versePositions.length &&
+                conn.versePositions.every((pos) =>
+                  versePositions.includes(pos)
+                );
 
-        return wordsMatch && positionsMatch;
-      });
+              const wordsMatch =
+                (conn.word1 === term1 && conn.word2 === term2) ||
+                (conn.word1 === term2 && conn.word2 === term1);
+
+              return wordsMatch && positionsMatch;
+            });
+          });
+        } else {
+          // Handle single pairing (original logic)
+          return selectedConnections.some((conn) => {
+            const positionsMatch =
+              conn.versePositions &&
+              conn.versePositions.length === versePositions.length &&
+              conn.versePositions.every((pos) => versePositions.includes(pos));
+
+            const wordsMatch =
+              (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+              (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+            return wordsMatch && positionsMatch;
+          });
+        }
+      })();
 
     return (
       <div
@@ -113,6 +142,19 @@ export function SearchResults({
         }`}
       >
         <div className='flex-1'>
+          {/* Show consolidated term pairs if available */}
+          {pairing.allTermPairs && pairing.allTermPairs.length > 1 && (
+            <div className='mb-2'>
+              <div
+                className={`text-xs font-medium ${
+                  isDarkMode ? 'text-blue-300' : 'text-blue-600'
+                }`}
+              >
+                Word pairs: {pairing.allTermPairs.join(', ')}
+              </div>
+            </div>
+          )}
+
           {pairing.verses.map((verse, verseIndex) => (
             <div key={verse.position} className={verseIndex > 0 ? 'mt-1' : ''}>
               <div className='mb-0.5'>

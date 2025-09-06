@@ -333,37 +333,36 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       const newEdges: Edge[] = [];
       const hadNodes = prevNodes.length > 0;
 
-      // Build map of existing nodes first
+      // Build map of existing nodes for position preservation
+      const existingNodePositions = new Map<string, { x: number; y: number }>();
       prevNodes.forEach((node) => {
-        nodeMap.set(node.id, node);
+        existingNodePositions.set(node.id, { x: node.x, y: node.y });
+      });
+
+      // Collect all words that appear in current connections
+      const wordsInConnections = new Set<string>();
+      connections.forEach((conn) => {
+        wordsInConnections.add(conn.word1);
+        wordsInConnections.add(conn.word2);
+      });
+
+      // Create nodes only for words that appear in connections
+      wordsInConnections.forEach((word) => {
+        const existingPosition = existingNodePositions.get(word);
+        const position = existingPosition || generateInitialPosition(word, newNodes);
+        
+        const node: Node = {
+          id: word,
+          x: position.x,
+          y: position.y,
+          word: word,
+        };
+        nodeMap.set(word, node);
         newNodes.push(node);
       });
 
       connections.forEach((conn) => {
-        // Create nodes if they don't exist
-        if (!nodeMap.has(conn.word1)) {
-          const position = generateInitialPosition(conn.word1, newNodes);
-          const node: Node = {
-            id: conn.word1,
-            x: position.x,
-            y: position.y,
-            word: conn.word1,
-          };
-          nodeMap.set(conn.word1, node);
-          newNodes.push(node);
-        }
-
-        if (!nodeMap.has(conn.word2)) {
-          const position = generateInitialPosition(conn.word2, newNodes);
-          const node: Node = {
-            id: conn.word2,
-            x: position.x,
-            y: position.y,
-            word: conn.word2,
-          };
-          nodeMap.set(conn.word2, node);
-          newNodes.push(node);
-        }
+        // Nodes are already created above, just create edges
 
         // Create edge if it doesn't exist
         const edgeExists = newEdges.some(
