@@ -68,33 +68,73 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     };
   }, []);
 
-  // Generate a position for a new node that doesn't overlap with existing nodes
-  const generateNodePosition = (existingNodes: Node[]) => {
-    // Use a larger virtual space for better node distribution
+  // Generate a deterministic position for a node based on its word
+  const generateNodePosition = (word: string, existingNodes: Node[]) => {
     const virtualWidth = 1200;
     const virtualHeight = 900;
     const margin = 100;
     const minDistance = 150;
-    let attempts = 0;
-    const maxAttempts = 100;
 
-    while (attempts < maxAttempts) {
-      const x = margin + Math.random() * (virtualWidth - 2 * margin);
-      const y = margin + Math.random() * (virtualHeight - 2 * margin);
-
-      // Check if this position is far enough from existing nodes
-      const tooClose = existingNodes.some((node) => {
-        const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
-        return distance < minDistance;
-      });
-
-      if (!tooClose) {
-        return { x, y };
+    // Create a simple hash function for the word to get consistent positioning
+    const hashCode = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
       }
-      attempts++;
+      return Math.abs(hash);
+    };
+
+    const hash = hashCode(word.toLowerCase());
+    
+    // Use hash to generate deterministic but well-distributed positions
+    const baseX = margin + (hash % (virtualWidth - 2 * margin));
+    const baseY = margin + ((hash >> 16) % (virtualHeight - 2 * margin));
+
+    // Try the base position first
+    let x = baseX;
+    let y = baseY;
+    
+    // Check if this position conflicts with existing nodes
+    const tooClose = existingNodes.some((node) => {
+      const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
+      return distance < minDistance;
+    });
+
+    if (!tooClose) {
+      return { x, y };
     }
 
-    // Fallback: use a grid-based position
+    // If there's a conflict, use a spiral pattern around the base position
+    const spiralRadius = minDistance;
+    const maxSpirals = 10;
+    
+    for (let spiral = 1; spiral <= maxSpirals; spiral++) {
+      const angleStep = (2 * Math.PI) / (8 * spiral); // More positions in outer spirals
+      const radius = spiralRadius * spiral;
+      
+      for (let i = 0; i < 8 * spiral; i++) {
+        const angle = i * angleStep + (hash * 0.01); // Add hash offset for variation
+        x = baseX + Math.cos(angle) * radius;
+        y = baseY + Math.sin(angle) * radius;
+        
+        // Keep within bounds
+        x = Math.max(margin, Math.min(virtualWidth - margin, x));
+        y = Math.max(margin, Math.min(virtualHeight - margin, y));
+        
+        const tooClose = existingNodes.some((node) => {
+          const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
+          return distance < minDistance;
+        });
+        
+        if (!tooClose) {
+          return { x, y };
+        }
+      }
+    }
+
+    // Final fallback: use a grid-based position with hash offset
     const gridSize = Math.ceil(Math.sqrt(existingNodes.length + 1));
     const cellWidth = (virtualWidth - 2 * margin) / gridSize;
     const cellHeight = (virtualHeight - 2 * margin) / gridSize;
@@ -177,7 +217,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       connections.forEach((conn) => {
         // Create nodes if they don't exist
         if (!nodeMap.has(conn.word1)) {
-          const position = generateNodePosition(newNodes);
+          const position = generateNodePosition(conn.word1, newNodes);
           const node: Node = {
             id: conn.word1,
             x: position.x,
@@ -189,7 +229,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         }
 
         if (!nodeMap.has(conn.word2)) {
-          const position = generateNodePosition(newNodes);
+          const position = generateNodePosition(conn.word2, newNodes);
           const node: Node = {
             id: conn.word2,
             x: position.x,
