@@ -333,23 +333,10 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       const mouseY = e.clientY - rect.top;
 
       setTransform((prev) => {
-        // Detect zoom gestures: ctrlKey (pinch), metaKey (cmd+scroll), or deltaZ
-        const isZoomGesture = e.ctrlKey || e.metaKey || Math.abs(e.deltaZ) > 0;
-
-        // Also detect zoom if deltaX and deltaY are both 0 but deltaY is significant (mouse wheel)
-        const isMouseWheel =
-          e.deltaX === 0 && Math.abs(e.deltaY) > 0 && e.deltaZ === 0;
-
-        if (isZoomGesture || isMouseWheel) {
-          // Zoom
-          let zoomDelta = e.deltaY;
-
-          // Use deltaZ if available (some trackpads)
-          if (Math.abs(e.deltaZ) > Math.abs(e.deltaY)) {
-            zoomDelta = e.deltaZ;
-          }
-
-          const zoomFactor = 1 - zoomDelta * 0.01;
+        // Simple and reliable: only Cmd+scroll zooms, everything else pans
+        if (e.metaKey) {
+          // Zoom with Cmd+scroll
+          const zoomFactor = 1 - e.deltaY * 0.01;
           const newScale = Math.max(0.1, Math.min(5, prev.scale * zoomFactor));
 
           // Zoom towards mouse position
@@ -359,7 +346,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
           return { x: newX, y: newY, scale: newScale };
         } else {
-          // Pan - trackpad scroll gestures
+          // Pan - all trackpad gestures (horizontal and vertical scrolling)
           return {
             ...prev,
             x: prev.x - e.deltaX,
@@ -394,45 +381,13 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       canvas.style.cursor = 'grab';
     };
 
-    // Handle Safari/WebKit gesture events for better trackpad support
-    const handleGestureStart = (e: Event & Partial<{ scale: number }>) => {
-      e.preventDefault();
-      initialScale = e.scale || 1;
-      initialTransform = { ...transform };
-    };
 
-    const handleGestureChange = (e: Event & Partial<{ scale: number }>) => {
-      e.preventDefault();
-      const scaleChange = (e.scale || 1) / initialScale;
-      const newScale = Math.max(
-        0.1,
-        Math.min(5, initialTransform.scale * scaleChange)
-      );
-
-      setTransform({
-        ...initialTransform,
-        scale: newScale,
-      });
-    };
-
-    const handleGestureEnd = (e: Event) => {
-      e.preventDefault();
-    };
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('mouseleave', handleMouseUp);
-
-    // Add gesture event listeners for Safari/WebKit
-    canvas.addEventListener('gesturestart', handleGestureStart, {
-      passive: false,
-    });
-    canvas.addEventListener('gesturechange', handleGestureChange, {
-      passive: false,
-    });
-    canvas.addEventListener('gestureend', handleGestureEnd, { passive: false });
 
     // Set initial cursor
     canvas.style.cursor = 'grab';
@@ -443,9 +398,6 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('mouseleave', handleMouseUp);
-      canvas.removeEventListener('gesturestart', handleGestureStart);
-      canvas.removeEventListener('gesturechange', handleGestureChange);
-      canvas.removeEventListener('gestureend', handleGestureEnd);
     };
   }, [isDragging, dragStart, lastPanPoint, transform]);
 
