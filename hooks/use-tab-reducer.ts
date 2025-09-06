@@ -4,6 +4,7 @@ import { useReducer, useCallback, useEffect, useRef } from 'react';
 import { SearchResult, VersePairing, kjvParser } from '../lib';
 import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
+import { DevStorageHelper } from '../lib/dev-storage-helper';
 
 // Complete tab state including search results
 export interface TabState {
@@ -83,6 +84,8 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
 const STORAGE_KEY = 'kjv-tab-reducer-state';
 const MAX_TABS = APP_CONFIG.TABS.MAX_TABS;
 
+
+
 function generateTabId(): string {
   return `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -129,11 +132,11 @@ function loadStateFromStorage(): TabReducerState {
       parsed.tabs = parsed.tabs.map(tab => ({
         ...DEFAULT_TAB_STATE,
         ...tab,
-        results: tab.results || [],
-        pairings: tab.pairings || [],
+        results: [], // Always start with empty results - they'll be regenerated
+        pairings: [], // Always start with empty pairings - they'll be regenerated
         isLoading: false, // Reset loading state on load
-        error: tab.error || '',
-        lastSearchKey: tab.lastSearchKey || '',
+        error: '', // Reset error state on load
+        lastSearchKey: '', // Reset search key to force re-search
         selectedConnections: (tab.selectedConnections || []).map(conn => ({
           ...conn,
           versePositions: conn.versePositions || [],
@@ -160,24 +163,91 @@ function saveStateToStorage(state: TabReducerState): void {
   if (typeof window === 'undefined') return;
 
   try {
-    // Don't save loading states or temporary flags
+    // Check storage usage and cleanup if needed
+    if (DevStorageHelper.isStorageNearLimit()) {
+      console.warn('localStorage near capacity, cleaning up old data');
+      DevStorageHelper.cleanupOldData();
+    }
+
+    // Create a lightweight version for storage - exclude large data that can be regenerated
     const stateToSave = {
       ...state,
       tabs: state.tabs.map(tab => ({
         ...tab,
         isLoading: false, // Don't persist loading state
+        results: [], // Don't store search results - they can be regenerated
+        pairings: [], // Don't store pairings - they can be regenerated
+        error: '', // Don't persist errors
       })),
     };
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    const serialized = JSON.stringify(stateToSave);
+    
+    // Check if the serialized data is too large
+    const storageInfo = DevStorageHelper.getStorageUsage();
+    const estimatedNewSize = storageInfo.used + serialized.length;
+    const maxSafeSize = 4 * 1024 * 1024; // 4MB conservative limit
+    
+    if (estimatedNewSize > maxSafeSize || serialized.length > 1024 * 1024) { // 1MB per state
+      console.warn('Tab state too large for localStorage, using minimal state');
+      // Save only essential data
+      const minimalState = {
+        tabs: state.tabs.slice(-3).map(tab => ({ // Keep only last 3 tabs
+          id: tab.id,
+          name: tab.name,
+          searchTerms: tab.searchTerms,
+          pairingsSearchTerms: tab.pairingsSearchTerms,
+          selectedTestament: tab.selectedTestament,
+          selectedBooks: tab.selectedBooks,
+          maxProximity: tab.maxProximity,
+          activeTab: tab.activeTab,
+          isDarkMode: tab.isDarkMode,
+          showGraph: tab.showGraph,
+          showFilters: tab.showFilters,
+          // Exclude large objects
+          selectedConnections: [],
+          selectedNodes: [],
+          graphTransform: { x: 0, y: 0, scale: 1 },
+          results: [],
+          pairings: [],
+          isLoading: false,
+          error: '',
+          lastSearchKey: '',
+        })),
+        activeTabId: state.activeTabId,
+        isInitialized: state.isInitialized,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalState));
+    } else {
+      localStorage.setItem(STORAGE_KEY, serialized);
+    }
   } catch (error) {
     console.error('Failed to save tab state to localStorage:', error);
     if (error instanceof Error && error.name === 'QuotaExceededError') {
       try {
+        // Cleanup and try with minimal state
+        DevStorageHelper.cleanupOldData();
         localStorage.removeItem(STORAGE_KEY);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        
+        const emergencyState = {
+          tabs: [{
+            id: state.activeTabId,
+            name: 'Search 1',
+            ...DEFAULT_TAB_STATE,
+          }],
+          activeTabId: state.activeTabId,
+          isInitialized: true,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(emergencyState));
+        console.warn('Saved emergency minimal state due to quota exceeded');
       } catch (retryError) {
-        console.error('Failed to save even after clearing:', retryError);
+        console.error('Failed to save even minimal state:', retryError);
+        // Clear localStorage entirely if we can't save anything
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (clearError) {
+          console.error('Failed to clear localStorage:', clearError);
+        }
       }
     }
   }
@@ -413,13 +483,16 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
 
 export function useTabReducer() {
   const [state, dispatch] = useReducer(tabReducer, createDefaultState());
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const stateRef = useRef(state);
 
   // Keep state ref updated
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Get current active tab
+  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId) || state.tabs[0];
 
   // Initialize from localStorage on mount
   useEffect(() => {
@@ -434,9 +507,6 @@ export function useTabReducer() {
       });
     }
   }, []);
-
-  // Get current active tab
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId) || state.tabs[0];
 
   // Search function that updates results in the reducer
   const performSearch = useCallback(async (tabId?: string, immediate = false) => {
@@ -524,6 +594,18 @@ export function useTabReducer() {
       searchTimeoutRef.current = setTimeout(executeSearch, APP_CONFIG.SEARCH.DEBOUNCE_DELAY);
     }
   }, []); // Keep empty dependencies but use ref for current state
+
+  // Auto-trigger search for active tab if it has search terms but no results
+  useEffect(() => {
+    if (state.isInitialized && activeTab && activeTab.searchTerms && 
+        !activeTab.isLoading && !activeTab.results.length && !activeTab.error) {
+      // Small delay to ensure kjvParser is loaded
+      const timer = setTimeout(() => {
+        performSearch(activeTab.id, true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [state.isInitialized, activeTab?.id, activeTab?.searchTerms, performSearch]);
 
   // Action creators
   const actions = {
