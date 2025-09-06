@@ -46,7 +46,6 @@ export default function Home() {
   const [containerHeight, setContainerHeight] = useState(400);
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [compactMode, setCompactMode] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [selectedConnections, setSelectedConnections] = useState<Array<{
     word1: string;
@@ -80,7 +79,6 @@ export default function Home() {
         setShowFilters(currentTabState.showFilters);
         setActiveTab(currentTabState.activeTab);
         setIsDarkMode(currentTabState.isDarkMode);
-        setCompactMode(currentTabState.compactMode);
         setShowGraph(currentTabState.showGraph || false);
         const connections = currentTabState.selectedConnections;
         setSelectedConnections(Array.isArray(connections) ? connections : []);
@@ -108,13 +106,13 @@ export default function Home() {
   // Set container height and handle resize
   useEffect(() => {
     const updateHeight = () => {
-      const baseOffset = compactMode ? 140 : 180;
+      const baseOffset = 180;
       setContainerHeight(window.innerHeight - baseOffset);
     };
     updateHeight();
     window.addEventListener('resize', updateHeight);
     return () => window.removeEventListener('resize', updateHeight);
-  }, [compactMode]);
+  }, []);
 
   // Perform search when dependencies change
   useEffect(() => {
@@ -165,7 +163,6 @@ export default function Home() {
             showFilters,
             activeTab,
             isDarkMode,
-            compactMode,
             showGraph,
             selectedConnections,
           }
@@ -179,7 +176,6 @@ export default function Home() {
         setShowFilters(newActiveTab.showFilters);
         setActiveTab(newActiveTab.activeTab);
         setIsDarkMode(newActiveTab.isDarkMode);
-        setCompactMode(newActiveTab.compactMode || false);
         setShowGraph(newActiveTab.showGraph || false);
         const connections = newActiveTab.selectedConnections;
         setSelectedConnections(Array.isArray(connections) ? connections : []);
@@ -196,7 +192,6 @@ export default function Home() {
       showFilters,
       activeTab,
       isDarkMode,
-      compactMode,
       showGraph,
       selectedConnections,
     ]
@@ -215,7 +210,6 @@ export default function Home() {
         showFilters,
         activeTab,
         isDarkMode,
-        compactMode,
         showGraph,
         selectedConnections,
       });
@@ -230,7 +224,6 @@ export default function Home() {
     showFilters,
     activeTab,
     isDarkMode,
-    compactMode,
     showGraph,
     selectedConnections,
     hasMounted,
@@ -253,7 +246,6 @@ export default function Home() {
             showFilters,
             activeTab,
             isDarkMode,
-            compactMode,
             showGraph,
             selectedConnections,
           }
@@ -282,7 +274,6 @@ export default function Home() {
     showFilters,
     activeTab,
     isDarkMode,
-    compactMode,
     showGraph,
     selectedConnections,
   ]);
@@ -347,12 +338,11 @@ export default function Home() {
         tabManager={tabManager}
         onTabManagerChange={handleTabManagerChange}
         isDarkMode={isDarkMode}
-        compactMode={compactMode}
       />
       
-      <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col ${compactMode ? 'py-1' : 'py-2'}`}>
+      <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col py-2`}>
         {/* Header */}
-        <div className={`rounded-lg shadow-md mb-2 ${compactMode ? 'p-1' : 'p-1.5'} ${
+        <div className={`rounded-lg shadow-md mb-2 p-1.5 ${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
         }`}>
           <div className='flex justify-between items-center mb-1'>
@@ -368,14 +358,7 @@ export default function Home() {
                 title={showGraph ? 'Hide graph visualizer' : 'Show graph visualizer'}
                 isDarkMode={isDarkMode}
               />
-              <ToggleButton
-                isActive={compactMode}
-                onClick={() => setCompactMode(!compactMode)}
-                activeIcon="📱"
-                inactiveIcon="📱"
-                title={compactMode ? 'Disable compact mode' : 'Enable compact mode for low resolution screens'}
-                isDarkMode={isDarkMode}
-              />
+
               <ToggleButton
                 isActive={isDarkMode}
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -414,7 +397,6 @@ export default function Home() {
             showFilters={showFilters}
             filterCounts={filterCounts}
             isDarkMode={isDarkMode}
-            compactMode={compactMode}
             onTestamentChange={handleTestamentChange}
             onBookToggle={handleBookToggle}
             onToggleFilters={() => setShowFilters(!showFilters)}
@@ -426,7 +408,7 @@ export default function Home() {
           {/* Results Panel */}
           <div className={`flex-1 flex flex-col min-h-0 ${showGraph ? 'w-1/2' : 'w-full'}`}>
             {/* Tab Navigation */}
-            <div className={`flex mb-2 ${compactMode ? 'gap-0.5' : 'gap-1'}`}>
+            <div className={`flex mb-2 gap-1`}>
               <button
                 onClick={() => setActiveTab('all')}
                 className={`px-3 py-1 text-xs font-medium rounded-t-lg transition-colors ${
@@ -474,7 +456,6 @@ export default function Home() {
                   pairingsSearchTerms={pairingsSearchTerms}
                   containerHeight={containerHeight}
                   isDarkMode={isDarkMode}
-                  compactMode={compactMode}
                   scrollPositionKey={scrollPositionKey}
                   showGraph={showGraph}
                   selectedConnections={selectedConnections}

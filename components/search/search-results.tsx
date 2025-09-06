@@ -12,7 +12,6 @@ interface SearchResultsProps {
   pairingsSearchTerms: string;
   containerHeight: number;
   isDarkMode: boolean;
-  compactMode: boolean;
   scrollPositionKey: string;
   showGraph: boolean;
   selectedConnections: Array<{
@@ -31,7 +30,6 @@ export function SearchResults({
   pairingsSearchTerms,
   containerHeight,
   isDarkMode,
-  compactMode,
   scrollPositionKey,
   showGraph,
   selectedConnections,
@@ -47,11 +45,9 @@ export function SearchResults({
   const renderResult = (result: SearchResult) => (
     <div
       key={`${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
-      className={`border-l-2 ${
-        compactMode ? 'pl-1.5 py-0.5 mb-0.5' : 'pl-2 py-1 mb-1'
-      } ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}
+      className={`border-l-2 pl-2 py-1 mb-1 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}
     >
-      <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
+      <div className='mb-0.5'>
         <span
           className={`font-semibold text-xs ${
             isDarkMode ? 'text-gray-200' : 'text-gray-800'
@@ -61,9 +57,7 @@ export function SearchResults({
         </span>
       </div>
       <div
-        className={`${
-          compactMode ? 'text-xs leading-tight' : 'text-xs leading-snug'
-        } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+        className={`text-xs leading-snug ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
         dangerouslySetInnerHTML={{
           __html: highlightText(result.verse.text, result.matches, isDarkMode),
         }}
@@ -106,17 +100,15 @@ export function SearchResults({
     return (
       <div
         key={`${pairing.term1}-${pairing.term2}-${pairing.verses.map(v => v.position).join('-')}`}
-        className={`border-l-2 flex justify-between items-start ${
-          compactMode ? 'pl-1.5 py-0.5 mb-0.5' : 'pl-2 py-1 mb-1'
-        } ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}
+        className={`border-l-2 flex justify-between items-start pl-2 py-1 mb-1 ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}
       >
         <div className="flex-1">
           {pairing.verses.map((verse, verseIndex) => (
             <div
               key={verse.position}
-              className={verseIndex > 0 ? (compactMode ? 'mt-0.5' : 'mt-1') : ''}
+              className={verseIndex > 0 ? 'mt-1' : ''}
             >
-              <div className={compactMode ? 'mb-0' : 'mb-0.5'}>
+              <div className='mb-0.5'>
                 <span
                   className={`font-semibold text-xs ${
                     isDarkMode ? 'text-gray-200' : 'text-gray-800'
@@ -126,9 +118,7 @@ export function SearchResults({
                 </span>
               </div>
               <div
-                className={`${
-                  compactMode ? 'text-xs leading-tight' : 'text-xs leading-snug'
-                } ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                className={`text-xs leading-snug ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
                 dangerouslySetInnerHTML={{
                   __html: highlightPairingText(verse.text),
                 }}
@@ -180,7 +170,7 @@ export function SearchResults({
         items={results}
         containerHeight={containerHeight}
         renderItem={renderResult}
-        estimatedItemHeight={compactMode ? 40 : 60}
+        estimatedItemHeight={60}
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
         } rounded-lg shadow-md p-2`}
@@ -209,7 +199,7 @@ export function SearchResults({
         items={pairings}
         containerHeight={containerHeight}
         renderItem={renderPairing}
-        estimatedItemHeight={compactMode ? 40 : 60}
+        estimatedItemHeight={60}
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
         } rounded-lg shadow-md p-2`}

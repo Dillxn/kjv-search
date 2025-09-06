@@ -15,7 +15,6 @@ interface FilterControlsProps {
   showFilters: boolean;
   filterCounts: FilterCounts;
   isDarkMode: boolean;
-  compactMode: boolean;
   onTestamentChange: (testament: 'all' | 'old' | 'new') => void;
   onBookToggle: (book: string) => void;
   onToggleFilters: () => void;
@@ -27,7 +26,6 @@ export function FilterControls({
   showFilters,
   filterCounts,
   isDarkMode,
-  compactMode,
   onTestamentChange,
   onBookToggle,
   onToggleFilters,
@@ -54,7 +52,7 @@ export function FilterControls({
   };
 
   return (
-    <div className={compactMode ? 'mb-1' : 'mb-1.5'}>
+    <div className='mb-1.5'>
       <div className='flex items-center justify-between mb-1'>
         <span
           className={`text-xs font-medium ${
