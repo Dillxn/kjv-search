@@ -61,8 +61,24 @@ export function getLocalStorageInfo(): void {
     if (kjvData) {
       console.log('kjv-tab-manager data size:', kjvData.length, 'characters');
       console.log('kjv-tab-manager data preview:', kjvData.substring(0, 200) + '...');
+      
+      // Validate JSON structure
+      try {
+        const parsed = JSON.parse(kjvData);
+        console.log('✓ kjv-tab-manager JSON is valid');
+        console.log('  - tabs count:', parsed.tabs?.length || 0);
+        console.log('  - active tab:', parsed.activeTabId);
+      } catch (parseError) {
+        console.error('✗ kjv-tab-manager JSON is corrupted:', parseError);
+      }
     } else {
       console.log('kjv-tab-manager data: not found');
+    }
+
+    // Check for dev backup
+    const backupData = localStorage.getItem('kjv-dev-backup');
+    if (backupData) {
+      console.log('🔧 Dev backup found:', backupData.length, 'characters');
     }
   } catch (error) {
     console.error('Error getting localStorage info:', error);

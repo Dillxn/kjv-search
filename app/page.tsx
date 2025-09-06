@@ -12,13 +12,18 @@ import { FilterControls } from '../components/search/filter-controls';
 import { SearchResults } from '../components/search/search-results';
 import { useSearchState } from '../hooks/use-search-state';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
+import { DevStorageHelper } from '../lib/dev-storage-helper';
 import { MoonStarIcon, SunIcon, WorkflowIcon } from 'lucide-react';
 
 export default function Home() {
   // Tab management
-  const [tabManager, setTabManager] = useState<TabManager>(() =>
-    TabManagerService.loadTabManager()
-  );
+  const [tabManager, setTabManager] = useState<TabManager>(() => {
+    // Try to restore from dev backup first
+    if (process.env.NODE_ENV === 'development') {
+      DevStorageHelper.restoreFromBackup();
+    }
+    return TabManagerService.loadTabManager();
+  });
 
   // Search state
   const {
@@ -52,7 +57,7 @@ export default function Home() {
       word1: string;
       word2: string;
       reference: string;
-      versePositions?: number[];
+      versePositions: number[];
     }>
   >([]);
 
@@ -63,13 +68,19 @@ export default function Home() {
 
   // Handle client-side hydration and load tab state
   useEffect(() => {
-    setHasMounted(true);
     if (!hasMounted) {
+      setHasMounted(true);
+
       // Test localStorage functionality
       console.log('=== localStorage Debug Info ===');
       testLocalStorage();
       getLocalStorageInfo();
       console.log('==============================');
+
+      // Start dev backup in development mode
+      if (process.env.NODE_ENV === 'development') {
+        DevStorageHelper.startDevBackup();
+      }
 
       const currentTabState = TabManagerService.getActiveTab(tabManager);
       if (currentTabState) {
@@ -83,8 +94,13 @@ export default function Home() {
         setActiveTab(currentTabState.activeTab);
         setIsDarkMode(currentTabState.isDarkMode);
         setShowGraph(currentTabState.showGraph || false);
-        const connections = currentTabState.selectedConnections;
-        setSelectedConnections(Array.isArray(connections) ? connections : []);
+        const connections = currentTabState.selectedConnections || [];
+        setSelectedConnections(
+          connections.map((conn) => ({
+            ...conn,
+            versePositions: conn.versePositions || [],
+          }))
+        );
       }
     }
   }, [
@@ -143,6 +159,8 @@ export default function Home() {
   // Update current tab state helper with debouncing
   const updateCurrentTabState = useCallback(
     (updates: Partial<Omit<TabState, 'id'>>) => {
+      if (!hasMounted) return; // Prevent updates before component is fully mounted
+
       setTabManager((prevTabManager) => {
         const activeTab = TabManagerService.getActiveTab(prevTabManager);
         if (activeTab) {
@@ -155,7 +173,7 @@ export default function Home() {
         return prevTabManager;
       });
     },
-    []
+    [hasMounted]
   );
 
   // Handle tab manager changes
@@ -230,9 +248,12 @@ export default function Home() {
         activeTab,
         isDarkMode,
         showGraph,
-        selectedConnections,
+        selectedConnections: selectedConnections.map((conn) => ({
+          ...conn,
+          versePositions: conn.versePositions || [],
+        })),
       });
-    }, 500); // Debounce for 500ms
+    }, 300); // Reduced debounce time for better responsiveness
 
     return () => clearTimeout(timeoutId);
   }, [
@@ -252,6 +273,8 @@ export default function Home() {
   // Save current tab state on unmount or page refresh
   useEffect(() => {
     const saveCurrentState = () => {
+      if (!hasMounted) return; // Don't save if not fully mounted
+
       const currentActiveTab = TabManagerService.getActiveTab(tabManager);
       if (currentActiveTab) {
         TabManagerService.updateTabState(tabManager, currentActiveTab.id, {
@@ -263,7 +286,10 @@ export default function Home() {
           activeTab,
           isDarkMode,
           showGraph,
-          selectedConnections,
+          selectedConnections: selectedConnections.map((conn) => ({
+            ...conn,
+            versePositions: conn.versePositions || [],
+          })),
         });
       }
     };
@@ -273,12 +299,26 @@ export default function Home() {
       saveCurrentState();
     };
 
+    // Save state on visibility change (when tab becomes hidden)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrentState();
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Cleanup function to save state on unmount
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       saveCurrentState();
+
+      // Stop dev backup on unmount
+      if (process.env.NODE_ENV === 'development') {
+        DevStorageHelper.stopDevBackup();
+      }
     };
   }, [
     tabManager,
@@ -291,6 +331,7 @@ export default function Home() {
     isDarkMode,
     showGraph,
     selectedConnections,
+    hasMounted,
   ]);
 
   // Event handlers
@@ -314,7 +355,7 @@ export default function Home() {
       const connections = Array.isArray(selectedConnections)
         ? selectedConnections
         : [];
-      const versePositions = pairing.verses.map((v: any) => v.position);
+      const versePositions = pairing.verses.map((v) => v.position);
 
       // Check if this specific pairing (with same verse positions) is already in graph
       const isInGraph = connections.some((conn) => {

@@ -101,9 +101,15 @@ export class TabManagerService {
     }
 
     try {
+      // Validate tabManager before saving
+      if (!tabManager || !tabManager.tabs || tabManager.tabs.length === 0) {
+        console.warn('Invalid tab manager, skipping save');
+        return;
+      }
+
       const serialized = JSON.stringify(tabManager);
       localStorage.setItem(this.STORAGE_KEY, serialized);
-      console.log('Tab manager saved to localStorage:', this.STORAGE_KEY);
+      console.log('Tab manager saved to localStorage:', this.STORAGE_KEY, `(${serialized.length} chars)`);
     } catch (error) {
       console.error('Failed to save tab manager to localStorage:', error);
       // Try to clear localStorage if it's full
