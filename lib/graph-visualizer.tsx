@@ -248,15 +248,15 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     };
 
     // Handle Safari/WebKit gesture events for better trackpad support
-    const handleGestureStart = (e: any) => {
+    const handleGestureStart = (e: Event & Partial<{ scale: number }>) => {
       e.preventDefault();
-      initialScale = e.scale;
+      initialScale = e.scale || 1;
       initialTransform = { ...transform };
     };
 
-    const handleGestureChange = (e: any) => {
+    const handleGestureChange = (e: Event & Partial<{ scale: number }>) => {
       e.preventDefault();
-      const scaleChange = e.scale / initialScale;
+      const scaleChange = (e.scale || 1) / initialScale;
       const newScale = Math.max(
         0.1,
         Math.min(5, initialTransform.scale * scaleChange)
@@ -268,7 +268,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       });
     };
 
-    const handleGestureEnd = (e: any) => {
+    const handleGestureEnd = (e: Event) => {
       e.preventDefault();
     };
 
