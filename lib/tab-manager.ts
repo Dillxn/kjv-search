@@ -25,6 +25,8 @@ export interface TabState {
     y: number;
     scale: number;
   };
+  // Cache key for search results (stored separately from localStorage)
+  resultsCacheKey?: string;
 }
 
 export interface TabManager {

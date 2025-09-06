@@ -16,7 +16,7 @@ interface PairingDisplayProps {
     reference: string;
     versePositions?: number[];
   }>;
-  onToggleGraph?: (pairing: VersePairing) => void;
+  onToggleGraph?: (connection: { word1: string; word2: string; reference: string; versePositions: number[] }) => void;
   showCheckbox?: boolean;
 }
 
@@ -102,7 +102,16 @@ export function PairingDisplay({
           <input
             type="checkbox"
             checked={isInGraph}
-            onChange={() => onToggleGraph(pairing)}
+            onChange={() => {
+              // Convert pairing to connection format expected by handleToggleGraph
+              const connection = {
+                word1: pairing.term1,
+                word2: pairing.term2,
+                reference: pairing.verses[0].reference,
+                versePositions: pairing.verses.map(v => v.position),
+              };
+              onToggleGraph(connection);
+            }}
             className={`w-4 h-4 rounded border-2 transition-colors ${
               isDarkMode
                 ? 'border-gray-500 bg-gray-700 checked:bg-blue-600 checked:border-blue-600'

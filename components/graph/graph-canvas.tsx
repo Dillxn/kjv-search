@@ -68,14 +68,6 @@ export function GraphCanvas({
   // Use a ref for immediate transform updates to avoid state update delays
   const currentTransform = useRef(transform);
   const isInternalUpdate = useRef(false);
-  
-  // Sync ref with prop changes only when not from internal updates
-  useEffect(() => {
-    if (!isInternalUpdate.current) {
-      currentTransform.current = transform;
-    }
-    isInternalUpdate.current = false;
-  }, [transform]);
 
   // Create color mappings for search terms
   const termColorMaps = React.useMemo(() => {
@@ -151,16 +143,6 @@ export function GraphCanvas({
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);
 
-  // Helper function to convert hex to RGB
-  const hexToRgb = useCallback((hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : null;
-  }, []);
-
   // Drawing function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -175,7 +157,12 @@ export function GraphCanvas({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
+    // Clear canvas with proper background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Set background color to ensure it's not transparent
+    ctx.fillStyle = isDarkMode ? '#1f2937' : '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
     ctx.translate(current.x, current.y);
@@ -185,6 +172,8 @@ export function GraphCanvas({
       ctx.restore();
       return;
     }
+
+
 
     // Create node lookup map for better performance
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
@@ -356,6 +345,14 @@ export function GraphCanvas({
 
     ctx.restore();
   }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements]);
+
+  // Always sync the ref with the prop, but track internal updates to prevent feedback loops
+  useEffect(() => {
+    if (!isInternalUpdate.current) {
+      currentTransform.current = transform;
+    }
+    isInternalUpdate.current = false;
+  }, [transform]);
 
   // Pan and zoom event handlers with smooth updates
   useEffect(() => {
@@ -543,10 +540,19 @@ export function GraphCanvas({
     };
   }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick, onNodeClick, draw]);
 
-  // Effect to handle drawing
+  // Single drawing effect - handles all drawing triggers
   useEffect(() => {
     draw();
-  }, [draw, transform]);
+  }, [draw]);
+
+  // Force initial draw on mount and when canvas size changes
+  useEffect(() => {
+    // Use requestAnimationFrame instead of setTimeout for smoother rendering
+    const rafId = requestAnimationFrame(() => {
+      draw();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [draw, canvasSize.width, canvasSize.height]);
 
 
 
@@ -555,7 +561,7 @@ export function GraphCanvas({
       ref={canvasRef}
       width={canvasSize.width}
       height={canvasSize.height}
-      className='border border-gray-300 bg-white block w-full h-full'
+      className={`border border-gray-300 block w-full h-full ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
       style={{
         maxWidth: '100%',
         maxHeight: '100%',

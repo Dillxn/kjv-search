@@ -69,25 +69,24 @@ export class KJVParser {
     return this.verseSearcher.searchVerses(limitedTerms, filters);
   }
 
-  async findVersePairings(terms: string[], filters: SearchFilters = {}): Promise<VersePairing[]> {
+  findVersePairings(terms: string[], filters: SearchFilters = {}): VersePairing[] {
     if (!this.verseSearcher) throw new Error('Parser not initialized');
 
     const limitedTerms = SearchUtils.validateAndLimitTerms(terms);
     const termToVerses = this.verseSearcher.findVersesForTerms(limitedTerms, filters);
 
-    return PairingGenerator.generateAllPairingsAsync(
+    return PairingGenerator.generateAllPairings(
       termToVerses, 
       false, 
-      undefined, 
       filters.maxProximity
     );
   }
 
-  async findVersePairingsBetweenGroups(
+  findVersePairingsBetweenGroups(
     group1Terms: string[],
     group2Terms: string[],
     filters: SearchFilters = {}
-  ): Promise<VersePairing[]> {
+  ): VersePairing[] {
     if (!this.verseSearcher) throw new Error('Parser not initialized');
 
     const limitedGroup1 = SearchUtils.validateAndLimitTerms(group1Terms);
@@ -99,11 +98,10 @@ export class KJVParser {
       filters
     );
 
-    return PairingGenerator.generateBetweenGroupsPairingsAsync(
+    return PairingGenerator.generateBetweenGroupsPairings(
       limitedGroup1,
       limitedGroup2,
       termToVerses,
-      undefined,
       filters.maxProximity
     );
   }

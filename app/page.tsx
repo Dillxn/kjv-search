@@ -1,92 +1,37 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { kjvParser } from '../lib';
 import { TabBar } from '../lib/tab-bar';
-import { TabManager, TabManagerService } from '../lib/tab-manager';
 import { GraphVisualizer } from '../lib/graph-visualizer';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { AppHeader } from '../components/ui/app-header';
 import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
-import { IconButton } from '../components/ui/button';
-import { useSearchState } from '../hooks/use-search-state';
-import { useTabStatePersistence } from '../hooks/use-tab-state-persistence';
-import { useGraphState } from '../hooks/use-graph-state';
+
+import { useTabReducer } from '../hooks/use-tab-reducer';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 
 import {
   getBackgroundClass,
   getTextClass,
-  getBorderClass,
 } from '../lib/theme-utils';
 
 export default function Home() {
-  // Tab management
-  const [tabManager, setTabManager] = useState<TabManager>(() => {
-    if (process.env.NODE_ENV === 'development') {
-      DevStorageHelper.restoreFromBackup();
-    }
-    return TabManagerService.loadTabManager();
-  });
-
-  // Search state
-  const {
-    searchTerms,
-    setSearchTerms,
-    pairingsSearchTerms,
-    setPairingsSearchTerms,
-    debouncedSearchTerms,
-    debouncedPairingsSearchTerms,
-    results,
-    pairings,
-    error,
-    selectedTestament,
-    setSelectedTestament,
-    selectedBooks,
-    setSelectedBooks,
-    maxProximity,
-    setMaxProximity,
-    filterCounts,
-    performSearch,
-  } = useSearchState();
-
-  // Graph state
-  const {
-    selectedConnections,
-    setSelectedConnections,
-    handleToggleGraph,
-    handleSelectAllPairings,
-    handleDeselectAllPairings,
-    allPairingsSelected,
-    cleanupInvalidConnections,
-    selectedNodes,
-    setSelectedNodes,
-    handleNodeClick,
-    clearNodeSelection,
-  } = useGraphState();
-
+  // All state managed by atomic reducer
+  const { state, activeTab, actions, performSearch } = useTabReducer();
+  
   // UI state
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showGraph, setShowGraph] = useState(false);
-  const [graphTransform, setGraphTransform] = useState({ x: 0, y: 0, scale: 1 });
-
-  // Debounced graph transform update to avoid excessive saves
-  const handleGraphTransformChange = useCallback((newTransform: { x: number; y: number; scale: number }) => {
-    setGraphTransform(newTransform);
-  }, []);
 
   // Generate unique localStorage key for scroll position
   const scrollPositionKey = useMemo(() => {
-    return `kjv-scroll-${tabManager.activeTabId}-${activeTab}`;
-  }, [tabManager.activeTabId, activeTab]);
+    return `kjv-scroll-${state.activeTabId}-${activeTab.activeTab}`;
+  }, [state.activeTabId, activeTab.activeTab]);
 
-  // Handle client-side hydration and load tab state
+  // Handle client-side hydration
   useEffect(() => {
     if (!hasMounted) {
       setHasMounted(true);
@@ -97,38 +42,8 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         DevStorageHelper.startDevBackup();
       }
-
-      const currentTabState = TabManagerService.getActiveTab(tabManager);
-      if (currentTabState) {
-        setSearchTerms(currentTabState.searchTerms);
-        setPairingsSearchTerms(currentTabState.pairingsSearchTerms);
-        setSelectedTestament(currentTabState.selectedTestament);
-        setSelectedBooks(currentTabState.selectedBooks);
-        setMaxProximity(currentTabState.maxProximity ?? 100);
-        setShowFilters(currentTabState.showFilters);
-        setActiveTab(currentTabState.activeTab);
-        setIsDarkMode(currentTabState.isDarkMode);
-        setShowGraph(currentTabState.showGraph || false);
-        setGraphTransform(currentTabState.graphTransform || { x: 0, y: 0, scale: 1 });
-        const connections = currentTabState.selectedConnections || [];
-        setSelectedConnections(
-          connections.map((conn) => ({
-            ...conn,
-            versePositions: conn.versePositions || [],
-          }))
-        );
-        setSelectedNodes(currentTabState.selectedNodes || []);
-      }
     }
-  }, [
-    hasMounted,
-    setPairingsSearchTerms,
-    setSearchTerms,
-    setSelectedBooks,
-    setSelectedTestament,
-    setSelectedConnections,
-    tabManager,
-  ]);
+  }, [hasMounted]);
 
   // Initialize KJV parser
   useEffect(() => {
@@ -144,112 +59,88 @@ export default function Home() {
     initializeKJV();
   }, []);
 
-  // Perform search when dependencies change
+  // Perform search when tab state changes and KJV is initialized
   useEffect(() => {
-    if (isInitialized) {
-      performSearch(activeTab);
+    if (isInitialized && hasMounted && state.isInitialized) {
+      performSearch(); // Uses debouncing internally
     }
   }, [
-    debouncedSearchTerms,
-    debouncedPairingsSearchTerms,
-    activeTab,
+    activeTab.searchTerms,
+    activeTab.pairingsSearchTerms,
+    activeTab.activeTab,
+    activeTab.selectedTestament,
+    activeTab.selectedBooks,
+    activeTab.maxProximity,
     isInitialized,
-    performSearch,
+    hasMounted,
+    state.isInitialized,
+    performSearch, // Keep this but make performSearch stable
   ]);
 
-  // Clean up invalid graph connections when search results change
+  // Perform immediate search when switching tabs
   useEffect(() => {
-    if (isInitialized && hasMounted) {
-      // Clean up connections based on current active tab results
-      if (activeTab === 'pairings') {
-        cleanupInvalidConnections(pairings);
-      }
-      // Note: For 'all' tab, we keep all connections as they might be from pairings searches
+    if (isInitialized && hasMounted && state.isInitialized) {
+      performSearch(undefined, true); // Immediate search for tab switches
     }
-  }, [pairings, results, isInitialized, hasMounted, activeTab, cleanupInvalidConnections]);
+  }, [state.activeTabId, isInitialized, hasMounted, state.isInitialized, performSearch]);
 
-  // Use the tab persistence hook
-  useTabStatePersistence({
-    tabManager,
-    searchTerms,
-    pairingsSearchTerms,
-    selectedTestament,
-    selectedBooks,
-    maxProximity,
-    showFilters,
-    activeTab,
-    isDarkMode,
-    showGraph,
-    selectedConnections,
-    selectedNodes,
-    graphTransform,
-    hasMounted,
-  });
+  // Convert reducer state to legacy TabManager format for TabBar component
+  const legacyTabManager = useMemo(() => ({
+    tabs: state.tabs.map(tab => ({
+      id: tab.id,
+      name: tab.name,
+      searchTerms: tab.searchTerms,
+      pairingsSearchTerms: tab.pairingsSearchTerms,
+      selectedTestament: tab.selectedTestament,
+      selectedBooks: tab.selectedBooks,
+      maxProximity: tab.maxProximity,
+      showFilters: tab.showFilters,
+      activeTab: tab.activeTab,
+      scrollPosition: 0,
+      isDarkMode: tab.isDarkMode,
+      showGraph: tab.showGraph,
+      selectedConnections: tab.selectedConnections,
+      selectedNodes: tab.selectedNodes,
+      graphTransform: tab.graphTransform,
+    })),
+    activeTabId: state.activeTabId,
+  }), [state]);
 
-  // Handle tab manager changes
-  const handleTabManagerChange = useCallback(
-    (newTabManager: TabManager) => {
-      const currentActiveTab = TabManagerService.getActiveTab(tabManager);
-      const newActiveTab = TabManagerService.getActiveTab(newTabManager);
-
-      if (
-        currentActiveTab &&
-        newActiveTab &&
-        currentActiveTab.id !== newActiveTab.id
-      ) {
-        TabManagerService.updateTabState(tabManager, currentActiveTab.id, {
-          searchTerms,
-          pairingsSearchTerms,
-          selectedTestament,
-          selectedBooks,
-          maxProximity,
-          showFilters,
-          activeTab,
-          isDarkMode,
-          showGraph,
-          selectedConnections,
-          selectedNodes,
-          graphTransform,
-        });
-
-        setSearchTerms(newActiveTab.searchTerms);
-        setPairingsSearchTerms(newActiveTab.pairingsSearchTerms);
-        setSelectedTestament(newActiveTab.selectedTestament);
-        setSelectedBooks(newActiveTab.selectedBooks);
-        setMaxProximity(newActiveTab.maxProximity ?? 100);
-        setShowFilters(newActiveTab.showFilters);
-        setActiveTab(newActiveTab.activeTab);
-        setIsDarkMode(newActiveTab.isDarkMode);
-        setShowGraph(newActiveTab.showGraph || false);
-        setGraphTransform(newActiveTab.graphTransform || { x: 0, y: 0, scale: 1 });
-        const connections = newActiveTab.selectedConnections;
-        setSelectedConnections(Array.isArray(connections) ? connections : []);
-        setSelectedNodes(newActiveTab.selectedNodes || []);
+  // Handle tab manager changes (convert from legacy format)
+  const handleTabManagerChange = useCallback((newTabManager: any) => {
+    if (newTabManager.activeTabId !== state.activeTabId) {
+      actions.switchTab(newTabManager.activeTabId);
+    }
+    
+    // Handle other tab operations
+    const currentTabIds = new Set(state.tabs.map(t => t.id));
+    const newTabIds = new Set(newTabManager.tabs.map((t: any) => t.id));
+    
+    // Check for removed tabs
+    for (const currentId of currentTabIds) {
+      if (!newTabIds.has(currentId)) {
+        actions.removeTab(currentId);
+        return;
       }
-
-      setTabManager(newTabManager);
-    },
-    [
-      tabManager,
-      searchTerms,
-      pairingsSearchTerms,
-      selectedTestament,
-      selectedBooks,
-      maxProximity,
-      showFilters,
-      activeTab,
-      isDarkMode,
-      showGraph,
-      selectedConnections,
-      selectedNodes,
-      graphTransform,
-      setSearchTerms,
-      setPairingsSearchTerms,
-      setSelectedTestament,
-      setSelectedBooks,
-      setSelectedConnections,
-    ]
-  );
+    }
+    
+    // Check for added tabs
+    for (const newTab of newTabManager.tabs) {
+      if (!currentTabIds.has(newTab.id)) {
+        actions.addTab(newTab.name);
+        return;
+      }
+    }
+    
+    // Check for renamed tabs
+    for (const newTab of newTabManager.tabs) {
+      const currentTab = state.tabs.find(t => t.id === newTab.id);
+      if (currentTab && currentTab.name !== newTab.name) {
+        actions.renameTab(newTab.id, newTab.name);
+        return;
+      }
+    }
+  }, [state, actions]);
 
   // Stop dev backup on unmount
   useEffect(() => {
@@ -261,59 +152,121 @@ export default function Home() {
   }, []);
 
   // Event handlers
-  const handleTestamentChange = (testament: 'all' | 'old' | 'new') => {
-    setSelectedTestament(testament);
-    setSelectedBooks([]);
-  };
+  const handleTestamentChange = useCallback((testament: 'all' | 'old' | 'new') => {
+    actions.updateFilters(testament, [], activeTab.maxProximity);
+  }, [actions, activeTab.maxProximity]);
 
-  const handleBookToggle = (book: string) => {
-    setSelectedBooks((prev) => {
-      if (prev.includes(book)) {
-        return prev.filter((b) => b !== book);
-      } else {
-        return [...prev, book];
-      }
-    });
-  };
+  const handleBookToggle = useCallback((book: string) => {
+    const newBooks = activeTab.selectedBooks.includes(book)
+      ? activeTab.selectedBooks.filter(b => b !== book)
+      : [...activeTab.selectedBooks, book];
+    actions.updateFilters(activeTab.selectedTestament, newBooks, activeTab.maxProximity);
+  }, [actions, activeTab.selectedBooks, activeTab.selectedTestament, activeTab.maxProximity]);
+
+  // Graph event handlers
+  const handleToggleGraph = useCallback((connection: any) => {
+    const exists = activeTab.selectedConnections.some(conn => 
+      conn.word1 === connection.word1 && 
+      conn.word2 === connection.word2 && 
+      conn.reference === connection.reference
+    );
+    
+    const newConnections = exists
+      ? activeTab.selectedConnections.filter(conn => 
+          !(conn.word1 === connection.word1 && 
+            conn.word2 === connection.word2 && 
+            conn.reference === connection.reference))
+      : [...activeTab.selectedConnections, connection];
+    
+    actions.updateGraphState({ selectedConnections: newConnections });
+  }, [actions, activeTab.selectedConnections]);
+
+  const handleSelectAllPairings = useCallback((pairings: any[]) => {
+    const newConnections = pairings.map(pairing => ({
+      word1: pairing.term1, // Use term1 instead of word1
+      word2: pairing.term2, // Use term2 instead of word2
+      reference: pairing.verses[0].reference,
+      versePositions: pairing.verses.map((v: any) => v.position),
+    }));
+    actions.updateGraphState({ selectedConnections: newConnections });
+  }, [actions]);
+
+  const handleDeselectAllPairings = useCallback(() => {
+    actions.updateGraphState({ selectedConnections: [] });
+  }, [actions]);
+
+  const handleNodeClick = useCallback((nodeId: string) => {
+    const newNodes = activeTab.selectedNodes.includes(nodeId)
+      ? activeTab.selectedNodes.filter(id => id !== nodeId)
+      : [...activeTab.selectedNodes, nodeId];
+    actions.updateGraphState({ selectedNodes: newNodes });
+  }, [actions, activeTab.selectedNodes]);
+
+  const clearNodeSelection = useCallback(() => {
+    actions.updateGraphState({ selectedNodes: [] });
+  }, [actions]);
+
+  const handleGraphTransformChange = useCallback((newTransform: { x: number; y: number; scale: number }) => {
+    actions.updateGraphState({ graphTransform: newTransform });
+  }, [actions]);
+
+  // Computed values
+  const allPairingsSelected = useCallback((pairings: any[]) => {
+    return pairings.length > 0 && pairings.every(pairing =>
+      activeTab.selectedConnections.some(conn =>
+        conn.word1 === pairing.term1 && // Use term1 instead of word1
+        conn.word2 === pairing.term2 && // Use term2 instead of word2
+        conn.reference === pairing.verses[0].reference
+      )
+    );
+  }, [activeTab.selectedConnections]);
+
+  // Calculate filter counts (simplified - could be moved to reducer if needed)
+  const filterCounts = useMemo(() => ({
+    total: activeTab.results.length,
+    oldTestament: 0, // Could calculate if needed
+    newTestament: 0, // Could calculate if needed
+    books: {} as Record<string, number>, // Could calculate if needed
+  }), [activeTab.results.length]);
 
   // Loading state
-  if (!isInitialized || !hasMounted) {
+  if (!isInitialized || !hasMounted || !state.isInitialized) {
     return (
-      <LoadingSpinner message='Loading KJV text...' isDarkMode={isDarkMode} />
+      <LoadingSpinner message='Loading KJV text...' isDarkMode={activeTab?.isDarkMode || false} />
     );
   }
 
   return (
     <div
       className={`h-screen flex flex-col gap-2 p-2 overflow-hidden ${getBackgroundClass(
-        isDarkMode
+        activeTab.isDarkMode
       )}`}
     >
       <TabBar
-        tabManager={tabManager}
+        tabManager={legacyTabManager}
         onTabManagerChange={handleTabManagerChange}
-        isDarkMode={isDarkMode}
+        isDarkMode={activeTab.isDarkMode}
       />
 
       <AppHeader
-        isDarkMode={isDarkMode}
-        showGraph={showGraph}
-        searchTerms={searchTerms}
-        pairingsSearchTerms={pairingsSearchTerms}
-        activeTab={activeTab}
-        selectedTestament={selectedTestament}
-        selectedBooks={selectedBooks}
-        maxProximity={maxProximity}
-        showFilters={showFilters}
+        isDarkMode={activeTab.isDarkMode}
+        showGraph={activeTab.showGraph}
+        searchTerms={activeTab.searchTerms}
+        pairingsSearchTerms={activeTab.pairingsSearchTerms}
+        activeTab={activeTab.activeTab}
+        selectedTestament={activeTab.selectedTestament}
+        selectedBooks={activeTab.selectedBooks}
+        maxProximity={activeTab.maxProximity}
+        showFilters={activeTab.showFilters}
         filterCounts={filterCounts}
-        onDarkModeToggle={() => setIsDarkMode(!isDarkMode)}
-        onGraphToggle={() => setShowGraph(!showGraph)}
-        onSearchTermsChange={setSearchTerms}
-        onPairingsSearchTermsChange={setPairingsSearchTerms}
+        onDarkModeToggle={() => actions.updateUIState({ isDarkMode: !activeTab.isDarkMode })}
+        onGraphToggle={() => actions.updateUIState({ showGraph: !activeTab.showGraph })}
+        onSearchTermsChange={(terms) => actions.updateSearchTerms(terms, activeTab.pairingsSearchTerms)}
+        onPairingsSearchTermsChange={(terms) => actions.updateSearchTerms(activeTab.searchTerms, terms)}
         onTestamentChange={handleTestamentChange}
         onBookToggle={handleBookToggle}
-        onProximityChange={setMaxProximity}
-        onToggleFilters={() => setShowFilters(!showFilters)}
+        onProximityChange={(proximity) => actions.updateFilters(activeTab.selectedTestament, activeTab.selectedBooks, proximity)}
+        onToggleFilters={() => actions.updateUIState({ showFilters: !activeTab.showFilters })}
       />
 
       {/* Content Area */}
@@ -321,43 +274,43 @@ export default function Home() {
           {/* Results Panel */}
           <div
             className={`flex-1 flex flex-col gap-2 min-h-0 ${
-              showGraph ? 'w-1/2' : 'w-full'
+              activeTab.showGraph ? 'w-1/2' : 'w-full'
             }`}
           >
             <TabNavigation
-              activeTab={activeTab}
-              resultsCount={results.length}
-              pairingsCount={pairings.length}
-              isDarkMode={isDarkMode}
-              showGraph={showGraph}
-              allPairingsSelected={allPairingsSelected(pairings)}
-              onTabChange={setActiveTab}
-              onSelectAllPairings={() => handleSelectAllPairings(pairings)}
-              onDeselectAllPairings={() => handleDeselectAllPairings(pairings)}
+              activeTab={activeTab.activeTab}
+              resultsCount={activeTab.results.length}
+              pairingsCount={activeTab.pairings.length}
+              isDarkMode={activeTab.isDarkMode}
+              showGraph={activeTab.showGraph}
+              allPairingsSelected={allPairingsSelected(activeTab.pairings)}
+              onTabChange={(tab) => actions.updateUIState({ activeTab: tab })}
+              onSelectAllPairings={() => handleSelectAllPairings(activeTab.pairings)}
+              onDeselectAllPairings={handleDeselectAllPairings}
             />
 
             {/* Search Results */}
             <div className='flex-1 min-h-0'>
-              {error ? (
+              {activeTab.error ? (
                 <div
                   className={`flex items-center justify-center h-full ${getTextClass(
-                    isDarkMode,
+                    activeTab.isDarkMode,
                     'error'
                   )}`}
                 >
-                  <p className='text-sm'>{error}</p>
+                  <p className='text-sm'>{activeTab.error}</p>
                 </div>
               ) : (
                 <SearchResults
-                  results={results}
-                  pairings={pairings}
-                  activeTab={activeTab}
-                  searchTerms={searchTerms}
-                  pairingsSearchTerms={pairingsSearchTerms}
-                  isDarkMode={isDarkMode}
+                  results={activeTab.results}
+                  pairings={activeTab.pairings}
+                  activeTab={activeTab.activeTab}
+                  searchTerms={activeTab.searchTerms}
+                  pairingsSearchTerms={activeTab.pairingsSearchTerms}
+                  isDarkMode={activeTab.isDarkMode}
                   scrollPositionKey={scrollPositionKey}
-                  showGraph={showGraph}
-                  selectedConnections={selectedConnections}
+                  showGraph={activeTab.showGraph}
+                  selectedConnections={activeTab.selectedConnections}
                   onToggleGraph={handleToggleGraph}
                 />
               )}
@@ -365,21 +318,21 @@ export default function Home() {
           </div>
 
           {/* Graph Panel */}
-          {showGraph && (
+          {activeTab.showGraph && (
             <div
               className={`w-1/2 rounded-sm overflow-hidden shadow-md flex flex-col min-h-0 ${getBackgroundClass(
-                isDarkMode,
+                activeTab.isDarkMode,
                 'card'
               )}`}
             >
               <GraphVisualizer
-                connections={selectedConnections}
-                searchTerms={searchTerms}
-                pairingsSearchTerms={pairingsSearchTerms}
-                isDarkMode={isDarkMode}
-                initialTransform={graphTransform}
+                connections={activeTab.selectedConnections}
+                searchTerms={activeTab.searchTerms}
+                pairingsSearchTerms={activeTab.pairingsSearchTerms}
+                isDarkMode={activeTab.isDarkMode}
+                initialTransform={activeTab.graphTransform}
                 onTransformChange={handleGraphTransformChange}
-                selectedNodes={selectedNodes}
+                selectedNodes={activeTab.selectedNodes}
                 onNodeClick={handleNodeClick}
                 onClearSelection={clearNodeSelection}
               />

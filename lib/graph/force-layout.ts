@@ -408,6 +408,12 @@ export function applyForceDirectedLayout(nodes: Node[], edges: Edge[]): Node[] {
 
 // Generate initial position for a node based on its word, prioritizing even distribution
 export function generateInitialPosition(word: string, existingNodes: Node[]) {
+  // Safety check for undefined word
+  if (!word || typeof word !== 'string') {
+    console.warn('generateInitialPosition called with invalid word:', word);
+    return { x: 100, y: 100 }; // Return default position
+  }
+
   const virtualWidth = 1200;
   const virtualHeight = 900;
   const margin = 100;

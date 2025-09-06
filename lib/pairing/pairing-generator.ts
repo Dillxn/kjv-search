@@ -88,6 +88,75 @@ export class PairingGenerator {
     return pairings;
   }
 
+  static generateAllPairings(
+    termToVerses: Map<string, Verse[]>,
+    isBetweenGroups: boolean = false,
+    maxProximity: number = CONFIG.MAX_PROXIMITY
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const processedPairings = new Set<string>();
+    const termArray = Array.from(termToVerses.keys());
+
+    // Create term pairs with priority scoring
+    const termPairs: Array<{
+      i: number;
+      j: number;
+      term1: string;
+      term2: string;
+      priority: number;
+    }> = [];
+
+    for (let i = 0; i < termArray.length; i++) {
+      for (let j = i + 1; j < termArray.length; j++) {
+        const term1 = termArray[i];
+        const term2 = termArray[j];
+
+        if (SearchUtils.areTermsSameWord(term1, term2)) continue;
+
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        const priority =
+          Math.min(verses1.length, verses2.length) *
+          Math.max(1, 100 - Math.abs(verses1.length - verses2.length));
+
+        termPairs.push({ i, j, term1, term2, priority });
+      }
+    }
+
+    // Sort by priority (highest first)
+    termPairs.sort((a, b) => b.priority - a.priority);
+
+    for (const { term1, term2 } of termPairs) {
+      const verses1 = termToVerses.get(term1) || [];
+      const verses2 = termToVerses.get(term2) || [];
+
+      const termPairings = PairingGenerator.findPairingsForTerms(
+        term1,
+        term2,
+        verses1,
+        verses2,
+        isBetweenGroups,
+        maxProximity
+      );
+
+      for (const pairing of termPairings) {
+        const pairingKey = PairingGenerator.createPairingKey(
+          pairing,
+          term1,
+          term2
+        );
+
+        if (!processedPairings.has(pairingKey)) {
+          pairings.push(pairing);
+          processedPairings.add(pairingKey);
+        }
+      }
+    }
+
+    return pairings;
+  }
+
   static async generateAllPairingsAsync(
     termToVerses: Map<string, Verse[]>,
     isBetweenGroups: boolean = false,
@@ -196,6 +265,67 @@ export class PairingGenerator {
     console.log(
       `Completed processing ${termPairs.length} term pairs, found ${pairings.length} verse pairings.`
     );
+    return pairings;
+  }
+
+  static generateBetweenGroupsPairings(
+    group1Terms: string[],
+    group2Terms: string[],
+    termToVerses: Map<string, Verse[]>,
+    maxProximity: number = CONFIG.MAX_PROXIMITY
+  ): VersePairing[] {
+    const pairings: VersePairing[] = [];
+    const processedPairings = new Set<string>();
+
+    // Create term pairs with priority scoring based on verse counts
+    const termPairs: Array<{ term1: string; term2: string; priority: number }> =
+      [];
+
+    for (const term1 of group1Terms) {
+      for (const term2 of group2Terms) {
+        if (SearchUtils.areTermsSameWord(term1, term2)) continue;
+
+        const verses1 = termToVerses.get(term1) || [];
+        const verses2 = termToVerses.get(term2) || [];
+
+        const priority =
+          Math.min(verses1.length, verses2.length) *
+          Math.max(1, 100 - Math.abs(verses1.length - verses2.length));
+
+        termPairs.push({ term1, term2, priority });
+      }
+    }
+
+    // Sort by priority (highest first) to process most promising pairs first
+    termPairs.sort((a, b) => b.priority - a.priority);
+
+    for (const { term1, term2 } of termPairs) {
+      const verses1 = termToVerses.get(term1) || [];
+      const verses2 = termToVerses.get(term2) || [];
+
+      const termPairings = PairingGenerator.findPairingsForTerms(
+        term1,
+        term2,
+        verses1,
+        verses2,
+        true,
+        maxProximity
+      );
+
+      for (const pairing of termPairings) {
+        const pairingKey = PairingGenerator.createPairingKey(
+          pairing,
+          term1,
+          term2
+        );
+
+        if (!processedPairings.has(pairingKey)) {
+          pairings.push(pairing);
+          processedPairings.add(pairingKey);
+        }
+      }
+    }
+
     return pairings;
   }
 

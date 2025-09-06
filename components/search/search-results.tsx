@@ -21,7 +21,7 @@ interface SearchResultsProps {
     reference: string;
     versePositions: number[];
   }>;
-  onToggleGraph: (pairing: VersePairing) => void;
+  onToggleGraph: (connection: { word1: string; word2: string; reference: string; versePositions: number[] }) => void;
 }
 
 export function SearchResults({

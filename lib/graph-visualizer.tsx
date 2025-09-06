@@ -123,17 +123,21 @@ export function GraphVisualizer({
     [onTransformChange]
   );
 
-  const [shouldAutoFit, setShouldAutoFit] = useState(false);
+  // Handle initial transform changes (like from tab switching)
+  useEffect(() => {
+    // Use requestAnimationFrame to smooth the transform update
+    const rafId = requestAnimationFrame(() => {
+      setTransform(initialTransform);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [initialTransform]);
 
-  const resetView = useCallback(() => {
-    const newTransform = { x: 0, y: 0, scale: 1 };
-    setTransform(newTransform);
-    onTransformChange?.(newTransform);
-  }, [onTransformChange]);
+  const [shouldAutoFit, setShouldAutoFit] = useState(false);
 
   const fitToView = useCallback(() => {
     if (nodes.length === 0) {
-      resetView();
+      // Reset view but don't call onTransformChange for empty state
+      setTransform({ x: 0, y: 0, scale: 1 });
       return;
     }
 
@@ -168,14 +172,14 @@ export function GraphVisualizer({
     const newTransform = { x, y, scale };
     setTransform(newTransform);
     onTransformChange?.(newTransform);
-  }, [nodes, canvasSize, onTransformChange, resetView]);
+  }, [nodes, canvasSize, onTransformChange]);
 
   // Update graph when connections change
   useEffect(() => {
     if (connections.length === 0) {
       setNodes([]);
       setEdges([]);
-      resetView();
+      // Don't reset transform when clearing - let it maintain the current state
       return;
     }
 
@@ -193,12 +197,27 @@ export function GraphVisualizer({
       // Collect all words that appear in current connections
       const wordsInConnections = new Set<string>();
       connections.forEach((conn) => {
-        wordsInConnections.add(conn.word1);
-        wordsInConnections.add(conn.word2);
+        // Safety check for valid connection data
+        if (
+          conn &&
+          typeof conn.word1 === 'string' &&
+          typeof conn.word2 === 'string'
+        ) {
+          wordsInConnections.add(conn.word1);
+          wordsInConnections.add(conn.word2);
+        } else {
+          console.warn('Invalid connection data:', conn);
+        }
       });
 
       // Create nodes only for words that appear in connections
       wordsInConnections.forEach((word) => {
+        // Additional safety check for word
+        if (!word || typeof word !== 'string') {
+          console.warn('Skipping invalid word:', word);
+          return;
+        }
+
         const existingPosition = existingNodePositions.get(word);
         const position =
           existingPosition || generateInitialPosition(word, newNodes);
@@ -215,6 +234,16 @@ export function GraphVisualizer({
       });
 
       connections.forEach((conn) => {
+        // Safety check for valid connection data
+        if (
+          !conn ||
+          typeof conn.word1 !== 'string' ||
+          typeof conn.word2 !== 'string'
+        ) {
+          console.warn('Skipping invalid connection:', conn);
+          return;
+        }
+
         const edgeExists = newEdges.some(
           (edge) =>
             (edge.source === conn.word1 && edge.target === conn.word2) ||
@@ -235,24 +264,47 @@ export function GraphVisualizer({
       const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
       setEdges(newEdges);
 
-      // Mark for auto-fit when first nodes are added
+      // Mark for auto-fit when first nodes are added, but only if we don't have a meaningful transform
       if (!hadNodes && layoutedNodes.length > 0) {
-        setShouldAutoFit(true);
+        // Only auto-fit if we're at the default transform (no meaningful pan/zoom)
+        // Also check that initialTransform is default to avoid auto-fitting during tab switches
+        const isDefaultTransform =
+          transform.x === 0 && transform.y === 0 && transform.scale === 1;
+        const isDefaultInitialTransform =
+          initialTransform.x === 0 &&
+          initialTransform.y === 0 &&
+          initialTransform.scale === 1;
+        if (isDefaultTransform && isDefaultInitialTransform) {
+          setShouldAutoFit(true);
+        }
       }
 
       return layoutedNodes;
     });
-  }, [connections]);
+  }, [connections, initialTransform.scale, initialTransform.x, initialTransform.y, transform.scale, transform.x, transform.y]);
 
   // Auto-fit effect - separate from the nodes update
   useEffect(() => {
-    if (shouldAutoFit && nodes.length > 0) {
-      setTimeout(() => {
+    if (
+      shouldAutoFit &&
+      nodes.length > 0 &&
+      canvasSize.width > 0 &&
+      canvasSize.height > 0
+    ) {
+      // Use requestAnimationFrame for smoother auto-fit
+      const rafId = requestAnimationFrame(() => {
         fitToView();
         setShouldAutoFit(false);
-      }, 50);
+      });
+      return () => cancelAnimationFrame(rafId);
     }
-  }, [shouldAutoFit, nodes.length, fitToView]);
+  }, [
+    shouldAutoFit,
+    nodes.length,
+    canvasSize.width,
+    canvasSize.height,
+    fitToView,
+  ]);
 
   const handleEdgeClick = (edge: Edge, allConnections: typeof connections) => {
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });

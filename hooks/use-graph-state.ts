@@ -204,7 +204,7 @@ export function useGraphState() {
   // Function to clean up connections that are no longer valid based on current pairings
   const cleanupInvalidConnections = useCallback((currentPairings: VersePairing[]) => {
     if (currentPairings.length === 0) {
-      // If no pairings, keep all connections (they might be from other search terms)
+      // If no pairings, keep all connections (they might be from other search terms or other tabs)
       return;
     }
 
@@ -222,6 +222,9 @@ export function useGraphState() {
 
     setSelectedConnections((prev) => {
       const prevArray = Array.isArray(prev) ? prev : [];
+      
+      // Only remove connections that match the current search terms but are no longer in results
+      // This preserves connections from other searches/tabs
       const filteredConnections = prevArray.filter((conn) => {
         const versePositions = conn.versePositions
           ?.slice()
@@ -229,7 +232,21 @@ export function useGraphState() {
           .join(',') || '';
         const [word1, word2] = [conn.word1, conn.word2].sort();
         const key = `${word1}-${word2}-${versePositions}`;
-        return validConnectionKeys.has(key);
+        
+        // If this connection matches current search results, check if it's still valid
+        if (validConnectionKeys.has(key)) {
+          return true;
+        }
+        
+        // If this connection doesn't match current search results, keep it
+        // (it might be from a different search or tab)
+        const matchesCurrentSearch = currentPairings.some(pairing => {
+          const pairingWords = [pairing.term1, pairing.term2].sort();
+          const connWords = [conn.word1, conn.word2].sort();
+          return pairingWords[0] === connWords[0] && pairingWords[1] === connWords[1];
+        });
+        
+        return !matchesCurrentSearch;
       });
       
       // Only update if there's actually a change
