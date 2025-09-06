@@ -772,7 +772,12 @@ export default function Home() {
                 </div>
               </div>
               <div className='flex-1 min-h-0'>
-                <GraphVisualizer connections={selectedConnections} />
+                <GraphVisualizer
+                  connections={selectedConnections}
+                  searchTerms={searchTerms}
+                  pairingsSearchTerms={pairingsSearchTerms}
+                  isDarkMode={isDarkMode}
+                />
               </div>
             </div>
           )}

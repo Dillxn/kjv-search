@@ -3,12 +3,15 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { kjvParser, VersePairing } from './';
 import { PairingDisplay } from '../components/shared/pairing-display';
+import { createTermColorMaps } from './highlighting/colors';
+import { SearchTermProcessor } from './search-utils';
 
 interface Node {
   id: string;
   x: number;
   y: number;
   word: string;
+  radius: number;
 }
 
 interface Edge {
@@ -25,9 +28,17 @@ interface GraphVisualizerProps {
     reference: string;
     versePositions?: number[];
   }>;
+  searchTerms?: string;
+  pairingsSearchTerms?: string;
+  isDarkMode?: boolean;
 }
 
-export function GraphVisualizer({ connections }: GraphVisualizerProps) {
+export function GraphVisualizer({ 
+  connections, 
+  searchTerms = '', 
+  pairingsSearchTerms = '', 
+  isDarkMode = false 
+}: GraphVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const connectionsRef = useRef(connections);
@@ -51,6 +62,53 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     connection: typeof connections[0];
     allConnections?: typeof connections;
   } | null>(null);
+
+  // Create color mappings for search terms
+  const termColorMaps = useMemo(() => {
+    const mainTerms = SearchTermProcessor.processSearchString(searchTerms);
+    const pairingsTerms = SearchTermProcessor.processSearchString(pairingsSearchTerms);
+    return createTermColorMaps(mainTerms, pairingsTerms, isDarkMode);
+  }, [searchTerms, pairingsSearchTerms, isDarkMode]);
+
+  // Helper function to get node color based on search terms
+  const getNodeColor = useCallback((word: string) => {
+    const normalizedWord = word.toLowerCase().trim();
+    
+    // Check main search terms first
+    const mainColor = termColorMaps.mainTermToColor.get(normalizedWord);
+    if (mainColor) {
+      return { background: mainColor, type: 'main' };
+    }
+    
+    // Check pairings search terms
+    const pairingsColor = termColorMaps.pairingsTermToColor.get(normalizedWord);
+    if (pairingsColor) {
+      return { background: pairingsColor, type: 'pairings' };
+    }
+    
+    // Default color for words not in search terms
+    return { 
+      background: isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-100 text-gray-800', 
+      type: 'default' 
+    };
+  }, [termColorMaps, isDarkMode]);
+
+  // Helper function to calculate node radius based on text width
+  const calculateNodeRadius = useCallback((word: string, fontSize: number = 12) => {
+    // Create a temporary canvas to measure text width
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 35; // fallback
+    
+    ctx.font = `${fontSize}px Arial`;
+    const textWidth = ctx.measureText(word).width;
+    
+    // Add padding around text (minimum 20px padding on each side)
+    const minRadius = Math.max(35, (textWidth / 2) + 20);
+    
+    // Cap maximum radius to keep nodes reasonable
+    return Math.min(minRadius, 80);
+  }, []);
 
   // Update canvas size when container resizes
   useEffect(() => {
@@ -83,6 +141,8 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       window.removeEventListener('resize', updateCanvasSize);
     };
   }, []);
+
+
 
   // Generate initial position for a node based on its word
   const generateInitialPosition = (word: string, existingNodes: Node[]) => {
@@ -146,7 +206,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         node.vy = 0;
       });
 
-      // Repulsion forces between all nodes
+      // Repulsion forces between all nodes (accounting for node sizes)
       for (let i = 0; i < layoutNodes.length; i++) {
         for (let j = i + 1; j < layoutNodes.length; j++) {
           const nodeA = layoutNodes[i];
@@ -156,7 +216,10 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
           const dy = nodeB.y - nodeA.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          if (distance > 0) {
+          // Minimum distance should account for both node radii plus some padding
+          const minDistance = nodeA.radius + nodeB.radius + 20;
+          
+          if (distance > 0 && distance < minDistance * 3) { // Only apply repulsion when nodes are close
             const force = repulsionStrength / (distance * distance);
             const fx = (dx / distance) * force;
             const fy = (dy / distance) * force;
@@ -263,9 +326,9 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         node.x += node.vx;
         node.y += node.vy;
         
-        // Keep nodes within bounds
-        node.x = Math.max(margin, Math.min(virtualWidth - margin, node.x));
-        node.y = Math.max(margin, Math.min(virtualHeight - margin, node.y));
+        // Keep nodes within bounds (accounting for node radius)
+        node.x = Math.max(margin + node.radius, Math.min(virtualWidth - margin - node.radius, node.x));
+        node.y = Math.max(margin + node.radius, Math.min(virtualHeight - margin - node.radius, node.y));
       });
     }
 
@@ -289,10 +352,10 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     let minY = Infinity, maxY = -Infinity;
 
     nodes.forEach(node => {
-      minX = Math.min(minX, node.x - 35); // Account for node radius
-      maxX = Math.max(maxX, node.x + 35);
-      minY = Math.min(minY, node.y - 35);
-      maxY = Math.max(maxY, node.y + 35);
+      minX = Math.min(minX, node.x - node.radius); // Account for actual node radius
+      maxX = Math.max(maxX, node.x + node.radius);
+      minY = Math.min(minY, node.y - node.radius);
+      maxY = Math.max(maxY, node.y + node.radius);
     });
 
     const contentWidth = maxX - minX + 2 * padding;
@@ -350,12 +413,14 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       wordsInConnections.forEach((word) => {
         const existingPosition = existingNodePositions.get(word);
         const position = existingPosition || generateInitialPosition(word, newNodes);
+        const radius = calculateNodeRadius(word);
         
         const node: Node = {
           id: word,
           x: position.x,
           y: position.y,
           word: word,
+          radius: radius,
         };
         nodeMap.set(word, node);
         newNodes.push(node);
@@ -394,7 +459,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
       return layoutedNodes;
     });
-  }, [applyForceDirectedLayout, connections]);
+  }, [applyForceDirectedLayout, connections, calculateNodeRadius]);
 
   // Auto-fit effect - separate from the nodes update
   useEffect(() => {
@@ -417,10 +482,10 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         let minY = Infinity, maxY = -Infinity;
 
         nodes.forEach(node => {
-          minX = Math.min(minX, node.x - 35);
-          maxX = Math.max(maxX, node.x + 35);
-          minY = Math.min(minY, node.y - 35);
-          maxY = Math.max(maxY, node.y + 35);
+          minX = Math.min(minX, node.x - node.radius);
+          maxX = Math.max(maxX, node.x + node.radius);
+          minY = Math.min(minY, node.y - node.radius);
+          maxY = Math.max(maxY, node.y + node.radius);
         });
 
         const contentWidth = maxX - minX + 2 * padding;
@@ -674,17 +739,78 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
     // Draw nodes
     nodes.forEach((node) => {
-      // Draw circle
+      const nodeColor = getNodeColor(node.word);
+      
+      // Parse Tailwind classes to get actual colors
+      const getColorsFromTailwind = (classes: string) => {
+        // Extract background and text colors from Tailwind classes
+        if (classes.includes('bg-yellow-200')) return { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' };
+        if (classes.includes('bg-blue-200')) return { bg: '#dbeafe', text: '#1e40af', border: '#3b82f6' };
+        if (classes.includes('bg-green-200')) return { bg: '#dcfce7', text: '#166534', border: '#22c55e' };
+        if (classes.includes('bg-red-200')) return { bg: '#fecaca', text: '#dc2626', border: '#ef4444' };
+        if (classes.includes('bg-purple-200')) return { bg: '#e9d5ff', text: '#7c3aed', border: '#8b5cf6' };
+        if (classes.includes('bg-pink-200')) return { bg: '#fce7f3', text: '#be185d', border: '#ec4899' };
+        if (classes.includes('bg-indigo-200')) return { bg: '#c7d2fe', text: '#4338ca', border: '#6366f1' };
+        if (classes.includes('bg-orange-200')) return { bg: '#fed7aa', text: '#ea580c', border: '#f97316' };
+        
+        // Dark mode colors
+        if (classes.includes('bg-yellow-300')) return { bg: '#fcd34d', text: '#92400e', border: '#f59e0b' };
+        if (classes.includes('bg-blue-300')) return { bg: '#93c5fd', text: '#1e40af', border: '#3b82f6' };
+        if (classes.includes('bg-green-300')) return { bg: '#86efac', text: '#166534', border: '#22c55e' };
+        if (classes.includes('bg-red-300')) return { bg: '#fca5a5', text: '#dc2626', border: '#ef4444' };
+        if (classes.includes('bg-purple-300')) return { bg: '#c4b5fd', text: '#7c3aed', border: '#8b5cf6' };
+        if (classes.includes('bg-pink-300')) return { bg: '#f9a8d4', text: '#be185d', border: '#ec4899' };
+        if (classes.includes('bg-indigo-300')) return { bg: '#a5b4fc', text: '#4338ca', border: '#6366f1' };
+        if (classes.includes('bg-orange-300')) return { bg: '#fdba74', text: '#ea580c', border: '#f97316' };
+        
+        // Pairings colors (border-based)
+        if (classes.includes('border-teal-500')) return { bg: 'transparent', text: '#0f766e', border: '#14b8a6' };
+        if (classes.includes('border-cyan-500')) return { bg: 'transparent', text: '#0e7490', border: '#06b6d4' };
+        if (classes.includes('border-lime-500')) return { bg: 'transparent', text: '#365314', border: '#84cc16' };
+        if (classes.includes('border-amber-500')) return { bg: 'transparent', text: '#92400e', border: '#f59e0b' };
+        if (classes.includes('border-rose-500')) return { bg: 'transparent', text: '#be123c', border: '#f43f5e' };
+        if (classes.includes('border-violet-500')) return { bg: 'transparent', text: '#6b21a8', border: '#8b5cf6' };
+        if (classes.includes('border-emerald-500')) return { bg: 'transparent', text: '#065f46', border: '#10b981' };
+        if (classes.includes('border-sky-500')) return { bg: 'transparent', text: '#0c4a6e', border: '#0ea5e9' };
+        
+        // Dark mode pairings colors
+        if (classes.includes('border-teal-400')) return { bg: 'transparent', text: '#2dd4bf', border: '#2dd4bf' };
+        if (classes.includes('border-cyan-400')) return { bg: 'transparent', text: '#22d3ee', border: '#22d3ee' };
+        if (classes.includes('border-lime-400')) return { bg: 'transparent', text: '#a3e635', border: '#a3e635' };
+        if (classes.includes('border-amber-400')) return { bg: 'transparent', text: '#fbbf24', border: '#fbbf24' };
+        if (classes.includes('border-rose-400')) return { bg: 'transparent', text: '#fb7185', border: '#fb7185' };
+        if (classes.includes('border-violet-400')) return { bg: 'transparent', text: '#a78bfa', border: '#a78bfa' };
+        if (classes.includes('border-emerald-400')) return { bg: 'transparent', text: '#34d399', border: '#34d399' };
+        if (classes.includes('border-sky-400')) return { bg: 'transparent', text: '#38bdf8', border: '#38bdf8' };
+        
+        // Default colors
+        if (classes.includes('bg-gray-600')) return { bg: '#4b5563', text: '#e5e7eb', border: '#6b7280' };
+        return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
+      };
+      
+      const colors = getColorsFromTailwind(nodeColor.background);
+      
+      // Draw circle with dynamic radius
       ctx.beginPath();
-      ctx.arc(node.x, node.y, 35, 0, 2 * Math.PI);
-      ctx.fillStyle = '#f8f9fa';
-      ctx.fill();
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 2 / transform.scale; // Keep stroke width consistent
+      ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
+      
+      if (colors.bg === 'transparent') {
+        // For pairings terms, use a subtle background with prominent border
+        ctx.fillStyle = isDarkMode ? '#374151' : '#f9fafb';
+        ctx.fill();
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 3 / transform.scale; // Thicker border for pairings
+      } else {
+        // For main search terms, use the background color
+        ctx.fillStyle = colors.bg;
+        ctx.fill();
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 2 / transform.scale;
+      }
       ctx.stroke();
 
       // Draw text
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = colors.text;
       const fontSize = 12 / transform.scale;
       ctx.font = `${fontSize}px Arial`;
       ctx.textAlign = 'center';
