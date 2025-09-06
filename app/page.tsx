@@ -119,9 +119,6 @@ export default function Home() {
         
         await kjvParser.fetchAndParse();
         
-          'KJV initialization complete, verses loaded:',
-          kjvParser.getVerses().length
-        );
         setIsInitialized(true);
       } catch (err) {
         console.error('KJV initialization failed:', err);
