@@ -59,6 +59,14 @@ export function GraphCanvas({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  
+  // Use a ref for immediate transform updates to avoid state update delays
+  const currentTransform = useRef(transform);
+  
+  // Sync ref with prop changes
+  useEffect(() => {
+    currentTransform.current = transform;
+  }, [transform]);
 
   // Create color mappings for search terms
   const termColorMaps = React.useMemo(() => {
@@ -129,26 +137,28 @@ export function GraphCanvas({
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);
 
-  // Pan and zoom event handlers
+  // Pan and zoom event handlers with direct updates
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let animationFrameId: number | null = null;
-    let pendingTransform: { x: number; y: number; scale: number } | null = null;
+    let updateTimeout: NodeJS.Timeout | null = null;
 
-    const applyTransform = () => {
-      if (pendingTransform) {
-        onTransformChange(pendingTransform);
-        pendingTransform = null;
-      }
-      animationFrameId = null;
-    };
-
-    const scheduleTransformUpdate = (newTransform: { x: number; y: number; scale: number }) => {
-      pendingTransform = newTransform;
-      if (!animationFrameId) {
-        animationFrameId = requestAnimationFrame(applyTransform);
+    const updateTransform = (newTransform: { x: number; y: number; scale: number }) => {
+      // Update ref immediately for drawing
+      currentTransform.current = newTransform;
+      
+      // Debounce parent updates to avoid excessive re-renders
+      if (updateTimeout) clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(() => {
+        onTransformChange(newTransform);
+      }, 10); // Very short debounce
+      
+      // Force a redraw immediately
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // Trigger a redraw by dispatching a custom event
+        canvas.dispatchEvent(new CustomEvent('transform-update'));
       }
     };
 
@@ -158,26 +168,32 @@ export function GraphCanvas({
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
+      const current = currentTransform.current;
 
       if (e.metaKey || e.ctrlKey) {
-        // Zoom with Cmd/Ctrl+scroll - smoother zoom factor
-        const zoomFactor = 1 - e.deltaY * 0.005;
-        const newScale = Math.max(0.1, Math.min(5, transform.scale * zoomFactor));
+        // Zoom with Cmd/Ctrl+scroll
+        const zoomSensitivity = 0.01;
+        const zoomFactor = 1 - e.deltaY * zoomSensitivity;
+        const newScale = Math.max(0.1, Math.min(5, current.scale * zoomFactor));
 
-        if (Math.abs(newScale - transform.scale) > 0.001) {
-          const scaleChange = newScale / transform.scale;
-          const newX = mouseX - (mouseX - transform.x) * scaleChange;
-          const newY = mouseY - (mouseY - transform.y) * scaleChange;
+        if (Math.abs(newScale - current.scale) > 0.001) {
+          const scaleChange = newScale / current.scale;
+          const newX = mouseX - (mouseX - current.x) * scaleChange;
+          const newY = mouseY - (mouseY - current.y) * scaleChange;
 
-          scheduleTransformUpdate({ x: newX, y: newY, scale: newScale });
+          updateTransform({ x: newX, y: newY, scale: newScale });
         }
       } else {
-        // Pan - reduce sensitivity for smoother panning
-        const panSensitivity = 0.8;
-        const newX = transform.x - e.deltaX * panSensitivity;
-        const newY = transform.y - e.deltaY * panSensitivity;
+        // Direct panning with balanced sensitivity
+        const panSensitivity = 1.5; // More reasonable sensitivity
+        
+        const deltaX = e.deltaX * panSensitivity;
+        const deltaY = e.deltaY * panSensitivity;
+        
+        const newX = current.x - deltaX;
+        const newY = current.y - deltaY;
 
-        scheduleTransformUpdate({ x: newX, y: newY, scale: transform.scale });
+        updateTransform({ x: newX, y: newY, scale: current.scale });
       }
     };
 
@@ -186,8 +202,9 @@ export function GraphCanvas({
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      const graphX = (mouseX - transform.x) / transform.scale;
-      const graphY = (mouseY - transform.y) / transform.scale;
+      const current = currentTransform.current;
+      const graphX = (mouseX - current.x) / current.scale;
+      const graphY = (mouseY - current.y) / current.scale;
 
       // Check if click is on an edge
       let clickedEdge = null;
@@ -243,7 +260,7 @@ export function GraphCanvas({
 
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
-      setLastPanPoint({ x: transform.x, y: transform.y });
+      setLastPanPoint({ x: current.x, y: current.y });
       canvas.style.cursor = 'grabbing';
     };
 
@@ -253,8 +270,8 @@ export function GraphCanvas({
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
 
-      scheduleTransformUpdate({
-        ...transform,
+      updateTransform({
+        ...currentTransform.current,
         x: lastPanPoint.x + deltaX,
         y: lastPanPoint.y + deltaY,
       });
@@ -274,8 +291,8 @@ export function GraphCanvas({
     canvas.style.cursor = 'grab';
 
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
       }
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('mousedown', handleMouseDown);
@@ -283,15 +300,17 @@ export function GraphCanvas({
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('mouseleave', handleMouseUp);
     };
-  }, [isDragging, dragStart, lastPanPoint, transform, onTransformChange, edges, nodes, connections, onEdgeClick]);
+  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick]);
 
-  // Optimized drawing effect with better performance
-  useEffect(() => {
+  // Drawing function
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const current = currentTransform.current;
 
     // Enable image smoothing for better quality at different scales
     ctx.imageSmoothingEnabled = true;
@@ -300,8 +319,8 @@ export function GraphCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    ctx.translate(transform.x, transform.y);
-    ctx.scale(transform.scale, transform.scale);
+    ctx.translate(current.x, current.y);
+    ctx.scale(current.scale, current.scale);
 
     if (nodes.length === 0) {
       ctx.restore();
@@ -313,7 +332,7 @@ export function GraphCanvas({
 
     // Draw edges with optimized rendering
     ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
-    ctx.lineWidth = Math.max(0.5, 1 / transform.scale);
+    ctx.lineWidth = Math.max(0.5, 1 / current.scale);
     
     edges.forEach((edge) => {
       const sourceNode = nodeMap.get(edge.source);
@@ -326,7 +345,7 @@ export function GraphCanvas({
         ctx.stroke();
 
         // Only draw labels if zoom level is sufficient
-        if (transform.scale > 0.3) {
+        if (current.scale > 0.3) {
           const midX = (sourceNode.x + targetNode.x) / 2;
           const midY = (sourceNode.y + targetNode.y) / 2;
 
@@ -353,7 +372,7 @@ export function GraphCanvas({
           ctx.rotate(angle);
 
           ctx.fillStyle = isDarkMode ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-          const fontSize = Math.max(8, 10 / transform.scale);
+          const fontSize = Math.max(8, 10 / current.scale);
           ctx.font = `${fontSize}px Arial`;
           const textWidth = ctx.measureText(displayText).width;
           ctx.fillRect(-textWidth / 2 - 2, -8, textWidth + 4, 12);
@@ -379,19 +398,19 @@ export function GraphCanvas({
         ctx.fillStyle = isDarkMode ? '#374151' : '#f9fafb';
         ctx.fill();
         ctx.strokeStyle = colors.border;
-        ctx.lineWidth = Math.max(1, 3 / transform.scale);
+        ctx.lineWidth = Math.max(1, 3 / current.scale);
       } else {
         ctx.fillStyle = colors.bg;
         ctx.fill();
         ctx.strokeStyle = colors.border;
-        ctx.lineWidth = Math.max(0.5, 2 / transform.scale);
+        ctx.lineWidth = Math.max(0.5, 2 / current.scale);
       }
       ctx.stroke();
 
       // Only draw text if zoom level is sufficient
-      if (transform.scale > 0.2) {
+      if (current.scale > 0.2) {
         ctx.fillStyle = colors.text;
-        const fontSize = Math.max(8, 12 / transform.scale);
+        const fontSize = Math.max(8, 12 / current.scale);
         ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -400,7 +419,27 @@ export function GraphCanvas({
     });
 
     ctx.restore();
-  }, [nodes, edges, transform, connections, getNodeColor, getColorsFromTailwind, isDarkMode, canvasSize]);
+  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, canvasSize]);
+
+  // Effect to handle drawing
+  useEffect(() => {
+    draw();
+  }, [draw, transform]);
+
+  // Effect to set up custom event listener for immediate redraws
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleTransformUpdate = () => {
+      draw();
+    };
+
+    canvas.addEventListener('transform-update', handleTransformUpdate);
+    return () => {
+      canvas.removeEventListener('transform-update', handleTransformUpdate);
+    };
+  }, [draw]);
 
   return (
     <canvas
