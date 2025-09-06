@@ -19,6 +19,7 @@ export interface TabState {
     reference: string;
     versePositions: number[]; // Array of verse positions to uniquely identify this pairing
   }>;
+  selectedNodes?: string[]; // Selected nodes for path highlighting
   graphTransform?: {
     x: number;
     y: number;
@@ -43,6 +44,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   isDarkMode: false,
   showGraph: false,
   selectedConnections: [],
+  selectedNodes: [],
   graphTransform: { x: 0, y: 0, scale: 1 },
 };
 
@@ -77,7 +79,7 @@ export class TabManagerService {
           parsed.activeTabId = parsed.tabs[0].id;
         }
         
-        // Migrate old tab data to include selectedConnections, maxProximity, and graphTransform if missing
+        // Migrate old tab data to include selectedConnections, maxProximity, selectedNodes, and graphTransform if missing
         parsed.tabs = parsed.tabs.map(tab => ({
           ...tab,
           maxProximity: tab.maxProximity ?? APP_CONFIG.PAIRINGS.MAX_PROXIMITY,
@@ -85,6 +87,7 @@ export class TabManagerService {
             ...conn,
             versePositions: conn.versePositions || [], // Add versePositions for existing connections
           })),
+          selectedNodes: tab.selectedNodes ?? [],
           graphTransform: tab.graphTransform ?? { x: 0, y: 0, scale: 1 },
         }));
         

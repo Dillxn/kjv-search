@@ -269,6 +269,7 @@ export function useGraphState() {
     allPairingsSelected,
     cleanupInvalidConnections,
     selectedNodes,
+    setSelectedNodes,
     handleNodeClick,
     clearNodeSelection,
   };

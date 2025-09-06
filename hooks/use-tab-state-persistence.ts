@@ -18,6 +18,7 @@ interface TabStatePersistenceProps {
     reference: string;
     versePositions: number[];
   }>;
+  selectedNodes: string[];
   graphTransform: {
     x: number;
     y: number;
@@ -38,6 +39,7 @@ export function useTabStatePersistence({
   isDarkMode,
   showGraph,
   selectedConnections,
+  selectedNodes,
   graphTransform,
   hasMounted,
 }: TabStatePersistenceProps) {
@@ -57,6 +59,7 @@ export function useTabStatePersistence({
       ...conn,
       versePositions: conn.versePositions || [],
     })),
+    selectedNodes,
     graphTransform,
   }), [
     searchTerms,
@@ -69,6 +72,7 @@ export function useTabStatePersistence({
     isDarkMode,
     showGraph,
     selectedConnections,
+    selectedNodes,
     graphTransform,
   ]);
 

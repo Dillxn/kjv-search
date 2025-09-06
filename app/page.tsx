@@ -62,6 +62,7 @@ export default function Home() {
     allPairingsSelected,
     cleanupInvalidConnections,
     selectedNodes,
+    setSelectedNodes,
     handleNodeClick,
     clearNodeSelection,
   } = useGraphState();
@@ -116,6 +117,7 @@ export default function Home() {
             versePositions: conn.versePositions || [],
           }))
         );
+        setSelectedNodes(currentTabState.selectedNodes || []);
       }
     }
   }, [
@@ -179,6 +181,7 @@ export default function Home() {
     isDarkMode,
     showGraph,
     selectedConnections,
+    selectedNodes,
     graphTransform,
     hasMounted,
   });
@@ -205,6 +208,7 @@ export default function Home() {
           isDarkMode,
           showGraph,
           selectedConnections,
+          selectedNodes,
           graphTransform,
         });
 
@@ -220,6 +224,7 @@ export default function Home() {
         setGraphTransform(newActiveTab.graphTransform || { x: 0, y: 0, scale: 1 });
         const connections = newActiveTab.selectedConnections;
         setSelectedConnections(Array.isArray(connections) ? connections : []);
+        setSelectedNodes(newActiveTab.selectedNodes || []);
       }
 
       setTabManager(newTabManager);
@@ -236,6 +241,7 @@ export default function Home() {
       isDarkMode,
       showGraph,
       selectedConnections,
+      selectedNodes,
       graphTransform,
       setSearchTerms,
       setPairingsSearchTerms,
