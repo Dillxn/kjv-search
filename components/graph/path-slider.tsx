@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PathSliderProps {
   currentPathIndex: number;
@@ -24,6 +25,18 @@ export function PathSlider({
     onPathChange(newIndex);
   };
 
+  const handlePrevious = () => {
+    if (currentPathIndex > 0) {
+      onPathChange(currentPathIndex - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentPathIndex < totalPaths - 1) {
+      onPathChange(currentPathIndex + 1);
+    }
+  };
+
   const currentPath = currentPathIndex + 1;
 
   return (
@@ -37,6 +50,34 @@ export function PathSlider({
         <span className="font-mono font-semibold text-xs px-2 py-1 rounded bg-opacity-20 bg-gray-500">
           {currentPath} / {totalPaths}
         </span>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handlePrevious}
+          disabled={currentPathIndex === 0}
+          className={`p-1 rounded transition-colors ${
+            currentPathIndex === 0
+              ? 'opacity-30 cursor-not-allowed'
+              : `hover:${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} cursor-pointer`
+          }`}
+          title="Previous path"
+        >
+          <ChevronLeft size={12} />
+        </button>
+        
+        <button
+          onClick={handleNext}
+          disabled={currentPathIndex === totalPaths - 1}
+          className={`p-1 rounded transition-colors ${
+            currentPathIndex === totalPaths - 1
+              ? 'opacity-30 cursor-not-allowed'
+              : `hover:${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} cursor-pointer`
+          }`}
+          title="Next path"
+        >
+          <ChevronRight size={12} />
+        </button>
       </div>
       
       <div className="flex-1 flex items-center gap-2">
