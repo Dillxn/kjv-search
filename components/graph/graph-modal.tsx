@@ -39,13 +39,35 @@ export function GraphModal({
   onClose,
 }: GraphModalProps) {
   // Get current connections for this word pair (real-time)
-  const currentConnections = connections.filter(
-    (conn) =>
-      (conn.word1 === selectedEdge.edge.source &&
-        conn.word2 === selectedEdge.edge.target) ||
-      (conn.word1 === selectedEdge.edge.target &&
-        conn.word2 === selectedEdge.edge.source)
-  );
+  const currentConnections = connections
+    .filter(
+      (conn) =>
+        (conn.word1 === selectedEdge.edge.source &&
+          conn.word2 === selectedEdge.edge.target) ||
+        (conn.word1 === selectedEdge.edge.target &&
+          conn.word2 === selectedEdge.edge.source)
+    )
+    .sort((a, b) => {
+      // Calculate proximity for each connection
+      const proximityA =
+        a.versePositions && a.versePositions.length > 1
+          ? Math.abs(a.versePositions[0] - a.versePositions[1])
+          : 0;
+      const proximityB =
+        b.versePositions && b.versePositions.length > 1
+          ? Math.abs(b.versePositions[0] - b.versePositions[1])
+          : 0;
+
+      // Sort by proximity first (same verse = 0, then 1, 2, etc.)
+      if (proximityA !== proximityB) {
+        return proximityA - proximityB;
+      }
+
+      // If proximity is the same, sort by first verse position
+      const firstPosA = a.versePositions?.[0] || 0;
+      const firstPosB = b.versePositions?.[0] || 0;
+      return firstPosA - firstPosB;
+    });
 
   const allVerses = kjvParser.getVerses();
 
@@ -90,11 +112,16 @@ export function GraphModal({
               if (verseObjects.length === 0) return null;
 
               // Create a mock pairing for the shared component
+              const proximity =
+                versePositions.length > 1
+                  ? Math.abs(versePositions[0] - versePositions[1])
+                  : 0;
+
               const mockPairing: VersePairing = {
                 verses: verseObjects,
                 term1: conn.word1,
                 term2: conn.word2,
-                proximity: 0,
+                proximity,
               };
 
               return (
