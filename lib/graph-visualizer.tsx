@@ -449,10 +449,15 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         const midY = (sourceNode.y + targetNode.y) / 2;
 
         // Calculate angle for text rotation
-        const angle = Math.atan2(
+        let angle = Math.atan2(
           targetNode.y - sourceNode.y,
           targetNode.x - sourceNode.x
         );
+
+        // Keep text right side up by flipping if angle is > 90° or < -90°
+        if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+          angle += Math.PI;
+        }
 
         ctx.save();
         ctx.translate(midX, midY);
