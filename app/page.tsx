@@ -311,102 +311,89 @@ export default function Home() {
   const handleSelectAllPairings = useCallback(() => {
     if (activeTab !== 'pairings') return;
 
-    // Add all current pairings to the graph
-    const newConnections: typeof selectedConnections = [];
-    
-    pairings.forEach((pairing) => {
-      const versePositions = pairing.verses.map((v) => v.position);
-      const verseRef =
-        pairing.verses.length === 1
+    // Create a Set of existing connection keys for fast lookup (normalized)
+    const existingConnections = Array.isArray(selectedConnections) ? selectedConnections : [];
+    const existingKeys = new Set(
+      existingConnections.map(conn => {
+        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        return `${word1}-${word2}-${versePositions}`;
+      })
+    );
+
+    // Build new connections array in one pass
+    const newConnections = pairings
+      .map((pairing) => {
+        const versePositions = pairing.verses.map((v) => v.position);
+        const sortedPositions = versePositions.slice().sort((a, b) => a - b).join(',');
+        const [word1, word2] = [pairing.term1, pairing.term2].sort();
+        const key = `${word1}-${word2}-${sortedPositions}`;
+        
+        // Skip if already exists
+        if (existingKeys.has(key)) return null;
+
+        const verseRef = pairing.verses.length === 1
           ? pairing.verses[0].reference
           : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
-      // Check if this pairing is already in the graph
-      const existingConnections = Array.isArray(selectedConnections) ? selectedConnections : [];
-      const alreadyExists = existingConnections.some((conn) => {
-        const positionsMatch =
-          conn.versePositions &&
-          conn.versePositions.length === versePositions.length &&
-          conn.versePositions.every((pos: number) =>
-            versePositions.includes(pos)
-          );
-
-        const wordsMatch =
-          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-
-        return wordsMatch && positionsMatch;
-      });
-
-      if (!alreadyExists) {
-        newConnections.push({
+        return {
           word1: pairing.term1,
           word2: pairing.term2,
           reference: verseRef,
           versePositions: versePositions,
-        });
-      }
-    });
+        };
+      })
+      .filter(Boolean) as typeof selectedConnections;
 
     if (newConnections.length > 0) {
-      setSelectedConnections((prev) => {
-        const prevArray = Array.isArray(prev) ? prev : [];
-        return [...prevArray, ...newConnections];
-      });
+      setSelectedConnections(prev => [...(Array.isArray(prev) ? prev : []), ...newConnections]);
     }
   }, [activeTab, pairings, selectedConnections]);
 
   const handleDeselectAllPairings = useCallback(() => {
     if (activeTab !== 'pairings') return;
 
-    // Remove all pairings that match current search results
-    setSelectedConnections((prev) => {
+    // Create a Set of current pairing keys for fast lookup (normalized word order)
+    const currentPairingKeys = new Set(
+      pairings.flatMap(pairing => {
+        const versePositions = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
+        // Normalize word order to ensure consistent matching
+        const [word1, word2] = [pairing.term1, pairing.term2].sort();
+        return [`${word1}-${word2}-${versePositions}`];
+      })
+    );
+
+    // Filter out matching connections in one pass
+    setSelectedConnections(prev => {
       const prevArray = Array.isArray(prev) ? prev : [];
-      return prevArray.filter((conn) => {
-        // Check if this connection matches any of the current pairings
-        const matchesCurrentPairing = pairings.some((pairing) => {
-          const versePositions = pairing.verses.map((v) => v.position);
-          const positionsMatch =
-            conn.versePositions &&
-            conn.versePositions.length === versePositions.length &&
-            conn.versePositions.every((pos: number) =>
-              versePositions.includes(pos)
-            );
-
-          const wordsMatch =
-            (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-            (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-
-          return wordsMatch && positionsMatch;
-        });
-
-        // Keep connections that don't match current pairings
-        return !matchesCurrentPairing;
+      return prevArray.filter(conn => {
+        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+        // Normalize word order to match the pairing keys
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        const key = `${word1}-${word2}-${versePositions}`;
+        return !currentPairingKeys.has(key);
       });
     });
   }, [activeTab, pairings]);
 
-  // Calculate if all current pairings are selected
+  // Calculate if all current pairings are selected (optimized with normalized keys)
   const allPairingsSelected = useMemo(() => {
     if (activeTab !== 'pairings' || pairings.length === 0) return false;
     
     const connections = Array.isArray(selectedConnections) ? selectedConnections : [];
-    return pairings.every((pairing) => {
-      const versePositions = pairing.verses.map((v) => v.position);
-      return connections.some((conn) => {
-        const positionsMatch =
-          conn.versePositions &&
-          conn.versePositions.length === versePositions.length &&
-          conn.versePositions.every((pos: number) =>
-            versePositions.includes(pos)
-          );
+    const connectionKeys = new Set(
+      connections.map(conn => {
+        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        return `${word1}-${word2}-${versePositions}`;
+      })
+    );
 
-        const wordsMatch =
-          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-
-        return wordsMatch && positionsMatch;
-      });
+    return pairings.every(pairing => {
+      const versePositions = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
+      const [word1, word2] = [pairing.term1, pairing.term2].sort();
+      const key = `${word1}-${word2}-${versePositions}`;
+      return connectionKeys.has(key);
     });
   }, [activeTab, pairings, selectedConnections]);
 
