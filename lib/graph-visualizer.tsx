@@ -3,7 +3,10 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GraphCanvas } from '../components/graph/graph-canvas';
 import { GraphModal } from '../components/graph/graph-modal';
+import { IconButton } from '../components/ui/button';
 import { applyForceDirectedLayout, generateInitialPosition, calculateNodeRadius } from './graph/force-layout';
+import { Maximize, RotateCcw } from 'lucide-react';
+import { getBackgroundClass } from './theme-utils';
 
 interface Node {
   id: string;
@@ -51,13 +54,14 @@ export function GraphVisualizer({
   const [edges, setEdges] = useState<Edge[]>([]);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [transform, setTransform] = useState(initialTransform);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<{
     edge: Edge;
     connection: typeof connections[0];
     allConnections?: typeof connections;
   } | null>(null);
 
-  // Update canvas size when container resizes
+  // Update canvas size when container resizes or full-screen changes
   useEffect(() => {
     const updateCanvasSize = () => {
       if (containerRef.current) {
@@ -80,7 +84,21 @@ export function GraphVisualizer({
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateCanvasSize);
     };
-  }, []);
+  }, [isFullScreen]);
+
+  // Handle escape key to exit full-screen
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    if (isFullScreen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isFullScreen]);
 
   const resetView = () => {
     const newTransform = { x: 0, y: 0, scale: 1 };
@@ -131,7 +149,9 @@ export function GraphVisualizer({
     const newTransform = { x, y, scale };
     setTransform(newTransform);
     onTransformChange?.(newTransform);
-  }, [nodes, canvasSize]);
+  }, [nodes, canvasSize, onTransformChange]);
+
+
 
   // Update graph when connections change
   useEffect(() => {
@@ -220,20 +240,32 @@ export function GraphVisualizer({
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
   };
 
+  const handleFullScreenToggle = () => {
+    setIsFullScreen(!isFullScreen);
+  };
+
   if (selectedEdge) {
     return (
-      <div ref={containerRef} className='w-full h-full'>
-        <GraphModal
-          selectedEdge={selectedEdge}
-          connections={connections}
-          onClose={() => setSelectedEdge(null)}
-        />
+      <div 
+        ref={containerRef} 
+        className={`w-full h-full ${isFullScreen ? 'fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center' : ''}`}
+      >
+        <div className={isFullScreen ? 'w-4/5 h-4/5 max-w-4xl max-h-4xl' : 'w-full h-full'}>
+          <GraphModal
+            selectedEdge={selectedEdge}
+            connections={connections}
+            onClose={() => setSelectedEdge(null)}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className='w-full h-full relative overflow-hidden'>
+    <div 
+      ref={containerRef} 
+      className={`w-full h-full relative overflow-hidden ${isFullScreen ? `fixed inset-0 z-50 ${getBackgroundClass(isDarkMode)}` : ''}`}
+    >
       <GraphCanvas
         nodes={nodes}
         edges={edges}
@@ -247,6 +279,26 @@ export function GraphVisualizer({
         onTransformChange={handleTransformChange}
       />
       
+      {/* Control buttons */}
+      {nodes.length > 0 && (
+        <div className='absolute top-2 right-2 flex gap-1'>
+          <IconButton
+            onClick={fitToView}
+            title="Fit graph to view"
+            isDarkMode={isDarkMode}
+          >
+            <RotateCcw size={16} />
+          </IconButton>
+          <IconButton
+            onClick={handleFullScreenToggle}
+            title={isFullScreen ? "Exit full screen" : "Enter full screen"}
+            isDarkMode={isDarkMode}
+          >
+            <Maximize size={16} />
+          </IconButton>
+        </div>
+      )}
+      
       {/* Empty state message */}
       {nodes.length === 0 && (
         <div className='absolute inset-0 flex items-center justify-center p-8'>
@@ -255,19 +307,6 @@ export function GraphVisualizer({
               Select word pairs from the results to build your graph
             </p>
           </div>
-        </div>
-      )}
-      
-      {/* Control buttons */}
-      {nodes.length > 0 && (
-        <div className='absolute top-2 right-2'>
-          <button
-            onClick={fitToView}
-            className='px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors'
-            title='Fit graph to view'
-          >
-            Fit to View
-          </button>
         </div>
       )}
     </div>

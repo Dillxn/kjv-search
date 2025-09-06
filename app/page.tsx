@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { kjvParser } from '../lib';
 import { TabBar } from '../lib/tab-bar';
 import { TabManager, TabManagerService } from '../lib/tab-manager';
@@ -9,11 +9,13 @@ import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { AppHeader } from '../components/ui/app-header';
 import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
+import { IconButton } from '../components/ui/button';
 import { useSearchState } from '../hooks/use-search-state';
 import { useTabStatePersistence } from '../hooks/use-tab-state-persistence';
 import { useGraphState } from '../hooks/use-graph-state';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
+
 import {
   getBackgroundClass,
   getTextClass,
@@ -356,36 +358,19 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-sm shadow-md flex flex-col min-h-0 ${getBackgroundClass(
+              className={`w-1/2 rounded-sm overflow-hidden shadow-md flex flex-col min-h-0 ${getBackgroundClass(
                 isDarkMode,
                 'card'
               )}`}
             >
-              <div
-                className={`flex-shrink-0 p-2 pl-2.5 ${getBorderClass(
-                  isDarkMode
-                )}`}
-              >
-                <div className='flex justify-between items-center'>
-                  <h3
-                    className={`text-sm font-medium ${getTextClass(
-                      isDarkMode
-                    )}`}
-                  >
-                    Word Connections Graph
-                  </h3>
-                </div>
-              </div>
-              <div className='flex-1 min-h-0'>
-                <GraphVisualizer
-                  connections={selectedConnections}
-                  searchTerms={searchTerms}
-                  pairingsSearchTerms={pairingsSearchTerms}
-                  isDarkMode={isDarkMode}
-                  initialTransform={graphTransform}
-                  onTransformChange={handleGraphTransformChange}
-                />
-              </div>
+              <GraphVisualizer
+                connections={selectedConnections}
+                searchTerms={searchTerms}
+                pairingsSearchTerms={pairingsSearchTerms}
+                isDarkMode={isDarkMode}
+                initialTransform={graphTransform}
+                onTransformChange={handleGraphTransformChange}
+              />
             </div>
           )}
         </div>
