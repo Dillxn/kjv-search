@@ -255,7 +255,7 @@ export default function Home() {
     });
   };
 
-  const handleAddToGraph = useCallback(
+  const handleToggleGraph = useCallback(
     (pairing: VersePairing) => {
       const connections = Array.isArray(selectedConnections)
         ? selectedConnections
@@ -263,7 +263,7 @@ export default function Home() {
       const versePositions = pairing.verses.map((v) => v.position);
 
       // Check if this specific pairing (with same verse positions) is already in graph
-      const isInGraph = connections.some((conn) => {
+      const existingConnectionIndex = connections.findIndex((conn) => {
         const positionsMatch =
           conn.versePositions &&
           conn.versePositions.length === versePositions.length &&
@@ -278,7 +278,14 @@ export default function Home() {
         return wordsMatch && positionsMatch;
       });
 
-      if (!isInGraph) {
+      if (existingConnectionIndex >= 0) {
+        // Remove from graph
+        setSelectedConnections((prev) => {
+          const prevArray = Array.isArray(prev) ? prev : [];
+          return prevArray.filter((_, index) => index !== existingConnectionIndex);
+        });
+      } else {
+        // Add to graph
         const verseRef =
           pairing.verses.length === 1
             ? pairing.verses[0].reference
@@ -439,7 +446,7 @@ export default function Home() {
                   scrollPositionKey={scrollPositionKey}
                   showGraph={showGraph}
                   selectedConnections={selectedConnections}
-                  onAddToGraph={handleAddToGraph}
+                  onToggleGraph={handleToggleGraph}
                 />
               )}
             </div>

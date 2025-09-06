@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { kjvParser } from './kjv-parser';
+import { UnifiedHighlighter } from './highlighting';
 
 interface Node {
   id: string;
@@ -13,6 +15,7 @@ interface Edge {
   source: string;
   target: string;
   reference: string;
+  versePositions?: number[];
 }
 
 interface GraphVisualizerProps {
@@ -27,14 +30,27 @@ interface GraphVisualizerProps {
 export function GraphVisualizer({ connections }: GraphVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const connectionsRef = useRef(connections);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+  // Update connections ref when connections change
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
+
+
   // Pan and zoom state
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  const [selectedEdge, setSelectedEdge] = useState<{
+    edge: Edge;
+    connection: typeof connections[0];
+    allConnections?: typeof connections;
+  } | null>(null);
 
   // Update canvas size when container resizes
   useEffect(() => {
@@ -68,12 +84,11 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     };
   }, []);
 
-  // Generate a deterministic position for a node based on its word
-  const generateNodePosition = (word: string, existingNodes: Node[]) => {
+  // Generate initial position for a node based on its word
+  const generateInitialPosition = (word: string, existingNodes: Node[]) => {
     const virtualWidth = 1200;
     const virtualHeight = 900;
     const margin = 100;
-    const minDistance = 150;
 
     // Create a simple hash function for the word to get consistent positioning
     const hashCode = (str: string) => {
@@ -88,65 +103,175 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
 
     const hash = hashCode(word.toLowerCase());
     
-    // Use hash to generate deterministic but well-distributed positions
-    const baseX = margin + (hash % (virtualWidth - 2 * margin));
-    const baseY = margin + ((hash >> 16) % (virtualHeight - 2 * margin));
+    // Use hash to generate deterministic but well-distributed initial positions
+    const x = margin + (hash % (virtualWidth - 2 * margin));
+    const y = margin + ((hash >> 16) % (virtualHeight - 2 * margin));
 
-    // Try the base position first
-    let x = baseX;
-    let y = baseY;
+    return { x, y };
+  };
+
+  // Helper function to check if two line segments intersect
+  const doLinesIntersect = (
+    x1: number, y1: number, x2: number, y2: number,
+    x3: number, y3: number, x4: number, y4: number
+  ) => {
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 1e-10) return false; // Lines are parallel
     
-    // Check if this position conflicts with existing nodes
-    const tooClose = existingNodes.some((node) => {
-      const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
-      return distance < minDistance;
-    });
-
-    if (!tooClose) {
-      return { x, y };
-    }
-
-    // If there's a conflict, use a spiral pattern around the base position
-    const spiralRadius = minDistance;
-    const maxSpirals = 10;
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
     
-    for (let spiral = 1; spiral <= maxSpirals; spiral++) {
-      const angleStep = (2 * Math.PI) / (8 * spiral); // More positions in outer spirals
-      const radius = spiralRadius * spiral;
-      
-      for (let i = 0; i < 8 * spiral; i++) {
-        const angle = i * angleStep + (hash * 0.01); // Add hash offset for variation
-        x = baseX + Math.cos(angle) * radius;
-        y = baseY + Math.sin(angle) * radius;
-        
-        // Keep within bounds
-        x = Math.max(margin, Math.min(virtualWidth - margin, x));
-        y = Math.max(margin, Math.min(virtualHeight - margin, y));
-        
-        const tooClose = existingNodes.some((node) => {
-          const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
-          return distance < minDistance;
-        });
-        
-        if (!tooClose) {
-          return { x, y };
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+  };
+
+  // Force-directed layout algorithm to minimize edge crossings
+  const applyForceDirectedLayout = useCallback((nodes: Node[], edges: Edge[]) => {
+    const virtualWidth = 1200;
+    const virtualHeight = 900;
+    const margin = 100;
+    const iterations = 120;
+    const repulsionStrength = 20000;
+    const attractionStrength = 0.03;
+    const crossingAvoidanceStrength = 1000; // Much gentler crossing avoidance
+    const dampening = 0.88;
+    const idealEdgeLength = 250; // Longer target edge length for better readability
+
+    // Create a copy of nodes to modify
+    const layoutNodes = nodes.map(node => ({ ...node, vx: 0, vy: 0 }));
+
+    for (let iter = 0; iter < iterations; iter++) {
+      // Reset forces
+      layoutNodes.forEach(node => {
+        node.vx = 0;
+        node.vy = 0;
+      });
+
+      // Repulsion forces between all nodes
+      for (let i = 0; i < layoutNodes.length; i++) {
+        for (let j = i + 1; j < layoutNodes.length; j++) {
+          const nodeA = layoutNodes[i];
+          const nodeB = layoutNodes[j];
+          
+          const dx = nodeB.x - nodeA.x;
+          const dy = nodeB.y - nodeA.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance > 0) {
+            const force = repulsionStrength / (distance * distance);
+            const fx = (dx / distance) * force;
+            const fy = (dy / distance) * force;
+            
+            nodeA.vx -= fx;
+            nodeA.vy -= fy;
+            nodeB.vx += fx;
+            nodeB.vy += fy;
+          }
         }
       }
+
+      // Attraction forces along edges (spring-like behavior)
+      edges.forEach(edge => {
+        const sourceNode = layoutNodes.find(n => n.id === edge.source);
+        const targetNode = layoutNodes.find(n => n.id === edge.target);
+        
+        if (sourceNode && targetNode) {
+          const dx = targetNode.x - sourceNode.x;
+          const dy = targetNode.y - sourceNode.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance > 0) {
+            // Spring force: attract if too far, repel if too close
+            const displacement = distance - idealEdgeLength;
+            const force = attractionStrength * displacement;
+            const fx = (dx / distance) * force;
+            const fy = (dy / distance) * force;
+            
+            sourceNode.vx += fx;
+            sourceNode.vy += fy;
+            targetNode.vx -= fx;
+            targetNode.vy -= fy;
+          }
+        }
+      });
+
+      // Edge crossing avoidance forces
+      for (let i = 0; i < edges.length; i++) {
+        for (let j = i + 1; j < edges.length; j++) {
+          const edge1 = edges[i];
+          const edge2 = edges[j];
+          
+          // Skip if edges share a node
+          if (edge1.source === edge2.source || edge1.source === edge2.target ||
+              edge1.target === edge2.source || edge1.target === edge2.target) {
+            continue;
+          }
+          
+          const source1 = layoutNodes.find(n => n.id === edge1.source);
+          const target1 = layoutNodes.find(n => n.id === edge1.target);
+          const source2 = layoutNodes.find(n => n.id === edge2.source);
+          const target2 = layoutNodes.find(n => n.id === edge2.target);
+          
+          if (source1 && target1 && source2 && target2) {
+            // Check if edges intersect
+            if (doLinesIntersect(
+              source1.x, source1.y, target1.x, target1.y,
+              source2.x, source2.y, target2.x, target2.y
+            )) {
+              // Apply forces to uncross the edges
+              // Move nodes perpendicular to their edge direction
+              const edge1Dx = target1.x - source1.x;
+              const edge1Dy = target1.y - source1.y;
+              const edge1Length = Math.sqrt(edge1Dx * edge1Dx + edge1Dy * edge1Dy);
+              
+              const edge2Dx = target2.x - source2.x;
+              const edge2Dy = target2.y - source2.y;
+              const edge2Length = Math.sqrt(edge2Dx * edge2Dx + edge2Dy * edge2Dy);
+              
+              if (edge1Length > 0 && edge2Length > 0) {
+                // Perpendicular directions
+                const perp1X = -edge1Dy / edge1Length;
+                const perp1Y = edge1Dx / edge1Length;
+                const perp2X = -edge2Dy / edge2Length;
+                const perp2Y = edge2Dx / edge2Length;
+                
+                // Scale force based on how close the intersection is to edge midpoints
+                // This makes the force gentler and more targeted
+                const force = crossingAvoidanceStrength * 0.1; // Much gentler force
+                
+                // Apply perpendicular forces to separate the crossing edges
+                // Only apply to one pair to avoid over-correction
+                source1.vx += perp1X * force;
+                source1.vy += perp1Y * force;
+                target1.vx += perp1X * force;
+                target1.vy += perp1Y * force;
+                
+                source2.vx -= perp1X * force; // Use same perpendicular direction
+                source2.vy -= perp1Y * force;
+                target2.vx -= perp1X * force;
+                target2.vy -= perp1Y * force;
+              }
+            }
+          }
+        }
+      }
+
+      // Apply forces and update positions
+      layoutNodes.forEach(node => {
+        node.vx *= dampening;
+        node.vy *= dampening;
+        
+        node.x += node.vx;
+        node.y += node.vy;
+        
+        // Keep nodes within bounds
+        node.x = Math.max(margin, Math.min(virtualWidth - margin, node.x));
+        node.y = Math.max(margin, Math.min(virtualHeight - margin, node.y));
+      });
     }
 
-    // Final fallback: use a grid-based position with hash offset
-    const gridSize = Math.ceil(Math.sqrt(existingNodes.length + 1));
-    const cellWidth = (virtualWidth - 2 * margin) / gridSize;
-    const cellHeight = (virtualHeight - 2 * margin) / gridSize;
-    const index = existingNodes.length;
-    const row = Math.floor(index / gridSize);
-    const col = index % gridSize;
-
-    return {
-      x: margin + col * cellWidth + cellWidth / 2,
-      y: margin + row * cellHeight + cellHeight / 2,
-    };
-  };
+    // Return updated positions
+    return layoutNodes.map(({ vx, vy, ...node }) => node);
+  }, []); // No dependencies needed as this is a pure function
 
   const resetView = () => {
     setTransform({ x: 0, y: 0, scale: 1 });
@@ -217,7 +342,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       connections.forEach((conn) => {
         // Create nodes if they don't exist
         if (!nodeMap.has(conn.word1)) {
-          const position = generateNodePosition(conn.word1, newNodes);
+          const position = generateInitialPosition(conn.word1, newNodes);
           const node: Node = {
             id: conn.word1,
             x: position.x,
@@ -229,7 +354,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         }
 
         if (!nodeMap.has(conn.word2)) {
-          const position = generateNodePosition(conn.word2, newNodes);
+          const position = generateInitialPosition(conn.word2, newNodes);
           const node: Node = {
             id: conn.word2,
             x: position.x,
@@ -252,21 +377,25 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
             source: conn.word1,
             target: conn.word2,
             reference: conn.reference,
+            versePositions: conn.versePositions,
           });
         }
       });
+
+      // Apply force-directed layout to minimize edge crossings
+      const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
 
       // Update edges in a separate effect to avoid dependency issues
       setEdges(newEdges);
 
       // Mark for auto-fit when first nodes are added or when starting fresh
-      if (!hadNodes && newNodes.length > 0) {
+      if (!hadNodes && layoutedNodes.length > 0) {
         setShouldAutoFit(true);
       }
 
-      return newNodes;
+      return layoutedNodes;
     });
-  }, [connections]);
+  }, [applyForceDirectedLayout, connections]);
 
   // Auto-fit effect - separate from the nodes update
   useEffect(() => {
@@ -322,8 +451,8 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let initialScale = 1;
-    let initialTransform = { x: 0, y: 0, scale: 1 };
+    const initialScale = 1;
+    const initialTransform = { x: 0, y: 0, scale: 1 };
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -357,6 +486,69 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Convert mouse coordinates to graph coordinates
+      const graphX = (mouseX - transform.x) / transform.scale;
+      const graphY = (mouseY - transform.y) / transform.scale;
+
+      // Check if click is on an edge
+      let clickedEdge = null;
+      for (const edge of edges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        const targetNode = nodes.find((n) => n.id === edge.target);
+
+        if (sourceNode && targetNode) {
+          // Calculate distance from point to line segment
+          const A = graphX - sourceNode.x;
+          const B = graphY - sourceNode.y;
+          const C = targetNode.x - sourceNode.x;
+          const D = targetNode.y - sourceNode.y;
+
+          const dot = A * C + B * D;
+          const lenSq = C * C + D * D;
+          let param = -1;
+          if (lenSq !== 0) param = dot / lenSq;
+
+          let xx, yy;
+          if (param < 0) {
+            xx = sourceNode.x;
+            yy = sourceNode.y;
+          } else if (param > 1) {
+            xx = targetNode.x;
+            yy = targetNode.y;
+          } else {
+            xx = sourceNode.x + param * C;
+            yy = sourceNode.y + param * D;
+          }
+
+          const dx = graphX - xx;
+          const dy = graphY - yy;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // If click is within 15 pixels of the edge
+          if (distance < 15) {
+            clickedEdge = edge;
+            break;
+          }
+        }
+      }
+
+      if (clickedEdge) {
+        // Find ALL connections between these two words
+        const allConnections = connectionsRef.current.filter(conn => 
+          (conn.word1 === clickedEdge.source && conn.word2 === clickedEdge.target) ||
+          (conn.word1 === clickedEdge.target && conn.word2 === clickedEdge.source)
+        );
+        
+        if (allConnections.length > 0) {
+          setSelectedEdge({ edge: clickedEdge, connection: allConnections[0], allConnections });
+          return; // Don't start dragging if we clicked an edge
+        }
+      }
+
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setLastPanPoint({ x: transform.x, y: transform.y });
@@ -399,7 +591,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('mouseleave', handleMouseUp);
     };
-  }, [isDragging, dragStart, lastPanPoint, transform]);
+  }, [isDragging, dragStart, lastPanPoint, transform, edges, nodes]);
 
   // Drawing effect with transform applied
   useEffect(() => {
@@ -448,6 +640,17 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         const midX = (sourceNode.x + targetNode.x) / 2;
         const midY = (sourceNode.y + targetNode.y) / 2;
 
+        // Count connections for this edge using ref to avoid dependency issues
+        const connectionCount = connectionsRef.current.filter(conn => 
+          (conn.word1 === edge.source && conn.word2 === edge.target) ||
+          (conn.word1 === edge.target && conn.word2 === edge.source)
+        ).length;
+
+        // Create display text - show count if more than 1 connection
+        const displayText = connectionCount > 1 
+          ? `${edge.reference} (${connectionCount})`
+          : edge.reference;
+
         // Calculate angle for text rotation
         let angle = Math.atan2(
           targetNode.y - sourceNode.y,
@@ -467,13 +670,13 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         const fontSize = 10 / transform.scale;
         ctx.font = `${fontSize}px Arial`;
-        const textWidth = ctx.measureText(edge.reference).width;
+        const textWidth = ctx.measureText(displayText).width;
         ctx.fillRect(-textWidth / 2 - 2, -8, textWidth + 4, 12);
 
         // Text
         ctx.fillStyle = '#333';
         ctx.textAlign = 'center';
-        ctx.fillText(edge.reference, 0, -2);
+        ctx.fillText(displayText, 0, -2);
         ctx.restore();
       }
     });
@@ -529,6 +732,95 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
           >
             Reset View
           </button>
+        </div>
+      )}
+
+      {/* Edge Details Modal - Full Component Overlay */}
+      {selectedEdge && (
+        <div className='absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col'>
+          {/* Header */}
+          <div className='p-4 border-b bg-white shadow-sm flex justify-between items-center flex-shrink-0'>
+            <h3 className='text-lg font-semibold text-gray-800'>
+              Connection: {selectedEdge.edge.source} ↔ {selectedEdge.edge.target}
+            </h3>
+            <button
+              onClick={() => setSelectedEdge(null)}
+              className='text-gray-500 hover:text-gray-700 text-xl font-bold px-2 py-1 rounded hover:bg-gray-100'
+            >
+              ×
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className='flex-1 overflow-y-auto p-4'>
+            <div className='text-sm text-gray-600 mb-4'>
+              {(() => {
+                // Get current connections for this word pair (real-time)
+                const currentConnections = connectionsRef.current.filter(conn => 
+                  (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
+                  (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
+                );
+                
+                return currentConnections.length > 0 
+                  ? `Found ${currentConnections.length} connection(s) between these words (updates in real-time)`
+                  : 'No connections currently selected for these words';
+              })()}
+            </div>
+            
+            {(() => {
+              // Get current connections and verses (real-time)
+              const currentConnections = connectionsRef.current.filter(conn => 
+                (conn.word1 === selectedEdge.edge.source && conn.word2 === selectedEdge.edge.target) ||
+                (conn.word1 === selectedEdge.edge.target && conn.word2 === selectedEdge.edge.source)
+              );
+              
+              if (currentConnections.length === 0) {
+                return (
+                  <div className='text-center py-8 text-gray-500'>
+                    <p>No verses currently selected for this word pair.</p>
+                    <p className='text-sm mt-2'>Add pairings from the search results to see verses here.</p>
+                  </div>
+                );
+              }
+              
+              // Collect all unique verse positions from current connections
+              const allVersePositions = new Set<number>();
+              currentConnections.forEach(conn => {
+                conn.versePositions?.forEach(pos => allVersePositions.add(pos));
+              });
+
+              const verses = kjvParser.getVerses();
+              const sortedPositions = Array.from(allVersePositions).sort((a, b) => a - b);
+              
+              return (
+                <div className='space-y-4'>
+                  {sortedPositions.map((position) => {
+                    const verse = verses.find(v => v.position === position);
+                    if (!verse) return null;
+                    
+                    // Highlight the two connected words in the verse text
+                    const searchTerms = [selectedEdge.edge.source, selectedEdge.edge.target];
+                    const highlightedText = UnifiedHighlighter.highlightText(verse.text, {
+                      mainTerms: searchTerms,
+                      isDarkMode: false, // Modal is always light mode
+                    });
+                    
+                    return (
+                      <div key={position} className='p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500'>
+                        <div className='font-semibold text-sm text-gray-700 mb-2'>
+                          {verse.reference}
+                        </div>
+                        <div 
+                          className='text-sm text-gray-800 leading-relaxed'
+                          dangerouslySetInnerHTML={{ __html: highlightedText }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
     </div>

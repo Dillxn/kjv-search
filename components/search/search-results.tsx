@@ -21,7 +21,7 @@ interface SearchResultsProps {
     reference: string;
     versePositions: number[];
   }>;
-  onAddToGraph: (pairing: VersePairing) => void;
+  onToggleGraph: (pairing: VersePairing) => void;
 }
 
 export function SearchResults({
@@ -35,7 +35,7 @@ export function SearchResults({
   scrollPositionKey,
   showGraph,
   selectedConnections,
-  onAddToGraph,
+  onToggleGraph,
 }: SearchResultsProps) {
   const getSearchTermsArray = () => {
     return SearchResultsHelper.processSearchString(searchTerms);
@@ -124,22 +124,18 @@ export function SearchResults({
           ))}
         </div>
         {showGraph && (
-          <button
-            onClick={() => onAddToGraph(pairing)}
-            disabled={isInGraph}
-            className={`ml-2 px-1.5 py-0.5 text-xs rounded ${
-              isInGraph
-                ? isDarkMode
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : isDarkMode
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-blue-500 text-white hover:bg-blue-600'
-            } transition-colors`}
-            title={isInGraph ? 'Already in graph' : 'Add to graph'}
-          >
-            {isInGraph ? '✓' : '+'}
-          </button>
+          <label className="ml-2 flex items-center cursor-pointer" title={isInGraph ? 'Remove from graph' : 'Add to graph'}>
+            <input
+              type="checkbox"
+              checked={isInGraph}
+              onChange={() => onToggleGraph(pairing)}
+              className={`w-4 h-4 rounded border-2 transition-colors ${
+                isDarkMode
+                  ? 'border-gray-500 bg-gray-700 checked:bg-blue-600 checked:border-blue-600'
+                  : 'border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500'
+              }`}
+            />
+          </label>
         )}
       </div>
     );

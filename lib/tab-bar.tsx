@@ -117,8 +117,8 @@ export function TabBar({
                 <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
                   <button
                     onClick={(e) => handleDuplicateTab(e, tab.id)}
-                    className={`p-0.5 rounded hover:bg-opacity-20 ${
-                      isDarkMode ? 'hover:bg-white' : 'hover:bg-black'
+                    className={`p-0.5 rounded ${
+                      isDarkMode ? 'hover:bg-white/20' : 'hover:bg-black/20'
                     }`}
                     title='Duplicate tab'
                   >
