@@ -15,7 +15,7 @@ export class VerseSearcher {
     for (const term of terms) {
       const matchingVerses = this.verses.filter((verse) => {
         if (!FilterUtils.shouldIncludeVerse(verse, filters)) return false;
-        return verse.text.toLowerCase().includes(term.toLowerCase());
+        return RegexUtils.testMatch(verse.text, term);
       });
       termToVerses.set(term, matchingVerses);
     }
@@ -31,23 +31,16 @@ export class VerseSearcher {
       if (!FilterUtils.shouldIncludeVerse(verse, filters)) continue;
 
       const matches: MatchBounds[] = [];
-      const verseText = verse.text.toLowerCase();
 
       for (const term of terms) {
-        const termLower = term.toLowerCase();
-        let startIndex = 0;
-
-        while (true) {
-          const index = verseText.indexOf(termLower, startIndex);
-          if (index === -1) break;
-
+        const termMatches = RegexUtils.findMatches(verse.text, term);
+        
+        for (const match of termMatches) {
           matches.push({
             term,
-            start: index,
-            end: index + termLower.length,
+            start: match.start,
+            end: match.end,
           });
-
-          startIndex = index + 1;
         }
       }
 
