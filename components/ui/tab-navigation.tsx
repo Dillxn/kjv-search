@@ -1,6 +1,6 @@
 'use client';
 
-import { getBackgroundClass, getTextClass } from '../../lib/theme-utils';
+import { Tab } from './tab';
 
 interface TabNavigationProps {
   activeTab: 'all' | 'pairings';
@@ -28,48 +28,20 @@ export function TabNavigation({
   return (
     <div className='flex mb-2 gap-1 items-center justify-between flex-shrink-0'>
       <div className='flex gap-1 items-center'>
-        <button
+        <Tab
+          isActive={activeTab === 'all'}
+          isDarkMode={isDarkMode}
           onClick={() => onTabChange('all')}
-          className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-            activeTab === 'all'
-              ? `${getBackgroundClass(
-                  isDarkMode,
-                  'secondary'
-                )} ${getTextClass(isDarkMode)} border-b-2 ${
-                  isDarkMode ? 'border-blue-400' : 'border-blue-500'
-                }`
-              : `${getBackgroundClass(
-                  isDarkMode,
-                  'secondary'
-                )} ${getTextClass(
-                  isDarkMode,
-                  'muted'
-                )} hover:${getTextClass(isDarkMode, 'secondary')}`
-          }`}
         >
           All Results ({resultsCount})
-        </button>
-        <button
+        </Tab>
+        <Tab
+          isActive={activeTab === 'pairings'}
+          isDarkMode={isDarkMode}
           onClick={() => onTabChange('pairings')}
-          className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-            activeTab === 'pairings'
-              ? `${getBackgroundClass(
-                  isDarkMode,
-                  'secondary'
-                )} ${getTextClass(isDarkMode)} border-b-2 ${
-                  isDarkMode ? 'border-blue-400' : 'border-blue-500'
-                }`
-              : `${getBackgroundClass(
-                  isDarkMode,
-                  'secondary'
-                )} ${getTextClass(
-                  isDarkMode,
-                  'muted'
-                )} hover:${getTextClass(isDarkMode, 'secondary')}`
-          }`}
         >
           Pairings ({pairingsCount})
-        </button>
+        </Tab>
       </div>
 
       {activeTab === 'pairings' && showGraph && pairingsCount > 0 && (

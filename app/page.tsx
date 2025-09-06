@@ -98,7 +98,7 @@ export default function Home() {
         setPairingsSearchTerms(currentTabState.pairingsSearchTerms);
         setSelectedTestament(currentTabState.selectedTestament);
         setSelectedBooks(currentTabState.selectedBooks);
-        setMaxProximity(currentTabState.maxProximity || 100);
+        setMaxProximity(currentTabState.maxProximity ?? 100);
         setShowFilters(currentTabState.showFilters);
         setActiveTab(currentTabState.activeTab);
         setIsDarkMode(currentTabState.isDarkMode);
@@ -207,7 +207,7 @@ export default function Home() {
         setPairingsSearchTerms(newActiveTab.pairingsSearchTerms);
         setSelectedTestament(newActiveTab.selectedTestament);
         setSelectedBooks(newActiveTab.selectedBooks);
-        setMaxProximity(newActiveTab.maxProximity || 100);
+        setMaxProximity(newActiveTab.maxProximity ?? 100);
         setShowFilters(newActiveTab.showFilters);
         setActiveTab(newActiveTab.activeTab);
         setIsDarkMode(newActiveTab.isDarkMode);

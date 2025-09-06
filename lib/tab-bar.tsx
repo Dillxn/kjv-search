@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Plus } from 'lucide-react';
+import { Tab } from '../components/ui/tab';
 import { TabManager, TabState, TabManagerService } from './tab-manager';
 
 interface TabBarProps {
@@ -70,25 +72,19 @@ export function TabBar({
   };
 
   return (
-    <div className={`flex items-center gap-1 px-2 py-1`}>
-      <div className='flex items-center gap-1 flex-1 overflow-x-auto scrollbar-thin'>
+    <div className={`flex items-center px-2 py-1`}>
+      <div className='flex items-center gap-1 overflow-x-auto scrollbar-thin'>
         {tabManager.tabs.map((tab) => {
           const isActive = tab.id === tabManager.activeTabId;
           const isEditing = editingTabId === tab.id;
 
           return (
-            <div
+            <Tab
               key={tab.id}
-              className={`group relative flex items-center gap-1 px-2 rounded-lg cursor-pointer transition-all duration-200 min-w-0 max-w-48 py-1 ${
-                isActive
-                  ? isDarkMode
-                    ? 'bg-gray-700 text-white border-b-2 border-blue-400'
-                    : 'bg-gray-100 text-gray-900 border-b-2 border-blue-500'
-                  : isDarkMode
-                  ? 'bg-gray-900 text-gray-300 hover:bg-gray-700'
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              }`}
+              isActive={isActive}
+              isDarkMode={isDarkMode}
               onClick={() => handleTabClick(tab.id)}
+              variant="complex"
             >
               {isEditing ? (
                 <input
@@ -154,30 +150,24 @@ export function TabBar({
                   )}
                 </div>
               )}
-            </div>
+            </Tab>
           );
         })}
+        
+        {tabManager.tabs.length < 10 && (
+          <button
+            onClick={handleAddTab}
+            className={`flex items-center justify-center w-6 h-6 ml-1 rounded transition-colors ${
+              isDarkMode
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title='Add new tab'
+          >
+            <Plus className='w-3 h-3' />
+          </button>
+        )}
       </div>
-
-      {tabManager.tabs.length < 10 && (
-        <button
-          onClick={handleAddTab}
-          className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
-            isDarkMode
-              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-          title='Add new tab'
-        >
-          <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
-            <path
-              fillRule='evenodd'
-              d='M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z'
-              clipRule='evenodd'
-            />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }
