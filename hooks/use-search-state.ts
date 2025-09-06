@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { kjvParser, SearchResult, VersePairing, SearchFilters, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib/kjv-parser';
+import { kjvParser, SearchResult, VersePairing, SearchFilters, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib';
 import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 
@@ -150,14 +150,14 @@ export function useSearchState() {
         }
       } else {
         // For all results tab, use traditional pairings logic
-        versePairings = kjvParser
-          .findVersePairings(terms, searchFilters)
-          .sort((a, b) => {
-            if (a.proximity !== b.proximity) {
-              return a.proximity - b.proximity;
-            }
-            return a.verses[0].position - b.verses[0].position;
-          });
+        versePairings = await kjvParser
+          .findVersePairings(terms, searchFilters);
+        versePairings = versePairings.sort((a, b) => {
+          if (a.proximity !== b.proximity) {
+            return a.proximity - b.proximity;
+          }
+          return a.verses[0].position - b.verses[0].position;
+        });
       }
 
       setResults(searchResults);

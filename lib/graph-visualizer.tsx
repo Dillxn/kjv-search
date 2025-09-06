@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { kjvParser } from './kjv-parser';
-import { UnifiedHighlighter } from './highlighting';
+import { kjvParser, VersePairing } from './';
+import { PairingDisplay } from '../components/shared/pairing-display';
 
 interface Node {
   id: string;
@@ -609,16 +609,8 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     ctx.scale(transform.scale, transform.scale);
 
     if (nodes.length === 0) {
-      // Show empty state message (reset transform for centered text)
+      // Empty state will be handled by JSX overlay
       ctx.restore();
-      ctx.fillStyle = '#666';
-      ctx.font = '16px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        'Select word pairs from the results to build your graph',
-        canvas.width / 2,
-        canvas.height / 2
-      );
       return;
     }
 
@@ -760,29 +752,51 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
             const verses = kjvParser.getVerses();
             const sortedPositions = Array.from(allVersePositions).sort((a, b) => a - b);
             
+            // Group connections by verse positions to create consolidated pairings
+            const verseGroupMap = new Map<string, typeof currentConnections>();
+            currentConnections.forEach(conn => {
+              const verseKey = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+              if (!verseGroupMap.has(verseKey)) {
+                verseGroupMap.set(verseKey, []);
+              }
+              verseGroupMap.get(verseKey)!.push(conn);
+            });
+
+            const allVerses = kjvParser.getVerses();
+            
             return (
-              <div className='space-y-4'>
-                {sortedPositions.map((position) => {
-                  const verse = verses.find(v => v.position === position);
-                  if (!verse) return null;
+              <div className='space-y-2'>
+                {Array.from(verseGroupMap.entries()).map(([verseKey, connections]) => {
+                  if (connections.length === 0) return null;
                   
-                  // Highlight the two connected words in the verse text
-                  const searchTerms = [selectedEdge.edge.source, selectedEdge.edge.target];
-                  const highlightedText = UnifiedHighlighter.highlightText(verse.text, {
-                    mainTerms: searchTerms,
-                    isDarkMode: false, // Modal is always light mode
-                  });
+                  const firstConn = connections[0];
+                  const versePositions = firstConn.versePositions || [];
+                  const verseObjects = versePositions
+                    .map(pos => allVerses.find(v => v.position === pos))
+                    .filter(Boolean) as typeof allVerses;
                   
+                  if (verseObjects.length === 0) return null;
+
+                  // Create a mock pairing for the shared component
+                  const mockPairing: VersePairing = {
+                    verses: verseObjects,
+                    term1: connections[0].word1,
+                    term2: connections[0].word2,
+                    proximity: 0,
+                    // Add consolidated term pairs if multiple connections
+                    allTermPairs: connections.length > 1 
+                      ? connections.map(conn => `${conn.word1} ↔ ${conn.word2}`)
+                      : undefined,
+                  };
+
                   return (
-                    <div key={position} className='p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500'>
-                      <div className='font-semibold text-sm text-gray-700 mb-2'>
-                        {verse.reference}
-                      </div>
-                      <div 
-                        className='text-sm text-gray-800 leading-relaxed'
-                        dangerouslySetInnerHTML={{ __html: highlightedText }}
-                      />
-                    </div>
+                    <PairingDisplay
+                      key={verseKey}
+                      pairing={mockPairing}
+                      searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
+                      isDarkMode={false}
+                      showCheckbox={false}
+                    />
                   );
                 })}
               </div>
@@ -807,21 +821,27 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
           objectFit: 'contain',
         }}
       />
+      
+      {/* Empty state message */}
+      {nodes.length === 0 && (
+        <div className='absolute inset-0 flex items-center justify-center p-8'>
+          <div className='text-center text-gray-500 max-w-sm'>
+            <p className='text-sm leading-relaxed'>
+              Select word pairs from the results to build your graph
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Control buttons */}
       {nodes.length > 0 && (
-        <div className='absolute top-2 right-2 flex gap-1'>
+        <div className='absolute top-2 right-2'>
           <button
             onClick={fitToView}
             className='px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors'
             title='Fit graph to view'
           >
             Fit to View
-          </button>
-          <button
-            onClick={resetView}
-            className='px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors'
-            title='Reset view (zoom and pan)'
-          >
-            Reset View
           </button>
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { kjvParser, VersePairing } from '../lib/kjv-parser';
+import { kjvParser, VersePairing } from '../lib';
 import { TabBar } from '../lib/tab-bar';
 import { TabManager, TabManagerService } from '../lib/tab-manager';
 import { GraphVisualizer } from '../lib/graph-visualizer';
@@ -15,7 +15,11 @@ import { useTabStatePersistence } from '../hooks/use-tab-state-persistence';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 import { MoonStarIcon, SunIcon, WorkflowIcon } from 'lucide-react';
-import { getBackgroundClass, getTextClass, getBorderClass } from '../lib/theme-utils';
+import {
+  getBackgroundClass,
+  getTextClass,
+  getBorderClass,
+} from '../lib/theme-utils';
 import { APP_CONFIG } from '../lib/constants';
 
 export default function Home() {
@@ -75,10 +79,9 @@ export default function Home() {
       setHasMounted(true);
 
       // Test localStorage functionality
-      
+
       testLocalStorage();
       getLocalStorageInfo();
-      
 
       // Start dev backup in development mode
       if (process.env.NODE_ENV === 'development') {
@@ -87,7 +90,6 @@ export default function Home() {
 
       const currentTabState = TabManagerService.getActiveTab(tabManager);
       if (currentTabState) {
-        
         // Load all tab state on mount
         setSearchTerms(currentTabState.searchTerms);
         setPairingsSearchTerms(currentTabState.pairingsSearchTerms);
@@ -119,9 +121,8 @@ export default function Home() {
   useEffect(() => {
     const initializeKJV = async () => {
       try {
-        
         await kjvParser.fetchAndParse();
-        
+
         setIsInitialized(true);
       } catch (err) {
         console.error('KJV initialization failed:', err);
@@ -135,7 +136,9 @@ export default function Home() {
   // Set container height and handle resize
   useEffect(() => {
     const updateHeight = () => {
-      setContainerHeight(window.innerHeight - APP_CONFIG.UI.CONTAINER_BASE_OFFSET);
+      setContainerHeight(
+        window.innerHeight - APP_CONFIG.UI.CONTAINER_BASE_OFFSET
+      );
     };
     updateHeight();
     window.addEventListener('resize', updateHeight);
@@ -228,8 +231,6 @@ export default function Home() {
     ]
   );
 
-
-
   // Stop dev backup on unmount
   useEffect(() => {
     return () => {
@@ -256,58 +257,86 @@ export default function Home() {
   };
 
   // Helper function to clean up orphaned nodes (nodes with no connections)
-  const cleanupOrphanedNodes = useCallback((connections: typeof selectedConnections) => {
-    // Since the graph visualizer automatically creates nodes from connections,
-    // orphaned nodes are automatically removed when their connections are removed.
-    // This function is here for potential future enhancements.
-    return connections;
-  }, []);
+  const cleanupOrphanedNodes = useCallback(
+    (connections: typeof selectedConnections) => {
+      // Since the graph visualizer automatically creates nodes from connections,
+      // orphaned nodes are automatically removed when their connections are removed.
+      // This function is here for potential future enhancements.
+      return connections;
+    },
+    []
+  );
 
   const handleToggleGraph = useCallback(
     (pairing: VersePairing) => {
-      const connections = Array.isArray(selectedConnections) ? selectedConnections : [];
+      console.log('handleToggleGraph called with pairing:', {
+        term1: pairing.term1,
+        term2: pairing.term2,
+        allTermPairs: pairing.allTermPairs,
+        hasAllTermPairs: !!pairing.allTermPairs,
+        allTermPairsLength: pairing.allTermPairs?.length,
+      });
+
+      const connections = Array.isArray(selectedConnections)
+        ? selectedConnections
+        : [];
       const versePositions = pairing.verses.map((v) => v.position);
-      const verseRef = pairing.verses.length === 1
-        ? pairing.verses[0].reference
-        : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+      const verseRef =
+        pairing.verses.length === 1
+          ? pairing.verses[0].reference
+          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
       // Handle consolidated pairings (multiple word pairs)
       if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
+        console.log(
+          'Processing consolidated pairing with',
+          pairing.allTermPairs.length,
+          'term pairs'
+        );
         // Parse all term pairs from the consolidated pairing
-        const termPairs = pairing.allTermPairs.map(pairStr => {
+        const termPairs = pairing.allTermPairs.map((pairStr) => {
           const [term1, term2] = pairStr.split(' ↔ ');
           return { term1: term1.trim(), term2: term2.trim() };
         });
 
         // Check if ALL term pairs are already in the graph
         const allExist = termPairs.every(({ term1, term2 }) => {
-          return connections.some(conn => {
-            const positionsMatch = conn.versePositions &&
+          return connections.some((conn) => {
+            const positionsMatch =
+              conn.versePositions &&
               conn.versePositions.length === versePositions.length &&
-              conn.versePositions.every((pos: number) => versePositions.includes(pos));
-            
-            const wordsMatch = (conn.word1 === term1 && conn.word2 === term2) ||
-                              (conn.word1 === term2 && conn.word2 === term1);
-            
+              conn.versePositions.every((pos: number) =>
+                versePositions.includes(pos)
+              );
+
+            const wordsMatch =
+              (conn.word1 === term1 && conn.word2 === term2) ||
+              (conn.word1 === term2 && conn.word2 === term1);
+
             return wordsMatch && positionsMatch;
           });
         });
 
         if (allExist) {
           // Remove all term pairs from graph (orphaned nodes will be automatically cleaned up)
-          setSelectedConnections(prev => {
+          setSelectedConnections((prev) => {
             const prevArray = Array.isArray(prev) ? prev : [];
-            const filteredConnections = prevArray.filter(conn => {
-              const positionsMatch = conn.versePositions &&
+            const filteredConnections = prevArray.filter((conn) => {
+              const positionsMatch =
+                conn.versePositions &&
                 conn.versePositions.length === versePositions.length &&
-                conn.versePositions.every((pos: number) => versePositions.includes(pos));
-              
+                conn.versePositions.every((pos: number) =>
+                  versePositions.includes(pos)
+                );
+
               if (!positionsMatch) return true; // Keep connections with different verses
-              
+
               // Remove if this connection matches any of the term pairs
               return !termPairs.some(({ term1, term2 }) => {
-                return (conn.word1 === term1 && conn.word2 === term2) ||
-                       (conn.word1 === term2 && conn.word2 === term1);
+                return (
+                  (conn.word1 === term1 && conn.word2 === term2) ||
+                  (conn.word1 === term2 && conn.word2 === term1)
+                );
               });
             });
             return cleanupOrphanedNodes(filteredConnections);
@@ -316,16 +345,31 @@ export default function Home() {
           // Add all term pairs to graph (skip existing ones)
           const newConnections = termPairs
             .filter(({ term1, term2 }) => {
-              return !connections.some(conn => {
-                const positionsMatch = conn.versePositions &&
+              const exists = connections.some((conn) => {
+                const positionsMatch =
+                  conn.versePositions &&
                   conn.versePositions.length === versePositions.length &&
-                  conn.versePositions.every((pos: number) => versePositions.includes(pos));
-                
-                const wordsMatch = (conn.word1 === term1 && conn.word2 === term2) ||
-                                  (conn.word1 === term2 && conn.word2 === term1);
-                
+                  conn.versePositions.every((pos: number) =>
+                    versePositions.includes(pos)
+                  );
+
+                const wordsMatch =
+                  (conn.word1 === term1 && conn.word2 === term2) ||
+                  (conn.word1 === term2 && conn.word2 === term1);
+
                 return wordsMatch && positionsMatch;
               });
+
+              // Debug: log what's being filtered
+              if (exists) {
+                console.log(
+                  `Skipping existing connection: ${term1} ↔ ${term2}`
+                );
+              } else {
+                console.log(`Adding new connection: ${term1} ↔ ${term2}`);
+              }
+
+              return !exists;
             })
             .map(({ term1, term2 }) => ({
               word1: term1,
@@ -335,7 +379,7 @@ export default function Home() {
             }));
 
           if (newConnections.length > 0) {
-            setSelectedConnections(prev => {
+            setSelectedConnections((prev) => {
               const prevArray = Array.isArray(prev) ? prev : [];
               return cleanupOrphanedNodes([...prevArray, ...newConnections]);
             });
@@ -344,12 +388,16 @@ export default function Home() {
       } else {
         // Handle single pairing (original logic)
         const existingConnectionIndex = connections.findIndex((conn) => {
-          const positionsMatch = conn.versePositions &&
+          const positionsMatch =
+            conn.versePositions &&
             conn.versePositions.length === versePositions.length &&
-            conn.versePositions.every((pos: number) => versePositions.includes(pos));
+            conn.versePositions.every((pos: number) =>
+              versePositions.includes(pos)
+            );
 
-          const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-                            (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+          const wordsMatch =
+            (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+            (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
 
           return wordsMatch && positionsMatch;
         });
@@ -358,7 +406,9 @@ export default function Home() {
           // Remove from graph (orphaned nodes will be automatically cleaned up)
           setSelectedConnections((prev) => {
             const prevArray = Array.isArray(prev) ? prev : [];
-            const filteredConnections = prevArray.filter((_, index) => index !== existingConnectionIndex);
+            const filteredConnections = prevArray.filter(
+              (_, index) => index !== existingConnectionIndex
+            );
             return cleanupOrphanedNodes(filteredConnections);
           });
         } else {
@@ -385,10 +435,16 @@ export default function Home() {
     if (activeTab !== 'pairings') return;
 
     // Create a Set of existing connection keys for fast lookup (normalized)
-    const existingConnections = Array.isArray(selectedConnections) ? selectedConnections : [];
+    const existingConnections = Array.isArray(selectedConnections)
+      ? selectedConnections
+      : [];
     const existingKeys = new Set(
-      existingConnections.map(conn => {
-        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+      existingConnections.map((conn) => {
+        const versePositions =
+          conn.versePositions
+            ?.slice()
+            .sort((a, b) => a - b)
+            .join(',') || '';
         const [word1, word2] = [conn.word1, conn.word2].sort();
         return `${word1}-${word2}-${versePositions}`;
       })
@@ -396,21 +452,25 @@ export default function Home() {
 
     // Build new connections array, handling both single and consolidated pairings
     const newConnections: typeof selectedConnections = [];
-    
+
     pairings.forEach((pairing) => {
       const versePositions = pairing.verses.map((v) => v.position);
-      const verseRef = pairing.verses.length === 1
-        ? pairing.verses[0].reference
-        : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+      const verseRef =
+        pairing.verses.length === 1
+          ? pairing.verses[0].reference
+          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
       if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
         // Handle consolidated pairings - add all term pairs
-        pairing.allTermPairs.forEach(pairStr => {
-          const [term1, term2] = pairStr.split(' ↔ ').map(t => t.trim());
-          const sortedPositions = versePositions.slice().sort((a, b) => a - b).join(',');
+        pairing.allTermPairs.forEach((pairStr) => {
+          const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
+          const sortedPositions = versePositions
+            .slice()
+            .sort((a, b) => a - b)
+            .join(',');
           const [word1, word2] = [term1, term2].sort();
           const key = `${word1}-${word2}-${sortedPositions}`;
-          
+
           // Skip if already exists
           if (!existingKeys.has(key)) {
             newConnections.push({
@@ -424,10 +484,13 @@ export default function Home() {
         });
       } else {
         // Handle single pairing
-        const sortedPositions = versePositions.slice().sort((a, b) => a - b).join(',');
+        const sortedPositions = versePositions
+          .slice()
+          .sort((a, b) => a - b)
+          .join(',');
         const [word1, word2] = [pairing.term1, pairing.term2].sort();
         const key = `${word1}-${word2}-${sortedPositions}`;
-        
+
         // Skip if already exists
         if (!existingKeys.has(key)) {
           newConnections.push({
@@ -441,7 +504,10 @@ export default function Home() {
     });
 
     if (newConnections.length > 0) {
-      setSelectedConnections(prev => [...(Array.isArray(prev) ? prev : []), ...newConnections]);
+      setSelectedConnections((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        ...newConnections,
+      ]);
     }
   }, [activeTab, pairings, selectedConnections]);
 
@@ -450,18 +516,24 @@ export default function Home() {
 
     // Create a Set of current pairing keys for fast lookup (normalized word order)
     const currentPairingKeys = new Set(
-      pairings.flatMap(pairing => {
+      pairings.flatMap((pairing) => {
         if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
           // Handle consolidated pairings - create keys for all term pairs
-          const versePositions = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
-          return pairing.allTermPairs.map(pairStr => {
-            const [term1, term2] = pairStr.split(' ↔ ').map(t => t.trim());
+          const versePositions = pairing.verses
+            .map((v) => v.position)
+            .sort((a, b) => a - b)
+            .join(',');
+          return pairing.allTermPairs.map((pairStr) => {
+            const [term1, term2] = pairStr.split(' ↔ ').map((t) => t.trim());
             const [word1, word2] = [term1, term2].sort();
             return `${word1}-${word2}-${versePositions}`;
           });
         } else {
           // Handle single pairing
-          const versePositions = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
+          const versePositions = pairing.verses
+            .map((v) => v.position)
+            .sort((a, b) => a - b)
+            .join(',');
           const [word1, word2] = [pairing.term1, pairing.term2].sort();
           return [`${word1}-${word2}-${versePositions}`];
         }
@@ -469,10 +541,14 @@ export default function Home() {
     );
 
     // Filter out matching connections in one pass (orphaned nodes automatically cleaned up)
-    setSelectedConnections(prev => {
+    setSelectedConnections((prev) => {
       const prevArray = Array.isArray(prev) ? prev : [];
-      const filteredConnections = prevArray.filter(conn => {
-        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+      const filteredConnections = prevArray.filter((conn) => {
+        const versePositions =
+          conn.versePositions
+            ?.slice()
+            .sort((a, b) => a - b)
+            .join(',') || '';
         const [word1, word2] = [conn.word1, conn.word2].sort();
         const key = `${word1}-${word2}-${versePositions}`;
         return !currentPairingKeys.has(key);
@@ -484,18 +560,27 @@ export default function Home() {
   // Calculate if all current pairings are selected (optimized with normalized keys)
   const allPairingsSelected = useMemo(() => {
     if (activeTab !== 'pairings' || pairings.length === 0) return false;
-    
-    const connections = Array.isArray(selectedConnections) ? selectedConnections : [];
+
+    const connections = Array.isArray(selectedConnections)
+      ? selectedConnections
+      : [];
     const connectionKeys = new Set(
-      connections.map(conn => {
-        const versePositions = conn.versePositions?.slice().sort((a, b) => a - b).join(',') || '';
+      connections.map((conn) => {
+        const versePositions =
+          conn.versePositions
+            ?.slice()
+            .sort((a, b) => a - b)
+            .join(',') || '';
         const [word1, word2] = [conn.word1, conn.word2].sort();
         return `${word1}-${word2}-${versePositions}`;
       })
     );
 
-    return pairings.every(pairing => {
-      const versePositions = pairing.verses.map(v => v.position).sort((a, b) => a - b).join(',');
+    return pairings.every((pairing) => {
+      const versePositions = pairing.verses
+        .map((v) => v.position)
+        .sort((a, b) => a - b)
+        .join(',');
       const [word1, word2] = [pairing.term1, pairing.term2].sort();
       const key = `${word1}-${word2}-${versePositions}`;
       return connectionKeys.has(key);
@@ -519,15 +604,19 @@ export default function Home() {
         isDarkMode={isDarkMode}
       />
 
-      <div className={`max-w-6xl mx-auto px-2 flex flex-col`} style={{ height: 'calc(100vh - 40px)' }}>
+      <div
+        className={`max-w-6xl mx-auto px-2 flex flex-col`}
+        style={{ height: 'calc(100vh - 40px)' }}
+      >
         {/* Header */}
         <div
-          className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(isDarkMode, 'card')}`}
+          className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(
+            isDarkMode,
+            'card'
+          )}`}
         >
           <div className='flex justify-between items-center mb-1'>
-            <h1
-              className={`text-base font-bold ${getTextClass(isDarkMode)}`}
-            >
+            <h1 className={`text-base font-bold ${getTextClass(isDarkMode)}`}>
               KJV Bible Search
             </h1>
             <div className='flex gap-0 rounded-sm overflow-clip'>
@@ -598,13 +687,24 @@ export default function Home() {
           >
             {/* Tab Navigation */}
             <div className={`flex mb-2 gap-1 items-center justify-between`}>
-              <div className="flex gap-1 items-center">
+              <div className='flex gap-1 items-center'>
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                     activeTab === 'all'
-                      ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
-                      : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
+                      ? `${getBackgroundClass(
+                          isDarkMode,
+                          'secondary'
+                        )} ${getTextClass(isDarkMode)} border-b-2 ${
+                          isDarkMode ? 'border-blue-400' : 'border-blue-500'
+                        }`
+                      : `${getBackgroundClass(
+                          isDarkMode,
+                          'secondary'
+                        )} ${getTextClass(
+                          isDarkMode,
+                          'muted'
+                        )} hover:${getTextClass(isDarkMode, 'secondary')}`
                   }`}
                 >
                   All Results ({results.length})
@@ -613,19 +713,37 @@ export default function Home() {
                   onClick={() => setActiveTab('pairings')}
                   className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                     activeTab === 'pairings'
-                      ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
-                      : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
+                      ? `${getBackgroundClass(
+                          isDarkMode,
+                          'secondary'
+                        )} ${getTextClass(isDarkMode)} border-b-2 ${
+                          isDarkMode ? 'border-blue-400' : 'border-blue-500'
+                        }`
+                      : `${getBackgroundClass(
+                          isDarkMode,
+                          'secondary'
+                        )} ${getTextClass(
+                          isDarkMode,
+                          'muted'
+                        )} hover:${getTextClass(isDarkMode, 'secondary')}`
                   }`}
                 >
                   Pairings ({pairings.length})
                 </button>
               </div>
-              
+
               {/* Select All Checkbox - Horizontally aligned with individual checkboxes */}
               {activeTab === 'pairings' && showGraph && pairings.length > 0 && (
-                <label className="mr-2 flex items-center cursor-pointer" title={allPairingsSelected ? 'Deselect all pairings' : 'Select all pairings'}>
+                <label
+                  className='mr-2 flex items-center cursor-pointer'
+                  title={
+                    allPairingsSelected
+                      ? 'Deselect all pairings'
+                      : 'Select all pairings'
+                  }
+                >
                   <input
-                    type="checkbox"
+                    type='checkbox'
                     checked={allPairingsSelected}
                     onChange={() => {
                       if (allPairingsSelected) {
@@ -648,7 +766,10 @@ export default function Home() {
             <div className='flex-1 min-h-0'>
               {error ? (
                 <div
-                  className={`flex items-center justify-center h-full ${getTextClass(isDarkMode, 'error')}`}
+                  className={`flex items-center justify-center h-full ${getTextClass(
+                    isDarkMode,
+                    'error'
+                  )}`}
                 >
                   <p className='text-sm'>{error}</p>
                 </div>
@@ -673,14 +794,21 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${getBackgroundClass(isDarkMode, 'card')}`}
+              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${getBackgroundClass(
+                isDarkMode,
+                'card'
+              )}`}
             >
               <div
-                className={`p-2 border-b flex-shrink-0 ${getBorderClass(isDarkMode)}`}
+                className={`p-2 border-b flex-shrink-0 ${getBorderClass(
+                  isDarkMode
+                )}`}
               >
                 <div className='flex justify-between items-center'>
                   <h3
-                    className={`text-sm font-medium ${getTextClass(isDarkMode)}`}
+                    className={`text-sm font-medium ${getTextClass(
+                      isDarkMode
+                    )}`}
                   >
                     Word Connections Graph
                   </h3>

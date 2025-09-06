@@ -3,14 +3,13 @@ export const APP_CONFIG = {
   // Search Configuration
   SEARCH: {
     MIN_TERM_LENGTH: 2,
-    MAX_SEARCH_TERMS: 8,
-    MAX_SEARCH_TERMS_PER_GROUP: 8,
+    MAX_SEARCH_TERMS: Infinity,
+    MAX_SEARCH_TERMS_PER_GROUP: Infinity,
     DEBOUNCE_DELAY: 500,
   },
   
   // Pairing Configuration
   PAIRINGS: {
-    MAX_TOTAL_PAIRINGS: 10000,
     MAX_PAIRINGS_PER_TERM_PAIR: 5000,
     MAX_PROXIMITY: 100,
   },
