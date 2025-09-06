@@ -84,63 +84,26 @@ export default function Home() {
     }
   }, [state.activeTabId, isInitialized, hasMounted, state.isInitialized, performSearch]);
 
-  // Convert reducer state to legacy TabManager format for TabBar component
-  const legacyTabManager = useMemo(() => ({
-    tabs: state.tabs.map(tab => ({
-      id: tab.id,
-      name: tab.name,
-      searchTerms: tab.searchTerms,
-      pairingsSearchTerms: tab.pairingsSearchTerms,
-      selectedTestament: tab.selectedTestament,
-      selectedBooks: tab.selectedBooks,
-      maxProximity: tab.maxProximity,
-      showFilters: tab.showFilters,
-      activeTab: tab.activeTab,
-      scrollPosition: 0,
-      isDarkMode: tab.isDarkMode,
-      showGraph: tab.showGraph,
-      selectedConnections: tab.selectedConnections,
-      selectedNodes: tab.selectedNodes,
-      graphTransform: tab.graphTransform,
-    })),
-    activeTabId: state.activeTabId,
-  }), [state]);
+  // Tab action handlers
+  const handleSwitchTab = useCallback((tabId: string) => {
+    actions.switchTab(tabId);
+  }, [actions]);
 
-  // Handle tab manager changes (convert from legacy format)
-  const handleTabManagerChange = useCallback((newTabManager: any) => {
-    if (newTabManager.activeTabId !== state.activeTabId) {
-      actions.switchTab(newTabManager.activeTabId);
-    }
-    
-    // Handle other tab operations
-    const currentTabIds = new Set(state.tabs.map(t => t.id));
-    const newTabIds = new Set(newTabManager.tabs.map((t: any) => t.id));
-    
-    // Check for removed tabs
-    for (const currentId of currentTabIds) {
-      if (!newTabIds.has(currentId)) {
-        actions.removeTab(currentId);
-        return;
-      }
-    }
-    
-    // Check for added tabs
-    for (const newTab of newTabManager.tabs) {
-      if (!currentTabIds.has(newTab.id)) {
-        actions.addTab(newTab.name);
-        return;
-      }
-    }
-    
-    // Check for renamed tabs
-    for (const newTab of newTabManager.tabs) {
-      const currentTab = state.tabs.find(t => t.id === newTab.id);
-      if (currentTab && currentTab.name !== newTab.name) {
-        actions.renameTab(newTab.id, newTab.name);
-        return;
-      }
-    }
-  }, [state, actions]);
+  const handleAddTab = useCallback(() => {
+    actions.addTab();
+  }, [actions]);
+
+  const handleRemoveTab = useCallback((tabId: string) => {
+    actions.removeTab(tabId);
+  }, [actions]);
+
+  const handleRenameTab = useCallback((tabId: string, name: string) => {
+    actions.renameTab(tabId, name);
+  }, [actions]);
+
+  const handleDuplicateTab = useCallback((tabId: string) => {
+    actions.duplicateTab(tabId);
+  }, [actions]);
 
   // Stop dev backup on unmount
   useEffect(() => {
@@ -165,31 +128,85 @@ export default function Home() {
 
   // Graph event handlers
   const handleToggleGraph = useCallback((connection: any) => {
-    const exists = activeTab.selectedConnections.some(conn => 
-      conn.word1 === connection.word1 && 
-      conn.word2 === connection.word2 && 
-      conn.reference === connection.reference
-    );
+    const versePositions = connection.versePositions || [];
+    const sortedPositions = versePositions
+      .slice()
+      .sort((a: number, b: number) => a - b)
+      .join(',');
+    const [word1, word2] = [connection.word1, connection.word2].sort();
+    const connectionKey = `${word1}-${word2}-${sortedPositions}`;
+
+    const exists = activeTab.selectedConnections.some(conn => {
+      const connVersePositions = conn.versePositions || [];
+      const connSortedPositions = connVersePositions
+        .slice()
+        .sort((a, b) => a - b)
+        .join(',');
+      const [connWord1, connWord2] = [conn.word1, conn.word2].sort();
+      const connKey = `${connWord1}-${connWord2}-${connSortedPositions}`;
+      return connKey === connectionKey;
+    });
     
     const newConnections = exists
-      ? activeTab.selectedConnections.filter(conn => 
-          !(conn.word1 === connection.word1 && 
-            conn.word2 === connection.word2 && 
-            conn.reference === connection.reference))
+      ? activeTab.selectedConnections.filter(conn => {
+          const connVersePositions = conn.versePositions || [];
+          const connSortedPositions = connVersePositions
+            .slice()
+            .sort((a, b) => a - b)
+            .join(',');
+          const [connWord1, connWord2] = [conn.word1, conn.word2].sort();
+          const connKey = `${connWord1}-${connWord2}-${connSortedPositions}`;
+          return connKey !== connectionKey;
+        })
       : [...activeTab.selectedConnections, connection];
     
     actions.updateGraphState({ selectedConnections: newConnections });
   }, [actions, activeTab.selectedConnections]);
 
   const handleSelectAllPairings = useCallback((pairings: any[]) => {
-    const newConnections = pairings.map(pairing => ({
-      word1: pairing.term1, // Use term1 instead of word1
-      word2: pairing.term2, // Use term2 instead of word2
-      reference: pairing.verses[0].reference,
-      versePositions: pairing.verses.map((v: any) => v.position),
-    }));
-    actions.updateGraphState({ selectedConnections: newConnections });
-  }, [actions]);
+    const existingConnections = activeTab.selectedConnections;
+    const existingKeys = new Set(
+      existingConnections.map((conn) => {
+        const versePositions = conn.versePositions
+          ?.slice()
+          .sort((a, b) => a - b)
+          .join(',') || '';
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        return `${word1}-${word2}-${versePositions}`;
+      })
+    );
+
+    const newConnections: any[] = [];
+
+    pairings.forEach((pairing) => {
+      const versePositions = pairing.verses.map((v: any) => v.position);
+      const verseRef = pairing.verses.length === 1
+        ? pairing.verses[0].reference
+        : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+
+      const sortedPositions = versePositions
+        .slice()
+        .sort((a: number, b: number) => a - b)
+        .join(',');
+      const [word1, word2] = [pairing.term1, pairing.term2].sort();
+      const key = `${word1}-${word2}-${sortedPositions}`;
+
+      if (!existingKeys.has(key)) {
+        newConnections.push({
+          word1: pairing.term1,
+          word2: pairing.term2,
+          reference: verseRef,
+          versePositions: versePositions,
+        });
+      }
+    });
+
+    if (newConnections.length > 0) {
+      actions.updateGraphState({ 
+        selectedConnections: [...existingConnections, ...newConnections] 
+      });
+    }
+  }, [actions, activeTab.selectedConnections]);
 
   const handleDeselectAllPairings = useCallback(() => {
     actions.updateGraphState({ selectedConnections: [] });
@@ -212,13 +229,28 @@ export default function Home() {
 
   // Computed values
   const allPairingsSelected = useCallback((pairings: any[]) => {
-    return pairings.length > 0 && pairings.every(pairing =>
-      activeTab.selectedConnections.some(conn =>
-        conn.word1 === pairing.term1 && // Use term1 instead of word1
-        conn.word2 === pairing.term2 && // Use term2 instead of word2
-        conn.reference === pairing.verses[0].reference
-      )
+    if (pairings.length === 0) return false;
+
+    const connectionKeys = new Set(
+      activeTab.selectedConnections.map((conn) => {
+        const versePositions = conn.versePositions
+          ?.slice()
+          .sort((a, b) => a - b)
+          .join(',') || '';
+        const [word1, word2] = [conn.word1, conn.word2].sort();
+        return `${word1}-${word2}-${versePositions}`;
+      })
     );
+
+    return pairings.every((pairing) => {
+      const versePositions = pairing.verses
+        .map((v: any) => v.position)
+        .sort((a: number, b: number) => a - b)
+        .join(',');
+      const [word1, word2] = [pairing.term1, pairing.term2].sort();
+      const key = `${word1}-${word2}-${versePositions}`;
+      return connectionKeys.has(key);
+    });
   }, [activeTab.selectedConnections]);
 
   // Calculate filter counts (simplified - could be moved to reducer if needed)
@@ -243,9 +275,14 @@ export default function Home() {
       )}`}
     >
       <TabBar
-        tabManager={legacyTabManager}
-        onTabManagerChange={handleTabManagerChange}
+        tabs={state.tabs}
+        activeTabId={state.activeTabId}
         isDarkMode={activeTab.isDarkMode}
+        onSwitchTab={handleSwitchTab}
+        onAddTab={handleAddTab}
+        onRemoveTab={handleRemoveTab}
+        onRenameTab={handleRenameTab}
+        onDuplicateTab={handleDuplicateTab}
       />
 
       <AppHeader

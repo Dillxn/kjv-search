@@ -3,18 +3,53 @@
 import { useState, useRef, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Tab } from '../components/ui/tab';
-import { TabManager, TabState, TabManagerService } from './tab-manager';
+
+interface TabState {
+  id: string;
+  name: string;
+  searchTerms: string;
+  pairingsSearchTerms: string;
+  selectedTestament: 'all' | 'old' | 'new';
+  selectedBooks: string[];
+  maxProximity: number;
+  showFilters: boolean;
+  activeTab: 'all' | 'pairings';
+  isDarkMode: boolean;
+  showGraph: boolean;
+  selectedConnections: Array<{
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions: number[];
+  }>;
+  selectedNodes: string[];
+  graphTransform: {
+    x: number;
+    y: number;
+    scale: number;
+  };
+}
 
 interface TabBarProps {
-  tabManager: TabManager;
-  onTabManagerChange: (tabManager: TabManager) => void;
+  tabs: TabState[];
+  activeTabId: string;
   isDarkMode: boolean;
+  onSwitchTab: (tabId: string) => void;
+  onAddTab: () => void;
+  onRemoveTab: (tabId: string) => void;
+  onRenameTab: (tabId: string, name: string) => void;
+  onDuplicateTab: (tabId: string) => void;
 }
 
 export function TabBar({
-  tabManager,
-  onTabManagerChange,
+  tabs,
+  activeTabId,
   isDarkMode,
+  onSwitchTab,
+  onAddTab,
+  onRemoveTab,
+  onRenameTab,
+  onDuplicateTab,
 }: TabBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -29,16 +64,16 @@ export function TabBar({
 
   const handleTabClick = (tabId: string) => {
     if (editingTabId) return; // Don't switch tabs while editing
-    onTabManagerChange(TabManagerService.switchTab(tabManager, tabId));
+    onSwitchTab(tabId);
   };
 
   const handleAddTab = () => {
-    onTabManagerChange(TabManagerService.addTab(tabManager));
+    onAddTab();
   };
 
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    onTabManagerChange(TabManagerService.removeTab(tabManager, tabId));
+    onRemoveTab(tabId);
   };
 
   const handleStartEdit = (e: React.MouseEvent, tab: TabState) => {
@@ -49,9 +84,7 @@ export function TabBar({
 
   const handleFinishEdit = () => {
     if (editingTabId) {
-      onTabManagerChange(
-        TabManagerService.renameTab(tabManager, editingTabId, editingName)
-      );
+      onRenameTab(editingTabId, editingName);
     }
     setEditingTabId(null);
     setEditingName('');
@@ -68,14 +101,14 @@ export function TabBar({
 
   const handleDuplicateTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    onTabManagerChange(TabManagerService.duplicateTab(tabManager, tabId));
+    onDuplicateTab(tabId);
   };
 
   return (
     <div className={`flex items-center`}>
       <div className='flex items-center gap-2 overflow-x-auto scrollbar-thin'>
-        {tabManager.tabs.map((tab) => {
-          const isActive = tab.id === tabManager.activeTabId;
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
           const isEditing = editingTabId === tab.id;
 
           return (
@@ -127,7 +160,7 @@ export function TabBar({
                     </svg>
                   </button>
 
-                  {tabManager.tabs.length > 1 && (
+                  {tabs.length > 1 && (
                     <button
                       onClick={(e) => handleCloseTab(e, tab.id)}
                       className={`p-0.5 rounded hover:bg-red-500 hover:text-white transition-colors ${
@@ -154,7 +187,7 @@ export function TabBar({
           );
         })}
         
-        {tabManager.tabs.length < 10 && (
+        {tabs.length < 10 && (
           <button
             onClick={handleAddTab}
             className={`flex items-center justify-center w-6 h-6 ml-1 rounded transition-colors ${

@@ -87,11 +87,11 @@ export class DevStorageHelper {
     // Backup localStorage during development
     this.backupInterval = setInterval(() => {
       try {
-        const tabManagerData = localStorage.getItem('kjv-tab-manager');
-        if (tabManagerData) {
+        const tabReducerData = localStorage.getItem('kjv-tab-reducer-state');
+        if (tabReducerData) {
           const backup = {
             timestamp: Date.now(),
-            data: tabManagerData,
+            data: tabReducerData,
           };
           localStorage.setItem(this.DEV_BACKUP_KEY, JSON.stringify(backup));
         }
@@ -123,11 +123,11 @@ export class DevStorageHelper {
       }
 
       const backup = JSON.parse(backupData);
-      const currentData = localStorage.getItem('kjv-tab-manager');
+      const currentData = localStorage.getItem('kjv-tab-reducer-state');
       
       // Only restore if current data is missing or backup is newer
       if (!currentData || (backup.timestamp && Date.now() - backup.timestamp < 30000)) {
-        localStorage.setItem('kjv-tab-manager', backup.data);
+        localStorage.setItem('kjv-tab-reducer-state', backup.data);
         
         return true;
       }

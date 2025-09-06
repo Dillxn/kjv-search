@@ -129,21 +129,32 @@ function loadStateFromStorage(): TabReducerState {
       }
 
       // Migrate tabs to include new fields
-      parsed.tabs = parsed.tabs.map(tab => ({
-        ...DEFAULT_TAB_STATE,
-        ...tab,
-        results: [], // Always start with empty results - they'll be regenerated
-        pairings: [], // Always start with empty pairings - they'll be regenerated
-        isLoading: false, // Reset loading state on load
-        error: '', // Reset error state on load
-        lastSearchKey: '', // Reset search key to force re-search
-        selectedConnections: (tab.selectedConnections || []).map(conn => ({
-          ...conn,
-          versePositions: conn.versePositions || [],
-        })),
-        selectedNodes: tab.selectedNodes || [],
-        graphTransform: tab.graphTransform || { x: 0, y: 0, scale: 1 },
-      }));
+      parsed.tabs = parsed.tabs.map(tab => {
+        const migratedTab = {
+          ...DEFAULT_TAB_STATE,
+          ...tab,
+          // Explicitly preserve user selections after spreading tab data
+          selectedConnections: (tab.selectedConnections || []).map(conn => ({
+            ...conn,
+            versePositions: conn.versePositions || [],
+          })),
+          selectedNodes: tab.selectedNodes || [],
+          graphTransform: tab.graphTransform || { x: 0, y: 0, scale: 1 },
+          // Reset transient state
+          results: [], // Always start with empty results - they'll be regenerated
+          pairings: [], // Always start with empty pairings - they'll be regenerated
+          isLoading: false, // Reset loading state on load
+          error: '', // Reset error state on load
+          lastSearchKey: '', // Reset search key to force re-search
+        };
+        
+        // Debug logging for loaded connections
+        if (migratedTab.selectedConnections.length > 0) {
+          console.log(`Loading tab "${migratedTab.name}" with selected connections:`, migratedTab.selectedConnections.length);
+        }
+        
+        return migratedTab;
+      });
 
       return { ...parsed, isInitialized: true };
     }
@@ -159,15 +170,37 @@ function loadStateFromStorage(): TabReducerState {
   return createDefaultState();
 }
 
+// Throttle saves to prevent excessive localStorage writes
+let saveTimeout: NodeJS.Timeout | null = null;
+let pendingState: TabReducerState | null = null;
+
 function saveStateToStorage(state: TabReducerState): void {
   if (typeof window === 'undefined') return;
 
-  try {
-    // Check storage usage and cleanup if needed
-    if (DevStorageHelper.isStorageNearLimit()) {
-      console.warn('localStorage near capacity, cleaning up old data');
-      DevStorageHelper.cleanupOldData();
-    }
+  // Store the latest state
+  pendingState = state;
+
+  // Clear existing timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+
+  // Throttle saves to every 100ms
+  saveTimeout = setTimeout(() => {
+    if (!pendingState) return;
+
+    try {
+      // Debug logging for selected connections
+      const activeTab = pendingState?.tabs.find(tab => tab.id === pendingState?.activeTabId);
+      if (activeTab && activeTab.selectedConnections.length > 0) {
+        console.log('Saving tab state with selected connections:', activeTab.selectedConnections.length);
+      }
+      
+      // Check storage usage and cleanup if needed
+      if (DevStorageHelper.isStorageNearLimit()) {
+        console.warn('localStorage near capacity, cleaning up old data');
+        DevStorageHelper.cleanupOldData();
+      }
 
     // Create a lightweight version for storage - exclude large data that can be regenerated
     const stateToSave = {
@@ -178,6 +211,7 @@ function saveStateToStorage(state: TabReducerState): void {
         results: [], // Don't store search results - they can be regenerated
         pairings: [], // Don't store pairings - they can be regenerated
         error: '', // Don't persist errors
+        // Keep selectedConnections, selectedNodes, and graphTransform - these are user selections that can't be regenerated
       })),
     };
     
@@ -188,7 +222,7 @@ function saveStateToStorage(state: TabReducerState): void {
     const estimatedNewSize = storageInfo.used + serialized.length;
     const maxSafeSize = 4 * 1024 * 1024; // 4MB conservative limit
     
-    if (estimatedNewSize > maxSafeSize || serialized.length > 1024 * 1024) { // 1MB per state
+    if (estimatedNewSize > maxSafeSize || serialized.length > 2 * 1024 * 1024) { // 2MB per state (increased from 1MB)
       console.warn('Tab state too large for localStorage, using minimal state');
       // Save only essential data
       const minimalState = {
@@ -204,10 +238,10 @@ function saveStateToStorage(state: TabReducerState): void {
           isDarkMode: tab.isDarkMode,
           showGraph: tab.showGraph,
           showFilters: tab.showFilters,
-          // Exclude large objects
-          selectedConnections: [],
-          selectedNodes: [],
-          graphTransform: { x: 0, y: 0, scale: 1 },
+          // Keep user selections even in minimal state - these are important
+          selectedConnections: tab.selectedConnections || [],
+          selectedNodes: tab.selectedNodes || [],
+          graphTransform: tab.graphTransform || { x: 0, y: 0, scale: 1 },
           results: [],
           pairings: [],
           isLoading: false,
@@ -229,11 +263,19 @@ function saveStateToStorage(state: TabReducerState): void {
         DevStorageHelper.cleanupOldData();
         localStorage.removeItem(STORAGE_KEY);
         
+        // Try to preserve at least the current tab's user selections
+        const currentTab = state.tabs.find(tab => tab.id === state.activeTabId);
         const emergencyState = {
           tabs: [{
             id: state.activeTabId,
-            name: 'Search 1',
+            name: currentTab?.name || 'Search 1',
             ...DEFAULT_TAB_STATE,
+            // Preserve user selections if possible
+            selectedConnections: currentTab?.selectedConnections || [],
+            selectedNodes: currentTab?.selectedNodes || [],
+            graphTransform: currentTab?.graphTransform || { x: 0, y: 0, scale: 1 },
+            isDarkMode: currentTab?.isDarkMode || false,
+            showGraph: currentTab?.showGraph || false,
           }],
           activeTabId: state.activeTabId,
           isInitialized: true,
@@ -250,7 +292,10 @@ function saveStateToStorage(state: TabReducerState): void {
         }
       }
     }
+  } finally {
+    pendingState = null;
   }
+  }, 100);
 }
 
 function tabReducer(state: TabReducerState, action: TabAction): TabReducerState {
