@@ -413,6 +413,7 @@ class KJVParser {
     group2Terms: string[],
     filters: SearchFilters = {}
   ): VersePairing[] {
+
     const pairings: VersePairing[] = [];
     const termToVerses = new Map<string, Verse[]>();
     const processedPairings = new Set<string>();
@@ -431,6 +432,8 @@ class KJVParser {
     const limitedGroup1 = validGroup1.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
     const limitedGroup2 = validGroup2.slice(0, MAX_SEARCH_TERMS_PER_GROUP);
 
+
+
     if (group1Terms.length > MAX_SEARCH_TERMS_PER_GROUP) {
       console.warn(
         `Limited group1 terms from ${group1Terms.length} to ${MAX_SEARCH_TERMS_PER_GROUP}`
@@ -444,6 +447,7 @@ class KJVParser {
 
     // Get verses for each search term in both groups using word-boundary matching
     const allTerms = [...limitedGroup1, ...limitedGroup2];
+
     for (const term of allTerms) {
       const normalizedTerm = term.toLowerCase().trim();
       if (!normalizedTerm || normalizedTerm.length < 2) continue;
@@ -469,7 +473,10 @@ class KJVParser {
       }
 
       // Store filtered verses for this term
-      termToVerses.set(term, Array.from(matchingVerses));
+      const versesArray = Array.from(matchingVerses);
+      termToVerses.set(term, versesArray);
+      
+
     }
 
     // Generate pairings only between terms from different groups
@@ -499,6 +506,7 @@ class KJVParser {
           true
         );
 
+
         // Filter out already processed pairings to prevent duplicates
         for (const pairing of pairPairings) {
           const pairingKey =
@@ -519,6 +527,7 @@ class KJVParser {
       if (pairings.length >= MAX_TOTAL_PAIRINGS) break;
     }
 
+    
     return pairings;
   }
 

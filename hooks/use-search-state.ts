@@ -138,23 +138,25 @@ export function useSearchState() {
       let versePairings: VersePairing[] = [];
       if (activeTab === 'pairings') {
         const mainTerms = debouncedSearchTerms
-          .split(' ')
+          .split(/\s+/)
           .map((term) => term.trim())
           .filter((term) => term);
         const pairingsTerms = debouncedPairingsSearchTerms
-          .split(' ')
+          .split(/\s+/)
           .map((term) => term.trim())
           .filter((term) => term);
 
+
         if (mainTerms.length > 0 && pairingsTerms.length > 0) {
+
           versePairings = kjvParser
-            .findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters)
-            .sort((a, b) => {
-              if (a.proximity !== b.proximity) {
-                return a.proximity - b.proximity;
-              }
-              return a.verses[0].position - b.verses[0].position;
-            });
+            .findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters);
+          versePairings = versePairings.sort((a, b) => {
+            if (a.proximity !== b.proximity) {
+              return a.proximity - b.proximity;
+            }
+            return a.verses[0].position - b.verses[0].position;
+          });
         }
       } else {
         // For all results tab, use traditional pairings logic

@@ -43,27 +43,27 @@ export class TabManagerService {
   static loadTabManager(): TabManager {
     // Check if we're in a browser environment
     if (typeof window === 'undefined') {
-      console.log('Not in browser environment, creating default tab manager');
+      
       return this.createDefaultTabManager();
     }
 
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
-      console.log('Loading tab manager from localStorage:', this.STORAGE_KEY, stored ? 'found' : 'not found');
+      
       
       if (stored) {
         const parsed = JSON.parse(stored) as TabManager;
-        console.log('Parsed tab manager:', parsed);
+        
         
         // Ensure we have at least one tab
         if (parsed.tabs.length === 0) {
-          console.log('No tabs found, creating default');
+          
           return this.createDefaultTabManager();
         }
         
         // Ensure activeTabId exists in tabs
         if (!parsed.tabs.find(tab => tab.id === parsed.activeTabId)) {
-          console.log('Active tab ID not found, using first tab');
+          
           parsed.activeTabId = parsed.tabs[0].id;
         }
         
@@ -76,7 +76,7 @@ export class TabManagerService {
           })),
         }));
         
-        console.log('Successfully loaded tab manager with', parsed.tabs.length, 'tabs');
+        
         return parsed;
       }
     } catch (error) {
@@ -84,13 +84,13 @@ export class TabManagerService {
       // Clear corrupted data
       try {
         localStorage.removeItem(this.STORAGE_KEY);
-        console.log('Cleared corrupted tab manager data');
+        
       } catch (clearError) {
         console.error('Failed to clear corrupted data:', clearError);
       }
     }
     
-    console.log('Creating default tab manager');
+    
     return this.createDefaultTabManager();
   }
 
@@ -109,7 +109,7 @@ export class TabManagerService {
 
       const serialized = JSON.stringify(tabManager);
       localStorage.setItem(this.STORAGE_KEY, serialized);
-      console.log('Tab manager saved to localStorage:', this.STORAGE_KEY, `(${serialized.length} chars)`);
+      
     } catch (error) {
       console.error('Failed to save tab manager to localStorage:', error);
       // Try to clear localStorage if it's full
@@ -117,7 +117,7 @@ export class TabManagerService {
         try {
           localStorage.removeItem(this.STORAGE_KEY);
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(tabManager));
-          console.log('Cleared and re-saved tab manager to localStorage');
+          
         } catch (retryError) {
           console.error('Failed to save even after clearing:', retryError);
         }

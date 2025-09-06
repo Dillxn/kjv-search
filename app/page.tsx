@@ -72,10 +72,10 @@ export default function Home() {
       setHasMounted(true);
 
       // Test localStorage functionality
-      console.log('=== localStorage Debug Info ===');
+      
       testLocalStorage();
       getLocalStorageInfo();
-      console.log('==============================');
+      
 
       // Start dev backup in development mode
       if (process.env.NODE_ENV === 'development') {
@@ -84,7 +84,7 @@ export default function Home() {
 
       const currentTabState = TabManagerService.getActiveTab(tabManager);
       if (currentTabState) {
-        console.log('Loading tab state:', currentTabState);
+        
         // Load all tab state on mount
         setSearchTerms(currentTabState.searchTerms);
         setPairingsSearchTerms(currentTabState.pairingsSearchTerms);
@@ -116,9 +116,9 @@ export default function Home() {
   useEffect(() => {
     const initializeKJV = async () => {
       try {
-        console.log('Starting KJV initialization...');
+        
         await kjvParser.fetchAndParse();
-        console.log(
+        
           'KJV initialization complete, verses loaded:',
           kjvParser.getVerses().length
         );

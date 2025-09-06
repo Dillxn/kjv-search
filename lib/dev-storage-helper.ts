@@ -29,14 +29,14 @@ export class DevStorageHelper {
       }
     }, 2000);
 
-    console.log('🔧 Dev storage backup started');
+    
   }
 
   static stopDevBackup(): void {
     if (this.backupInterval) {
       clearInterval(this.backupInterval);
       this.backupInterval = null;
-      console.log('🔧 Dev storage backup stopped');
+      
     }
   }
 
@@ -57,7 +57,7 @@ export class DevStorageHelper {
       // Only restore if current data is missing or backup is newer
       if (!currentData || (backup.timestamp && Date.now() - backup.timestamp < 30000)) {
         localStorage.setItem('kjv-tab-manager', backup.data);
-        console.log('🔧 Restored from dev backup');
+        
         return true;
       }
     } catch (error) {

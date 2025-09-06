@@ -9,7 +9,11 @@ interface TabBarProps {
   isDarkMode: boolean;
 }
 
-export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarProps) {
+export function TabBar({
+  tabManager,
+  onTabManagerChange,
+  isDarkMode,
+}: TabBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +47,9 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
 
   const handleFinishEdit = () => {
     if (editingTabId) {
-      onTabManagerChange(TabManagerService.renameTab(tabManager, editingTabId, editingName));
+      onTabManagerChange(
+        TabManagerService.renameTab(tabManager, editingTabId, editingName)
+      );
     }
     setEditingTabId(null);
     setEditingName('');
@@ -65,7 +71,7 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
 
   return (
     <div className={`flex items-center gap-1 px-2 py-1`}>
-      <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-thin">
+      <div className='flex items-center gap-1 flex-1 overflow-x-auto scrollbar-thin'>
         {tabManager.tabs.map((tab) => {
           const isActive = tab.id === tabManager.activeTabId;
           const isEditing = editingTabId === tab.id;
@@ -79,15 +85,15 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
                     ? 'bg-gray-700 text-white border-b-2 border-blue-400'
                     : 'bg-gray-100 text-gray-900 border-b-2 border-blue-500'
                   : isDarkMode
-                    ? 'bg-gray-900 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  ? 'bg-gray-900 text-gray-300 hover:bg-gray-700'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => handleTabClick(tab.id)}
             >
               {isEditing ? (
                 <input
                   ref={editInputRef}
-                  type="text"
+                  type='text'
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
                   onBlur={handleFinishEdit}
@@ -99,7 +105,7 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
                 />
               ) : (
                 <span
-                  className="text-xs font-medium truncate flex-1 min-w-0"
+                  className='text-xs font-medium truncate flex-1 min-w-0'
                   onDoubleClick={(e) => handleStartEdit(e, tab)}
                   title={tab.name}
                 >
@@ -108,29 +114,41 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
               )}
 
               {!isEditing && (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
                   <button
                     onClick={(e) => handleDuplicateTab(e, tab.id)}
                     className={`p-0.5 rounded hover:bg-opacity-20 ${
                       isDarkMode ? 'hover:bg-white' : 'hover:bg-black'
                     }`}
-                    title="Duplicate tab"
+                    title='Duplicate tab'
                   >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M7 7h6v6H7V7zM5 5v10h10V5H5zM3 3h14v14H3V3z" />
+                    <svg
+                      className='w-3 h-3'
+                      fill='currentColor'
+                      viewBox='0 0 20 20'
+                    >
+                      <path d='M7 7h6v6H7V7zM5 5v10h10V5H5zM3 3h14v14H3V3z' />
                     </svg>
                   </button>
-                  
+
                   {tabManager.tabs.length > 1 && (
                     <button
                       onClick={(e) => handleCloseTab(e, tab.id)}
                       className={`p-0.5 rounded hover:bg-red-500 hover:text-white transition-colors ${
                         isDarkMode ? 'text-gray-400' : 'text-gray-500'
                       }`}
-                      title="Close tab"
+                      title='Close tab'
                     >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      <svg
+                        className='w-3 h-3'
+                        fill='currentColor'
+                        viewBox='0 0 20 20'
+                      >
+                        <path
+                          fillRule='evenodd'
+                          d='M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z'
+                          clipRule='evenodd'
+                        />
                       </svg>
                     </button>
                   )}
@@ -149,10 +167,14 @@ export function TabBar({ tabManager, onTabManagerChange, isDarkMode }: TabBarPro
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
-          title="Add new tab"
+          title='Add new tab'
         >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+          <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
+            <path
+              fillRule='evenodd'
+              d='M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z'
+              clipRule='evenodd'
+            />
           </svg>
         </button>
       )}
