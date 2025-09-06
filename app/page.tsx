@@ -12,21 +12,13 @@ import { FilterControls } from '../components/search/filter-controls';
 import { SearchResults } from '../components/search/search-results';
 import { useSearchState } from '../hooks/use-search-state';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
-import {
-  MoonStar,
-  MoonStarIcon,
-  Sun,
-  SunIcon,
-  Workflow,
-  WorkflowIcon,
-} from 'lucide-react';
+import { MoonStarIcon, SunIcon, WorkflowIcon } from 'lucide-react';
 
 export default function Home() {
   // Tab management
   const [tabManager, setTabManager] = useState<TabManager>(() =>
     TabManagerService.loadTabManager()
   );
-  const activeTabState = TabManagerService.getActiveTab(tabManager);
 
   // Search state
   const {
@@ -60,6 +52,7 @@ export default function Home() {
       word1: string;
       word2: string;
       reference: string;
+      versePositions?: number[];
     }>
   >([]);
 
@@ -94,7 +87,14 @@ export default function Home() {
         setSelectedConnections(Array.isArray(connections) ? connections : []);
       }
     }
-  }, [hasMounted, tabManager]);
+  }, [
+    hasMounted,
+    setPairingsSearchTerms,
+    setSearchTerms,
+    setSelectedBooks,
+    setSelectedTestament,
+    tabManager,
+  ]);
 
   // Initialize KJV parser
   useEffect(() => {
@@ -171,21 +171,17 @@ export default function Home() {
         currentActiveTab.id !== newActiveTab.id
       ) {
         // Save current tab state before switching
-        const updatedTabManager = TabManagerService.updateTabState(
-          tabManager,
-          currentActiveTab.id,
-          {
-            searchTerms,
-            pairingsSearchTerms,
-            selectedTestament,
-            selectedBooks,
-            showFilters,
-            activeTab,
-            isDarkMode,
-            showGraph,
-            selectedConnections,
-          }
-        );
+        TabManagerService.updateTabState(tabManager, currentActiveTab.id, {
+          searchTerms,
+          pairingsSearchTerms,
+          selectedTestament,
+          selectedBooks,
+          showFilters,
+          activeTab,
+          isDarkMode,
+          showGraph,
+          selectedConnections,
+        });
 
         // Load new tab state
         setSearchTerms(newActiveTab.searchTerms);
@@ -213,6 +209,10 @@ export default function Home() {
       isDarkMode,
       showGraph,
       selectedConnections,
+      setSearchTerms,
+      setPairingsSearchTerms,
+      setSelectedTestament,
+      setSelectedBooks,
     ]
   );
 
@@ -314,14 +314,16 @@ export default function Home() {
       const connections = Array.isArray(selectedConnections)
         ? selectedConnections
         : [];
-      const versePositions = pairing.verses.map((v) => v.position);
+      const versePositions = pairing.verses.map((v: any) => v.position);
 
       // Check if this specific pairing (with same verse positions) is already in graph
       const isInGraph = connections.some((conn) => {
         const positionsMatch =
           conn.versePositions &&
           conn.versePositions.length === versePositions.length &&
-          conn.versePositions.every((pos) => versePositions.includes(pos));
+          conn.versePositions.every((pos: number) =>
+            versePositions.includes(pos)
+          );
 
         const wordsMatch =
           (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
@@ -516,12 +518,12 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-lg shadow-md ${
+              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${
                 isDarkMode ? 'bg-gray-800' : 'bg-white'
               }`}
             >
               <div
-                className={`p-2 border-b ${
+                className={`p-2 border-b flex-shrink-0 ${
                   isDarkMode ? 'border-gray-700' : 'border-gray-200'
                 }`}
               >
@@ -545,7 +547,7 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              <div className='flex-1' style={{ height: containerHeight - 60 }}>
+              <div className='flex-1 min-h-0'>
                 <GraphVisualizer connections={selectedConnections} />
               </div>
             </div>

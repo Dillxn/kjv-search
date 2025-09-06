@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 interface Node {
   id: string;
@@ -20,6 +20,7 @@ interface GraphVisualizerProps {
     word1: string;
     word2: string;
     reference: string;
+    versePositions?: number[];
   }>;
 }
 
@@ -40,20 +41,29 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     const updateCanvasSize = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        const width = Math.max(400, Math.floor(rect.width - 8)); // Account for border and padding
-        const height = Math.max(300, Math.floor(rect.height - 8));
+        const width = Math.max(300, Math.floor(rect.width - 4)); // Minimal padding
+        const height = Math.max(200, Math.floor(rect.height - 4));
         setCanvasSize({ width, height });
       }
     };
 
-    // Initial size update with a small delay to ensure container is rendered
-    const timer = setTimeout(updateCanvasSize, 100);
+    // Use ResizeObserver for better responsiveness
+    const resizeObserver = new ResizeObserver(() => {
+      updateCanvasSize();
+    });
 
-    // Also update on resize
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Initial size update
+    updateCanvasSize();
+
+    // Fallback window resize listener
     window.addEventListener('resize', updateCanvasSize);
 
     return () => {
-      clearTimeout(timer);
+      resizeObserver.disconnect();
       window.removeEventListener('resize', updateCanvasSize);
     };
   }, []);
@@ -102,11 +112,53 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
     setTransform({ x: 0, y: 0, scale: 1 });
   };
 
+  const fitToView = useCallback(() => {
+    if (nodes.length === 0) {
+      resetView();
+      return;
+    }
+
+    // Calculate bounding box of all nodes
+    const padding = 100; // Extra padding around the content
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.x - 35); // Account for node radius
+      maxX = Math.max(maxX, node.x + 35);
+      minY = Math.min(minY, node.y - 35);
+      maxY = Math.max(maxY, node.y + 35);
+    });
+
+    const contentWidth = maxX - minX + 2 * padding;
+    const contentHeight = maxY - minY + 2 * padding;
+
+    // Calculate scale to fit content in canvas
+    const scaleX = canvasSize.width / contentWidth;
+    const scaleY = canvasSize.height / contentHeight;
+    const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 100%
+
+    // Calculate center position
+    const contentCenterX = (minX + maxX) / 2;
+    const contentCenterY = (minY + maxY) / 2;
+    const canvasCenterX = canvasSize.width / 2;
+    const canvasCenterY = canvasSize.height / 2;
+
+    const x = canvasCenterX - contentCenterX * scale;
+    const y = canvasCenterY - contentCenterY * scale;
+
+    setTransform({ x, y, scale });
+  }, [nodes, canvasSize]);
+
+  // Track if we need to auto-fit
+  const [shouldAutoFit, setShouldAutoFit] = useState(false);
+
   // Update graph when connections change
   useEffect(() => {
     if (connections.length === 0) {
       setNodes([]);
       setEdges([]);
+      resetView();
       return;
     }
 
@@ -114,6 +166,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       const nodeMap = new Map<string, Node>();
       const newNodes: Node[] = [];
       const newEdges: Edge[] = [];
+      const hadNodes = prevNodes.length > 0;
 
       // Build map of existing nodes first
       prevNodes.forEach((node) => {
@@ -166,9 +219,63 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
       // Update edges in a separate effect to avoid dependency issues
       setEdges(newEdges);
 
+      // Mark for auto-fit when first nodes are added or when starting fresh
+      if (!hadNodes && newNodes.length > 0) {
+        setShouldAutoFit(true);
+      }
+
       return newNodes;
     });
   }, [connections]);
+
+  // Auto-fit effect - separate from the nodes update
+  useEffect(() => {
+    if (shouldAutoFit && nodes.length > 0) {
+      setTimeout(() => {
+        fitToView();
+        setShouldAutoFit(false);
+      }, 50);
+    }
+  }, [shouldAutoFit, nodes.length, fitToView]);
+
+  // Auto-fit when canvas size changes and we have nodes
+  useEffect(() => {
+    if (nodes.length > 0) {
+      // Small delay to ensure canvas is properly resized
+      const timeoutId = setTimeout(() => {
+        // Inline the fit logic to avoid dependency issues
+        const padding = 100;
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        nodes.forEach(node => {
+          minX = Math.min(minX, node.x - 35);
+          maxX = Math.max(maxX, node.x + 35);
+          minY = Math.min(minY, node.y - 35);
+          maxY = Math.max(maxY, node.y + 35);
+        });
+
+        const contentWidth = maxX - minX + 2 * padding;
+        const contentHeight = maxY - minY + 2 * padding;
+
+        const scaleX = canvasSize.width / contentWidth;
+        const scaleY = canvasSize.height / contentHeight;
+        const scale = Math.min(scaleX, scaleY, 1);
+
+        const contentCenterX = (minX + maxX) / 2;
+        const contentCenterY = (minY + maxY) / 2;
+        const canvasCenterX = canvasSize.width / 2;
+        const canvasCenterY = canvasSize.height / 2;
+
+        const x = canvasCenterX - contentCenterX * scale;
+        const y = canvasCenterY - contentCenterY * scale;
+
+        setTransform({ x, y, scale });
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [canvasSize.width, canvasSize.height, nodes]);
 
   // Pan and zoom event handlers
   useEffect(() => {
@@ -397,19 +504,27 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
   }, [nodes, edges, transform]);
 
   return (
-    <div ref={containerRef} className='w-full h-full p-1 relative'>
+    <div ref={containerRef} className='w-full h-full relative overflow-hidden'>
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        className='border border-gray-300 bg-white block'
+        className='border border-gray-300 bg-white block w-full h-full'
         style={{
-          width: canvasSize.width,
-          height: canvasSize.height,
+          maxWidth: '100%',
+          maxHeight: '100%',
+          objectFit: 'contain',
         }}
       />
       {nodes.length > 0 && (
         <div className='absolute top-2 right-2 flex gap-1'>
+          <button
+            onClick={fitToView}
+            className='px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors'
+            title='Fit graph to view'
+          >
+            Fit to View
+          </button>
           <button
             onClick={resetView}
             className='px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors'
