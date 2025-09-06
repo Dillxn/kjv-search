@@ -161,7 +161,7 @@ export function GraphCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Set background color to ensure it's not transparent
-    ctx.fillStyle = isDarkMode ? '#1f2937' : '#ffffff';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
