@@ -25,14 +25,14 @@ export class PairingGenerator {
     const pairings: VersePairing[] = [];
     const processedPairs = new Set<string>();
 
-    console.log(`findPairingsForTerms: ${term1} (${verses1.length} verses) ↔ ${term2} (${verses2.length} verses)`);
+    
 
     // Find same-verse pairings
     const commonVerses = verses1.filter((v1) =>
       verses2.some((v2) => v1.position === v2.position)
     );
 
-    console.log(`Found ${commonVerses.length} common verses for ${term1} ↔ ${term2}`);
+    
 
     for (const verse of commonVerses) {
       const pairingKey = `same-${verse.position}-${term1}-${term2}`;
@@ -94,7 +94,7 @@ export class PairingGenerator {
     const processedPairings = new Set<string>();
     const termArray = Array.from(termToVerses.keys());
 
-    console.log('generateAllPairingsAsync called with terms:', termArray);
+    
     console.log('Term to verses mapping:', 
       Array.from(termToVerses.entries()).map(([term, verses]) => ({
         term,
@@ -131,7 +131,7 @@ export class PairingGenerator {
       }
     }
 
-    console.log('Generated term pairs for processing:', termPairs.map(tp => `${tp.term1} ↔ ${tp.term2}`));
+    
 
     // Sort by priority (highest first)
     termPairs.sort((a, b) => b.priority - a.priority);
@@ -168,7 +168,7 @@ export class PairingGenerator {
       );
 
       if (termPairings.length > 0) {
-        console.log(`Found ${termPairings.length} pairings for ${term1} ↔ ${term2}`);
+        
       }
 
       for (const pairing of termPairings) {
@@ -300,7 +300,7 @@ export class PairingGenerator {
 
   // Consolidate pairings that share verses but have different word combinations
   static consolidatePairings(pairings: VersePairing[], termToVerses?: Map<string, Verse[]>, group1Terms?: string[], group2Terms?: string[]): VersePairing[] {
-    console.log('consolidatePairings called with', pairings.length, 'pairings');
+    
 
     const verseGroupMap = new Map<string, VersePairing[]>();
 
@@ -399,8 +399,8 @@ export class PairingGenerator {
         }
       }
       
-      console.log(`Verse group has ${allTerms.length} unique terms: [${allTerms.join(', ')}]`);
-      console.log(`Generated ${validPairs.length} valid term pairs: [${validPairs.join(', ')}]`);
+      
+      
 
       // Create consolidated pairing with valid term pairs
       const consolidatedPairing: VersePairing = {

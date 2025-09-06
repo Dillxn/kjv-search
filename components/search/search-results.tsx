@@ -12,7 +12,6 @@ interface SearchResultsProps {
   activeTab: 'all' | 'pairings';
   searchTerms: string;
   pairingsSearchTerms: string;
-  containerHeight: number;
   isDarkMode: boolean;
   scrollPositionKey: string;
   showGraph: boolean;
@@ -31,7 +30,6 @@ export function SearchResults({
   activeTab,
   searchTerms,
   pairingsSearchTerms,
-  containerHeight,
   isDarkMode,
   scrollPositionKey,
   showGraph,
@@ -104,7 +102,6 @@ export function SearchResults({
     return (
       <VirtualScroll
         items={results}
-        containerHeight={containerHeight}
         renderItem={renderResult}
         estimatedItemHeight={60}
         className={`${
@@ -131,7 +128,6 @@ export function SearchResults({
     return (
       <VirtualScroll
         items={pairings}
-        containerHeight={containerHeight}
         renderItem={renderPairing}
         estimatedItemHeight={60}
         className={`${

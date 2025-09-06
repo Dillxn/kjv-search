@@ -7,15 +7,15 @@ export function highlightWithRegex(
   hasBorder: boolean = false
 ): string {
   if (!RegexUtils.isValidSearchTerm(term)) {
-    console.log(`⚠️ Term "${term}" too short, skipping`);
+    
     return text;
   }
   
   const regex = RegexUtils.createWordBoundaryRegex(term);
-  console.log(`🔍 Created regex for "${term}":`, regex);
+  
   
   const matches = text.match(regex);
-  console.log(`📍 Matches found for "${term}":`, matches);
+  
   
   const borderClass = hasBorder ? 'border' : '';
   
@@ -23,7 +23,7 @@ export function highlightWithRegex(
     regex,
     (match) => {
       const replacement = `<mark class="${colorClass} ${borderClass} px-0.5 rounded">${match}</mark>`;
-      console.log(`🔄 Replacing "${match}" with:`, replacement);
+      
       return replacement;
     }
   );

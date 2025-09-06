@@ -55,7 +55,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
-  const [containerHeight, setContainerHeight] = useState(400);
+
   const [activeTab, setActiveTab] = useState<'all' | 'pairings'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
@@ -133,17 +133,7 @@ export default function Home() {
     initializeKJV();
   }, []);
 
-  // Set container height and handle resize
-  useEffect(() => {
-    const updateHeight = () => {
-      setContainerHeight(
-        window.innerHeight - APP_CONFIG.UI.CONTAINER_BASE_OFFSET
-      );
-    };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
+  // Remove hardcoded height calculation - use flexbox instead
 
   // Perform search when dependencies change
   useEffect(() => {
@@ -365,9 +355,7 @@ export default function Home() {
 
             // Debug: log what's being filtered
             if (exists) {
-              console.log(`Skipping existing connection: ${term1} ↔ ${term2}`);
             } else {
-              console.log(`Adding new connection: ${term1} ↔ ${term2}`);
             }
 
             return !exists;
@@ -555,7 +543,9 @@ export default function Home() {
 
   return (
     <div
-      className={`h-screen overflow-hidden ${getBackgroundClass(isDarkMode)}`}
+      className={`h-screen flex flex-col overflow-hidden ${getBackgroundClass(
+        isDarkMode
+      )}`}
     >
       <TabBar
         tabManager={tabManager}
@@ -563,10 +553,7 @@ export default function Home() {
         isDarkMode={isDarkMode}
       />
 
-      <div
-        className={`max-w-6xl mx-auto px-2 flex flex-col`}
-        style={{ height: 'calc(100vh - 40px)' }}
-      >
+      <div className={`px-2 flex flex-col flex-1 min-h-0`}>
         {/* Header */}
         <div
           className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(
@@ -637,7 +624,7 @@ export default function Home() {
         </div>
 
         {/* Content Area */}
-        <div className='flex-1 flex gap-2 min-h-0'>
+        <div className='flex-1 flex gap-2 min-h-0 pb-4'>
           {/* Results Panel */}
           <div
             className={`flex-1 flex flex-col min-h-0 ${
@@ -645,7 +632,9 @@ export default function Home() {
             }`}
           >
             {/* Tab Navigation */}
-            <div className={`flex mb-2 gap-1 items-center justify-between`}>
+            <div
+              className={`flex mb-2 gap-1 items-center justify-between flex-shrink-0`}
+            >
               <div className='flex gap-1 items-center'>
                 <button
                   onClick={() => setActiveTab('all')}
@@ -739,7 +728,6 @@ export default function Home() {
                   activeTab={activeTab}
                   searchTerms={searchTerms}
                   pairingsSearchTerms={pairingsSearchTerms}
-                  containerHeight={containerHeight}
                   isDarkMode={isDarkMode}
                   scrollPositionKey={scrollPositionKey}
                   showGraph={showGraph}

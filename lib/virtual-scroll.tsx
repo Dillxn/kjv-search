@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 interface VirtualScrollProps<T> {
   items: T[];
   itemHeight?: number | ((item: T, index: number) => number);
-  containerHeight: number;
   renderItem: (item: T, index: number) => React.ReactNode;
   overscan?: number;
   className?: string;
@@ -16,7 +15,6 @@ interface VirtualScrollProps<T> {
 export function VirtualScroll<T>({
   items,
   itemHeight,
-  containerHeight,
   renderItem,
   overscan = 5,
   className = '',
@@ -24,10 +22,25 @@ export function VirtualScroll<T>({
   localStorageKey
 }: VirtualScrollProps<T>) {
   const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(400); // Default fallback
   const [measuredHeights, setMeasuredHeights] = useState<Map<number, number>>(new Map());
   const scrollElementRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Simple height measurement on mount and resize
+  useEffect(() => {
+    const updateHeight = () => {
+      if (scrollElementRef.current) {
+        const rect = scrollElementRef.current.getBoundingClientRect();
+        setContainerHeight(rect.height);
+      }
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   // Restore scroll position from localStorage on mount
   useEffect(() => {
@@ -157,7 +170,7 @@ export function VirtualScroll<T>({
       ref={scrollElementRef}
       className={`overflow-auto ${className}`}
       style={{ 
-        height: containerHeight,
+        height: '100%',
         scrollbarWidth: 'auto', // Ensure scrollbar is visible on Firefox
         scrollbarGutter: 'stable' // Reserve space for scrollbar
       }}
