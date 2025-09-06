@@ -8,7 +8,7 @@ interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  label: string;
+  label?: string;
   isDarkMode: boolean;
   isPairingsInput?: boolean;
 }
@@ -123,7 +123,7 @@ export function SearchInput({
           suppressContentEditableWarning={true}
           data-placeholder={placeholder}
           onInput={handleInput}
-          className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[2.25rem] ${getBackgroundClass(isDarkMode, 'input')} ${getBorderClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 [&:empty]:before:pointer-events-none`}
+          className={`w-full px-1.5 py-1 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${getBackgroundClass(isDarkMode, 'input')} ${getBorderClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 [&:empty]:before:pointer-events-none`}
         />
       </div>
     </div>

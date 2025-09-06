@@ -50,7 +50,7 @@ export function Slider({
           value={value}
           onChange={handleChange}
           className={`
-            w-full h-2 rounded-lg appearance-none cursor-pointer
+            w-full h-2 rounded-sm appearance-none cursor-pointer
             ${isDarkMode 
               ? 'bg-gray-700 slider-thumb-dark' 
               : 'bg-gray-200 slider-thumb-light'

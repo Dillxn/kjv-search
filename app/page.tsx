@@ -356,13 +356,13 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-lg shadow-md flex flex-col gap-2 p-2 min-h-0 ${getBackgroundClass(
+              className={`w-1/2 rounded-sm shadow-md flex flex-col min-h-0 ${getBackgroundClass(
                 isDarkMode,
                 'card'
               )}`}
             >
               <div
-                className={`border-b flex-shrink-0 pb-2 ${getBorderClass(
+                className={`flex-shrink-0 p-2 pl-2.5 ${getBorderClass(
                   isDarkMode
                 )}`}
               >
@@ -374,16 +374,6 @@ export default function Home() {
                   >
                     Word Connections Graph
                   </h3>
-                  <button
-                    onClick={() => setSelectedConnections([])}
-                    className={`text-xs px-2 py-1 rounded transition-colors ${
-                      isDarkMode
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    Clear All
-                  </button>
                 </div>
               </div>
               <div className='flex-1 min-h-0'>

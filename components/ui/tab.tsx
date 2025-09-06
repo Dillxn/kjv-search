@@ -21,7 +21,7 @@ export function Tab({
   title,
   variant = 'simple',
 }: TabProps) {
-  const baseClasses = `text-xs font-medium rounded-sm cursor-pointer transition-all duration-200 ${
+  const baseClasses = `text-xs font-medium rounded-xs cursor-pointer transition-all duration-200 ${
     isActive
       ? isDarkMode
         ? 'bg-gray-700 text-white border-b-2 border-blue-400'

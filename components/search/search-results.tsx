@@ -106,7 +106,7 @@ export function SearchResults({
         estimatedItemHeight={60}
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
-        } rounded-lg shadow-md p-2`}
+        } rounded-sm shadow-md p-2`}
         localStorageKey={scrollPositionKey}
       />
     );
@@ -132,7 +132,7 @@ export function SearchResults({
         estimatedItemHeight={60}
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
-        } rounded-lg shadow-md p-2`}
+        } rounded-sm shadow-md p-2`}
         localStorageKey={scrollPositionKey}
       />
     );

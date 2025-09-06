@@ -54,7 +54,7 @@ export function AppHeader({
 }: AppHeaderProps) {
   return (
     <div
-      className={`rounded-lg shadow-md p-2 ${getBackgroundClass(
+      className={`rounded-sm shadow-md p-2 ${getBackgroundClass(
         isDarkMode,
         'card'
       )}`}
@@ -92,7 +92,6 @@ export function AppHeader({
         value={searchTerms}
         onChange={onSearchTermsChange}
         placeholder='Start typing to search... (min 2 characters)'
-        label='Enter search words (separated by spaces):'
         isDarkMode={isDarkMode}
       />
 
@@ -101,7 +100,6 @@ export function AppHeader({
           value={pairingsSearchTerms}
           onChange={onPairingsSearchTermsChange}
           placeholder='Enter second group of words...'
-          label='Second search group (for pairings):'
           isDarkMode={isDarkMode}
           isPairingsInput={true}
         />
