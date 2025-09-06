@@ -340,7 +340,7 @@ export default function Home() {
         isDarkMode={isDarkMode}
       />
       
-      <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col py-2`}>
+      <div className={`max-w-6xl mx-auto px-2 h-full flex flex-col`}>
         {/* Header */}
         <div className={`rounded-lg shadow-md mb-2 p-1.5 ${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
@@ -411,7 +411,7 @@ export default function Home() {
             <div className={`flex mb-2 gap-1`}>
               <button
                 onClick={() => setActiveTab('all')}
-                className={`px-3 py-1 text-xs font-medium rounded-t-lg transition-colors ${
+                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                   activeTab === 'all'
                     ? isDarkMode
                       ? 'bg-gray-700 text-white border-b-2 border-blue-400'
@@ -425,7 +425,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab('pairings')}
-                className={`px-3 py-1 text-xs font-medium rounded-t-lg transition-colors ${
+                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                   activeTab === 'pairings'
                     ? isDarkMode
                       ? 'bg-gray-700 text-white border-b-2 border-blue-400'

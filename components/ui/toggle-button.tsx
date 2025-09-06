@@ -23,7 +23,7 @@ export function ToggleButton({
       className={`p-0.5 rounded-full text-sm transition-opacity hover:opacity-80 ${
         isActive
           ? isDarkMode
-            ? 'bg-blue-600 text-white'
+            ? 'bg-slate-600 text-white'
             : 'bg-blue-500 text-white'
           : isDarkMode
           ? 'bg-gray-700 text-gray-400'
