@@ -193,32 +193,53 @@ export function GraphCanvas({
             (conn.word1 === edge.target && conn.word2 === edge.source)
           ).length;
 
-          const displayText = connectionCount > 1 
-            ? `${edge.reference} (${connectionCount})`
-            : edge.reference;
-
-          let angle = Math.atan2(
-            targetNode.y - sourceNode.y,
-            targetNode.x - sourceNode.x
-          );
-
-          if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
-            angle += Math.PI;
-          }
+          const displayText = connectionCount.toString();
 
           ctx.save();
           ctx.translate(midX, midY);
-          ctx.rotate(angle);
 
-          ctx.fillStyle = isDarkMode ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255, 255, 255, 0.9)';
           const fontSize = Math.max(8, 10 / current.scale);
-          ctx.font = `${fontSize}px Arial`;
-          const textWidth = ctx.measureText(displayText).width;
-          ctx.fillRect(-textWidth / 2 - 2, -8, textWidth + 4, 12);
+          ctx.font = `bold ${fontSize}px Arial`;
+          const textMetrics = ctx.measureText(displayText);
+          const textWidth = textMetrics.width;
+          const textHeight = fontSize;
+          
+          // Calculate label dimensions with padding
+          const padding = Math.max(3, 4 / current.scale);
+          const labelWidth = textWidth + padding * 2;
+          const labelHeight = textHeight + padding * 1.5;
+          const radius = Math.min(labelWidth, labelHeight) * 0.2;
+          
+          // Draw rounded rectangle background
+          const x = -labelWidth / 2;
+          const y = -labelHeight / 2;
+          
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + labelWidth - radius, y);
+          ctx.quadraticCurveTo(x + labelWidth, y, x + labelWidth, y + radius);
+          ctx.lineTo(x + labelWidth, y + labelHeight - radius);
+          ctx.quadraticCurveTo(x + labelWidth, y + labelHeight, x + labelWidth - radius, y + labelHeight);
+          ctx.lineTo(x + radius, y + labelHeight);
+          ctx.quadraticCurveTo(x, y + labelHeight, x, y + labelHeight - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          
+          // Fill background
+          ctx.fillStyle = isDarkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+          ctx.fill();
+          
+          // Add subtle border
+          ctx.strokeStyle = isDarkMode ? 'rgba(156, 163, 175, 0.4)' : 'rgba(107, 114, 128, 0.3)';
+          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+          ctx.stroke();
 
-          ctx.fillStyle = isDarkMode ? '#e5e7eb' : '#333';
+          // Draw text centered
+          ctx.fillStyle = isDarkMode ? '#f3f4f6' : '#1f2937';
           ctx.textAlign = 'center';
-          ctx.fillText(displayText, 0, -2);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(displayText, 0, 0);
           ctx.restore();
         }
       }
