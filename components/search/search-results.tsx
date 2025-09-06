@@ -44,7 +44,9 @@ export function SearchResults({
   const renderResult = (result: SearchResult) => (
     <div
       key={`${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
-      className={`border-l-2 pl-2 py-1 mb-1 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`}
+      className={`border-l-2 pl-2 py-1 mb-1 ${
+        isDarkMode ? 'border-blue-400' : 'border-blue-500'
+      }`}
     >
       <div className='mb-0.5'>
         <span
@@ -56,7 +58,9 @@ export function SearchResults({
         </span>
       </div>
       <div
-        className={`text-xs leading-snug ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+        className={`text-xs leading-snug ${
+          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+        }`}
         dangerouslySetInnerHTML={{
           __html: UnifiedHighlighter.highlightText(result.verse.text, {
             matches: result.matches,
@@ -69,7 +73,8 @@ export function SearchResults({
 
   const renderPairing = (pairing: VersePairing) => {
     const searchTermsArray = getSearchTermsArray();
-    const pairingsSearchTermsArray = SearchResultsHelper.processSearchString(pairingsSearchTerms);
+    const pairingsSearchTermsArray =
+      SearchResultsHelper.processSearchString(pairingsSearchTerms);
 
     // Function to highlight text with both color schemes
     const highlightPairingText = (text: string): string => {
@@ -82,29 +87,34 @@ export function SearchResults({
     };
 
     // Check if this specific pairing is already in the graph
-    const versePositions = pairing.verses.map(v => v.position);
-    const isInGraph = Array.isArray(selectedConnections) && selectedConnections.some(conn => {
-      const positionsMatch = conn.versePositions && 
-        conn.versePositions.length === versePositions.length &&
-        conn.versePositions.every(pos => versePositions.includes(pos));
-      
-      const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-                        (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-      
-      return wordsMatch && positionsMatch;
-    });
+    const versePositions = pairing.verses.map((v) => v.position);
+    const isInGraph =
+      Array.isArray(selectedConnections) &&
+      selectedConnections.some((conn) => {
+        const positionsMatch =
+          conn.versePositions &&
+          conn.versePositions.length === versePositions.length &&
+          conn.versePositions.every((pos) => versePositions.includes(pos));
+
+        const wordsMatch =
+          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+        return wordsMatch && positionsMatch;
+      });
 
     return (
       <div
-        key={`${pairing.term1}-${pairing.term2}-${pairing.verses.map(v => v.position).join('-')}`}
-        className={`border-l-2 flex justify-between items-start pl-2 py-1 mb-1 ${isDarkMode ? 'border-green-400' : 'border-green-500'}`}
+        key={`${pairing.term1}-${pairing.term2}-${pairing.verses
+          .map((v) => v.position)
+          .join('-')}`}
+        className={`border-l-2 flex justify-between items-start pl-2 py-1 mb-1 ${
+          isDarkMode ? 'border-green-400' : 'border-green-500'
+        }`}
       >
-        <div className="flex-1">
+        <div className='flex-1'>
           {pairing.verses.map((verse, verseIndex) => (
-            <div
-              key={verse.position}
-              className={verseIndex > 0 ? 'mt-1' : ''}
-            >
+            <div key={verse.position} className={verseIndex > 0 ? 'mt-1' : ''}>
               <div className='mb-0.5'>
                 <span
                   className={`font-semibold text-xs ${
@@ -115,7 +125,9 @@ export function SearchResults({
                 </span>
               </div>
               <div
-                className={`text-xs leading-snug ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                className={`text-xs leading-snug ${
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                }`}
                 dangerouslySetInnerHTML={{
                   __html: highlightPairingText(verse.text),
                 }}
@@ -124,9 +136,12 @@ export function SearchResults({
           ))}
         </div>
         {showGraph && (
-          <label className="ml-2 flex items-center cursor-pointer" title={isInGraph ? 'Remove from graph' : 'Add to graph'}>
+          <label
+            className='ml-2 flex items-center cursor-pointer'
+            title={isInGraph ? 'Remove from graph' : 'Add to graph'}
+          >
             <input
-              type="checkbox"
+              type='checkbox'
               checked={isInGraph}
               onChange={() => onToggleGraph(pairing)}
               className={`w-4 h-4 rounded border-2 transition-colors ${

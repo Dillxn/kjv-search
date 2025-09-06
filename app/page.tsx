@@ -308,6 +308,108 @@ export default function Home() {
     [selectedConnections]
   );
 
+  const handleSelectAllPairings = useCallback(() => {
+    if (activeTab !== 'pairings') return;
+
+    // Add all current pairings to the graph
+    const newConnections: typeof selectedConnections = [];
+    
+    pairings.forEach((pairing) => {
+      const versePositions = pairing.verses.map((v) => v.position);
+      const verseRef =
+        pairing.verses.length === 1
+          ? pairing.verses[0].reference
+          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+
+      // Check if this pairing is already in the graph
+      const existingConnections = Array.isArray(selectedConnections) ? selectedConnections : [];
+      const alreadyExists = existingConnections.some((conn) => {
+        const positionsMatch =
+          conn.versePositions &&
+          conn.versePositions.length === versePositions.length &&
+          conn.versePositions.every((pos: number) =>
+            versePositions.includes(pos)
+          );
+
+        const wordsMatch =
+          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+        return wordsMatch && positionsMatch;
+      });
+
+      if (!alreadyExists) {
+        newConnections.push({
+          word1: pairing.term1,
+          word2: pairing.term2,
+          reference: verseRef,
+          versePositions: versePositions,
+        });
+      }
+    });
+
+    if (newConnections.length > 0) {
+      setSelectedConnections((prev) => {
+        const prevArray = Array.isArray(prev) ? prev : [];
+        return [...prevArray, ...newConnections];
+      });
+    }
+  }, [activeTab, pairings, selectedConnections]);
+
+  const handleDeselectAllPairings = useCallback(() => {
+    if (activeTab !== 'pairings') return;
+
+    // Remove all pairings that match current search results
+    setSelectedConnections((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : [];
+      return prevArray.filter((conn) => {
+        // Check if this connection matches any of the current pairings
+        const matchesCurrentPairing = pairings.some((pairing) => {
+          const versePositions = pairing.verses.map((v) => v.position);
+          const positionsMatch =
+            conn.versePositions &&
+            conn.versePositions.length === versePositions.length &&
+            conn.versePositions.every((pos: number) =>
+              versePositions.includes(pos)
+            );
+
+          const wordsMatch =
+            (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+            (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+          return wordsMatch && positionsMatch;
+        });
+
+        // Keep connections that don't match current pairings
+        return !matchesCurrentPairing;
+      });
+    });
+  }, [activeTab, pairings]);
+
+  // Calculate if all current pairings are selected
+  const allPairingsSelected = useMemo(() => {
+    if (activeTab !== 'pairings' || pairings.length === 0) return false;
+    
+    const connections = Array.isArray(selectedConnections) ? selectedConnections : [];
+    return pairings.every((pairing) => {
+      const versePositions = pairing.verses.map((v) => v.position);
+      return connections.some((conn) => {
+        const positionsMatch =
+          conn.versePositions &&
+          conn.versePositions.length === versePositions.length &&
+          conn.versePositions.every((pos: number) =>
+            versePositions.includes(pos)
+          );
+
+        const wordsMatch =
+          (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
+          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+
+        return wordsMatch && positionsMatch;
+      });
+    });
+  }, [activeTab, pairings, selectedConnections]);
+
   // Loading state
   if (!isInitialized || !hasMounted) {
     return (
@@ -403,27 +505,51 @@ export default function Home() {
             }`}
           >
             {/* Tab Navigation */}
-            <div className={`flex mb-2 gap-1`}>
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-                  activeTab === 'all'
-                    ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
-                    : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
-                }`}
-              >
-                All Results ({results.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('pairings')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-                  activeTab === 'pairings'
-                    ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
-                    : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
-                }`}
-              >
-                Pairings ({pairings.length})
-              </button>
+            <div className={`flex mb-2 gap-1 items-center justify-between`}>
+              <div className="flex gap-1 items-center">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                    activeTab === 'all'
+                      ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
+                      : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
+                  }`}
+                >
+                  All Results ({results.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('pairings')}
+                  className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                    activeTab === 'pairings'
+                      ? `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode)} border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-500'}`
+                      : `${getBackgroundClass(isDarkMode, 'secondary')} ${getTextClass(isDarkMode, 'muted')} hover:${getTextClass(isDarkMode, 'secondary')}`
+                  }`}
+                >
+                  Pairings ({pairings.length})
+                </button>
+              </div>
+              
+              {/* Select All Checkbox - Horizontally aligned with individual checkboxes */}
+              {activeTab === 'pairings' && showGraph && pairings.length > 0 && (
+                <label className="mr-2 flex items-center cursor-pointer" title={allPairingsSelected ? 'Deselect all pairings' : 'Select all pairings'}>
+                  <input
+                    type="checkbox"
+                    checked={allPairingsSelected}
+                    onChange={() => {
+                      if (allPairingsSelected) {
+                        handleDeselectAllPairings();
+                      } else {
+                        handleSelectAllPairings();
+                      }
+                    }}
+                    className={`w-4 h-4 rounded border-2 transition-colors ${
+                      isDarkMode
+                        ? 'border-gray-500 bg-gray-700 checked:bg-blue-600 checked:border-blue-600'
+                        : 'border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500'
+                    }`}
+                  />
+                </label>
+              )}
             </div>
 
             {/* Search Results */}
