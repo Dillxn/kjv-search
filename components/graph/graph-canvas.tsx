@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { createTermColorMaps } from '../../lib/highlighting/colors';
 import { SearchTermProcessor } from '../../lib/search-utils';
-import { getHighlightedElements } from '../../lib/graph/path-finding';
+import { getHighlightedElements, getHighlightedElementsForPath } from '../../lib/graph/path-finding';
 import React from 'react';
 
 interface Node {
@@ -44,6 +44,7 @@ interface GraphCanvasProps {
   onTransformChange: (transform: { x: number; y: number; scale: number }) => void;
   selectedNodes?: string[];
   onNodeClick?: (nodeId: string) => void;
+  currentPath?: string[] | null;
 }
 
 export function GraphCanvas({
@@ -59,6 +60,7 @@ export function GraphCanvas({
   onTransformChange,
   selectedNodes = [],
   onNodeClick,
+  currentPath = null,
 }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -78,8 +80,13 @@ export function GraphCanvas({
 
   // Calculate highlighted elements for path visualization
   const highlightedElements = React.useMemo(() => {
+    // If we have a specific current path, use that for highlighting
+    if (currentPath && currentPath.length > 1) {
+      return getHighlightedElementsForPath(currentPath, edges);
+    }
+    // Otherwise, fall back to the original behavior (show all paths)
     return getHighlightedElements(selectedNodes, nodes, edges);
-  }, [selectedNodes, nodes, edges]);
+  }, [selectedNodes, nodes, edges, currentPath]);
 
   // Memoized color function to prevent unnecessary recalculations
   const getNodeColor = useCallback((word: string) => {

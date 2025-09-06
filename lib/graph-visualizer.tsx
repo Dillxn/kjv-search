@@ -3,12 +3,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GraphCanvas } from '../components/graph/graph-canvas';
 import { GraphModal } from '../components/graph/graph-modal';
+import { PathSlider } from '../components/graph/path-slider';
 import { IconButton } from '../components/ui/button';
 import {
   applyForceDirectedLayout,
   generateInitialPosition,
   calculateNodeRadius,
 } from './graph/force-layout';
+import { getAllPathsBetweenNodes } from './graph/path-finding';
 import { Fullscreen, Maximize2, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 
@@ -74,6 +76,8 @@ export function GraphVisualizer({
     connection: (typeof connections)[0];
     allConnections?: typeof connections;
   } | null>(null);
+  const [availablePaths, setAvailablePaths] = useState<string[][]>([]);
+  const [currentPathIndex, setCurrentPathIndex] = useState(0);
 
   // Update canvas size when container resizes or full-screen changes
   useEffect(() => {
@@ -306,6 +310,19 @@ export function GraphVisualizer({
     fitToView,
   ]);
 
+  // Calculate available paths when two nodes are selected
+  useEffect(() => {
+    if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
+      const [startNode, endNode] = selectedNodes;
+      const paths = getAllPathsBetweenNodes(startNode, endNode, nodes, edges);
+      setAvailablePaths(paths);
+      setCurrentPathIndex(0); // Reset to first (simplest) path
+    } else {
+      setAvailablePaths([]);
+      setCurrentPathIndex(0);
+    }
+  }, [selectedNodes, nodes, edges]);
+
   const handleEdgeClick = (edge: Edge, allConnections: typeof connections) => {
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
   };
@@ -361,6 +378,7 @@ export function GraphVisualizer({
         onTransformChange={handleTransformChange}
         selectedNodes={selectedNodes}
         onNodeClick={onNodeClick}
+        currentPath={availablePaths[currentPathIndex] || null}
       />
 
       {/* Control buttons */}
@@ -392,19 +410,30 @@ export function GraphVisualizer({
         </div>
       )}
 
-      {/* Selection status */}
+      {/* Selection status and path slider */}
       {selectedNodes.length > 0 && (
-        <div className='absolute top-2 left-2 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm'>
-          {selectedNodes.length === 1 ? (
-            <span>
-              Selected: <strong>{selectedNodes[0]}</strong> (click another node
-              to see path)
-            </span>
-          ) : (
-            <span>
-              Path: <strong>{selectedNodes[0]}</strong> →{' '}
-              <strong>{selectedNodes[1]}</strong>
-            </span>
+        <div className='absolute top-2 left-2 flex flex-col gap-2'>
+          <div className='bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm'>
+            {selectedNodes.length === 1 ? (
+              <span>
+                Selected: <strong>{selectedNodes[0]}</strong> (click another node
+                to see path)
+              </span>
+            ) : (
+              <span>
+                Path: <strong>{selectedNodes[0]}</strong> →{' '}
+                <strong>{selectedNodes[1]}</strong>
+              </span>
+            )}
+          </div>
+          
+          {selectedNodes.length === 2 && availablePaths.length > 1 && (
+            <PathSlider
+              currentPathIndex={currentPathIndex}
+              totalPaths={availablePaths.length}
+              onPathChange={setCurrentPathIndex}
+              isDarkMode={isDarkMode}
+            />
           )}
         </div>
       )}

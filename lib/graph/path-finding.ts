@@ -150,7 +150,7 @@ export function getPathEdges(path: string[], edges: Edge[]): Edge[] {
 /**
  * Find all simple paths between two nodes (no cycles/backtracking)
  */
-function findAllSimplePaths(
+export function findAllSimplePaths(
   startNode: string,
   endNode: string,
   nodes: Node[],
@@ -196,7 +196,8 @@ function findAllSimplePaths(
   visited.add(startNode);
   dfs(startNode, endNode, [startNode], visited);
   
-  return allPaths;
+  // Sort paths by length (simplest to most complex)
+  return allPaths.sort((a, b) => a.length - b.length);
 }
 
 /**
@@ -217,6 +218,44 @@ function getNodesOnAllPaths(
   });
   
   return pathNodes;
+}
+
+/**
+ * Get all paths between two nodes sorted by complexity (simplest first)
+ */
+export function getAllPathsBetweenNodes(
+  startNode: string,
+  endNode: string,
+  nodes: Node[],
+  edges: Edge[]
+): string[][] {
+  return findAllSimplePaths(startNode, endNode, nodes, edges);
+}
+
+/**
+ * Get highlighted elements for a specific path
+ */
+export function getHighlightedElementsForPath(
+  path: string[],
+  edges: Edge[]
+): {
+  highlightedNodes: Set<string>;
+  highlightedEdgeIds: Set<string>;
+} {
+  const highlightedNodes = new Set(path);
+  const highlightedEdgeIds = new Set<string>();
+  
+  // Get edges for this specific path
+  const pathEdges = getPathEdges(path, edges);
+  pathEdges.forEach(edge => {
+    const edgeId = [edge.source, edge.target].sort().join('-');
+    highlightedEdgeIds.add(edgeId);
+  });
+  
+  return {
+    highlightedNodes,
+    highlightedEdgeIds
+  };
 }
 
 /**
