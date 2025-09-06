@@ -281,15 +281,7 @@ export function GraphVisualizer({
 
       return layoutedNodes;
     });
-  }, [
-    connections,
-    initialTransform.scale,
-    initialTransform.x,
-    initialTransform.y,
-    transform.scale,
-    transform.x,
-    transform.y,
-  ]);
+  }, [connections]);
 
   // Auto-fit effect - separate from the nodes update
   useEffect(() => {

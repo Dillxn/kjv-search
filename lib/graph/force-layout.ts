@@ -503,13 +503,14 @@ export function generateInitialPosition(word: string, existingNodes: Node[]) {
     }
   }
   
-  // Add some randomness within the chosen cell to avoid perfect grid alignment
-  const jitterX = (Math.random() - 0.5) * cellWidth * 0.3;
-  const jitterY = (Math.random() - 0.5) * cellHeight * 0.3;
+  // Add deterministic jitter based on the word to avoid perfect grid alignment
+  const wordHash = hashCode(word.toLowerCase());
+  const jitterX = ((wordHash % 1000) / 1000 - 0.5) * cellWidth * 0.3;
+  const jitterY = (((wordHash >> 10) % 1000) / 1000 - 0.5) * cellHeight * 0.3;
   
   return {
     x: Math.max(margin + 50, Math.min(virtualWidth - margin - 50, bestCell.x + jitterX)),
-    y: Math.max(margin + 50, Math.min(virtualHeight - margin - 50, bestCell.y + jitterY))
+    y: Math.max(margin + 50, Math.min(virtualWidth - margin - 50, bestCell.y + jitterY))
   };
 }
 
