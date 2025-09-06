@@ -78,11 +78,11 @@ export class KJVParser {
     return PairingGenerator.generateAllPairingsAsync(termToVerses, false);
   }
 
-  findVersePairingsBetweenGroups(
+  async findVersePairingsBetweenGroups(
     group1Terms: string[],
     group2Terms: string[],
     filters: SearchFilters = {}
-  ): VersePairing[] {
+  ): Promise<VersePairing[]> {
     if (!this.verseSearcher) throw new Error('Parser not initialized');
 
     const limitedGroup1 = SearchUtils.validateAndLimitTerms(group1Terms);
@@ -94,7 +94,7 @@ export class KJVParser {
       filters
     );
 
-    return PairingGenerator.generateBetweenGroupsPairings(
+    return PairingGenerator.generateBetweenGroupsPairingsAsync(
       limitedGroup1,
       limitedGroup2,
       termToVerses

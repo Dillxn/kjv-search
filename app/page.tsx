@@ -286,108 +286,25 @@ export default function Home() {
           ? pairing.verses[0].reference
           : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
 
-      // Handle consolidated pairings (multiple word pairs)
-      if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
-        console.log(
-          'Processing consolidated pairing with',
-          pairing.allTermPairs.length,
-          'term pairs'
-        );
-        // Parse all term pairs from the consolidated pairing
-        const termPairs = pairing.allTermPairs.map((pairStr) => {
-          const [term1, term2] = pairStr.split(' ↔ ');
-          return { term1: term1.trim(), term2: term2.trim() };
-        });
-
-        // Check if ALL term pairs are already in the graph
-        const allExist = termPairs.every(({ term1, term2 }) => {
-          return connections.some((conn) => {
-            const positionsMatch =
-              conn.versePositions &&
-              conn.versePositions.length === versePositions.length &&
-              conn.versePositions.every((pos: number) =>
-                versePositions.includes(pos)
-              );
-
-            const wordsMatch =
-              (conn.word1 === term1 && conn.word2 === term2) ||
-              (conn.word1 === term2 && conn.word2 === term1);
-
-            return wordsMatch && positionsMatch;
-          });
-        });
-
-        if (allExist) {
-          // Remove all term pairs from graph (orphaned nodes will be automatically cleaned up)
-          setSelectedConnections((prev) => {
-            const prevArray = Array.isArray(prev) ? prev : [];
-            const filteredConnections = prevArray.filter((conn) => {
-              const positionsMatch =
-                conn.versePositions &&
-                conn.versePositions.length === versePositions.length &&
-                conn.versePositions.every((pos: number) =>
-                  versePositions.includes(pos)
-                );
-
-              if (!positionsMatch) return true; // Keep connections with different verses
-
-              // Remove if this connection matches any of the term pairs
-              return !termPairs.some(({ term1, term2 }) => {
-                return (
-                  (conn.word1 === term1 && conn.word2 === term2) ||
-                  (conn.word1 === term2 && conn.word2 === term1)
-                );
-              });
-            });
-            return cleanupOrphanedNodes(filteredConnections);
-          });
-        } else {
-          // Add all term pairs to graph (skip existing ones)
-          const newConnections = termPairs
-            .filter(({ term1, term2 }) => {
-              const exists = connections.some((conn) => {
-                const positionsMatch =
-                  conn.versePositions &&
-                  conn.versePositions.length === versePositions.length &&
-                  conn.versePositions.every((pos: number) =>
-                    versePositions.includes(pos)
-                  );
-
-                const wordsMatch =
-                  (conn.word1 === term1 && conn.word2 === term2) ||
-                  (conn.word1 === term2 && conn.word2 === term1);
-
-                return wordsMatch && positionsMatch;
-              });
-
-              // Debug: log what's being filtered
-              if (exists) {
-                console.log(
-                  `Skipping existing connection: ${term1} ↔ ${term2}`
-                );
-              } else {
-                console.log(`Adding new connection: ${term1} ↔ ${term2}`);
-              }
-
-              return !exists;
+      // Get all term pairs - either from allTermPairs or create from term1/term2
+      const termPairs =
+        pairing.allTermPairs && pairing.allTermPairs.length > 0
+          ? pairing.allTermPairs.map((pairStr) => {
+              const [term1, term2] = pairStr.split(' ↔ ');
+              return { term1: term1.trim(), term2: term2.trim() };
             })
-            .map(({ term1, term2 }) => ({
-              word1: term1,
-              word2: term2,
-              reference: verseRef,
-              versePositions: versePositions,
-            }));
+          : [{ term1: pairing.term1, term2: pairing.term2 }];
 
-          if (newConnections.length > 0) {
-            setSelectedConnections((prev) => {
-              const prevArray = Array.isArray(prev) ? prev : [];
-              return cleanupOrphanedNodes([...prevArray, ...newConnections]);
-            });
-          }
-        }
-      } else {
-        // Handle single pairing (original logic)
-        const existingConnectionIndex = connections.findIndex((conn) => {
+      console.log(
+        'Processing pairing with',
+        termPairs.length,
+        'term pairs:',
+        termPairs
+      );
+
+      // Check if ALL term pairs are already in the graph
+      const allExist = termPairs.every(({ term1, term2 }) => {
+        return connections.some((conn) => {
           const positionsMatch =
             conn.versePositions &&
             conn.versePositions.length === versePositions.length &&
@@ -396,34 +313,76 @@ export default function Home() {
             );
 
           const wordsMatch =
-            (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-            (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
+            (conn.word1 === term1 && conn.word2 === term2) ||
+            (conn.word1 === term2 && conn.word2 === term1);
 
           return wordsMatch && positionsMatch;
         });
+      });
 
-        if (existingConnectionIndex >= 0) {
-          // Remove from graph (orphaned nodes will be automatically cleaned up)
-          setSelectedConnections((prev) => {
-            const prevArray = Array.isArray(prev) ? prev : [];
-            const filteredConnections = prevArray.filter(
-              (_, index) => index !== existingConnectionIndex
-            );
-            return cleanupOrphanedNodes(filteredConnections);
+      if (allExist) {
+        // Remove all term pairs from graph (orphaned nodes will be automatically cleaned up)
+        setSelectedConnections((prev) => {
+          const prevArray = Array.isArray(prev) ? prev : [];
+          const filteredConnections = prevArray.filter((conn) => {
+            const positionsMatch =
+              conn.versePositions &&
+              conn.versePositions.length === versePositions.length &&
+              conn.versePositions.every((pos: number) =>
+                versePositions.includes(pos)
+              );
+
+            if (!positionsMatch) return true; // Keep connections with different verses
+
+            // Remove if this connection matches any of the term pairs
+            return !termPairs.some(({ term1, term2 }) => {
+              return (
+                (conn.word1 === term1 && conn.word2 === term2) ||
+                (conn.word1 === term2 && conn.word2 === term1)
+              );
+            });
           });
-        } else {
-          // Add to graph
+          return cleanupOrphanedNodes(filteredConnections);
+        });
+      } else {
+        // Add all term pairs to graph (skip existing ones)
+        const newConnections = termPairs
+          .filter(({ term1, term2 }) => {
+            const exists = connections.some((conn) => {
+              const positionsMatch =
+                conn.versePositions &&
+                conn.versePositions.length === versePositions.length &&
+                conn.versePositions.every((pos: number) =>
+                  versePositions.includes(pos)
+                );
+
+              const wordsMatch =
+                (conn.word1 === term1 && conn.word2 === term2) ||
+                (conn.word1 === term2 && conn.word2 === term1);
+
+              return wordsMatch && positionsMatch;
+            });
+
+            // Debug: log what's being filtered
+            if (exists) {
+              console.log(`Skipping existing connection: ${term1} ↔ ${term2}`);
+            } else {
+              console.log(`Adding new connection: ${term1} ↔ ${term2}`);
+            }
+
+            return !exists;
+          })
+          .map(({ term1, term2 }) => ({
+            word1: term1,
+            word2: term2,
+            reference: verseRef,
+            versePositions: versePositions,
+          }));
+
+        if (newConnections.length > 0) {
           setSelectedConnections((prev) => {
             const prevArray = Array.isArray(prev) ? prev : [];
-            return cleanupOrphanedNodes([
-              ...prevArray,
-              {
-                word1: pairing.term1,
-                word2: pairing.term2,
-                reference: verseRef,
-                versePositions: versePositions,
-              },
-            ]);
+            return cleanupOrphanedNodes([...prevArray, ...newConnections]);
           });
         }
       }

@@ -54,39 +54,27 @@ export function PairingDisplay({
   // Check if this specific pairing is already in the graph
   const versePositions = pairing.verses.map((v) => v.position);
   const isInGraph = Array.isArray(selectedConnections) && (() => {
-    // Handle consolidated pairings
-    if (pairing.allTermPairs && pairing.allTermPairs.length > 1) {
-      // Parse all term pairs and check if ALL are in the graph
-      const termPairs = pairing.allTermPairs.map(pairStr => {
-        const [term1, term2] = pairStr.split(' ↔ ');
-        return { term1: term1.trim(), term2: term2.trim() };
-      });
+    // Get all term pairs - either from allTermPairs or create from term1/term2
+    const termPairs = pairing.allTermPairs && pairing.allTermPairs.length > 0
+      ? pairing.allTermPairs.map(pairStr => {
+          const [term1, term2] = pairStr.split(' ↔ ');
+          return { term1: term1.trim(), term2: term2.trim() };
+        })
+      : [{ term1: pairing.term1, term2: pairing.term2 }];
 
-      return termPairs.every(({ term1, term2 }) => {
-        return selectedConnections.some(conn => {
-          const positionsMatch = conn.versePositions &&
-            conn.versePositions.length === versePositions.length &&
-            conn.versePositions.every((pos) => versePositions.includes(pos));
-          
-          const wordsMatch = (conn.word1 === term1 && conn.word2 === term2) ||
-                            (conn.word1 === term2 && conn.word2 === term1);
-          
-          return wordsMatch && positionsMatch;
-        });
-      });
-    } else {
-      // Handle single pairing (original logic)
-      return selectedConnections.some((conn) => {
+    // Check if ALL term pairs are in the graph
+    return termPairs.every(({ term1, term2 }) => {
+      return selectedConnections.some(conn => {
         const positionsMatch = conn.versePositions &&
           conn.versePositions.length === versePositions.length &&
           conn.versePositions.every((pos) => versePositions.includes(pos));
-
-        const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-                          (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-
+        
+        const wordsMatch = (conn.word1 === term1 && conn.word2 === term2) ||
+                          (conn.word1 === term2 && conn.word2 === term1);
+        
         return wordsMatch && positionsMatch;
       });
-    }
+    });
   })();
 
   return (

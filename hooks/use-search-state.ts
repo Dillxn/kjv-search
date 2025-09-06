@@ -139,7 +139,7 @@ export function useSearchState() {
 
         if (hasValidMain && hasValidPairings) {
 
-          versePairings = kjvParser
+          versePairings = await kjvParser
             .findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters);
           versePairings = versePairings.sort((a, b) => {
             if (a.proximity !== b.proximity) {
