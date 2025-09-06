@@ -5,7 +5,7 @@ import { GraphCanvas } from '../components/graph/graph-canvas';
 import { GraphModal } from '../components/graph/graph-modal';
 import { IconButton } from '../components/ui/button';
 import { applyForceDirectedLayout, generateInitialPosition, calculateNodeRadius } from './graph/force-layout';
-import { Maximize, RotateCcw } from 'lucide-react';
+import { Fullscreen, Maximize, Maximize2, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 
 interface Node {
@@ -287,14 +287,14 @@ export function GraphVisualizer({
             title="Fit graph to view"
             isDarkMode={isDarkMode}
           >
-            <RotateCcw size={16} />
+            <Fullscreen size={16} />
           </IconButton>
           <IconButton
             onClick={handleFullScreenToggle}
             title={isFullScreen ? "Exit full screen" : "Enter full screen"}
             isDarkMode={isDarkMode}
           >
-            <Maximize size={16} />
+            <Maximize2 size={16} />
           </IconButton>
         </div>
       )}

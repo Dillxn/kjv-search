@@ -96,7 +96,7 @@ export function IconButton({
       disabled={disabled}
       title={title}
       isDarkMode={isDarkMode}
-      className={`p-0.5 px-2 ${className}`.trim()}
+      className={`py-1 ${className}`.trim()}
     >
       {children}
     </Button>
