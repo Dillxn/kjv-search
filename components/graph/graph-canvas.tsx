@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { createTermColorMaps } from '../../lib/highlighting/colors';
 import { SearchTermProcessor } from '../../lib/search-utils';
+import { getHighlightedElements } from '../../lib/graph/path-finding';
 import React from 'react';
 
 interface Node {
@@ -41,6 +42,8 @@ interface GraphCanvasProps {
     versePositions?: number[];
   }>) => void;
   onTransformChange: (transform: { x: number; y: number; scale: number }) => void;
+  selectedNodes?: string[];
+  onNodeClick?: (nodeId: string) => void;
 }
 
 export function GraphCanvas({
@@ -54,6 +57,8 @@ export function GraphCanvas({
   transform,
   onEdgeClick,
   onTransformChange,
+  selectedNodes = [],
+  onNodeClick,
 }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -78,6 +83,11 @@ export function GraphCanvas({
     const pairingsTerms = SearchTermProcessor.processSearchString(pairingsSearchTerms);
     return createTermColorMaps(mainTerms, pairingsTerms, isDarkMode);
   }, [searchTerms, pairingsSearchTerms, isDarkMode]);
+
+  // Calculate highlighted elements for path visualization
+  const highlightedElements = React.useMemo(() => {
+    return getHighlightedElements(selectedNodes, nodes, edges);
+  }, [selectedNodes, nodes, edges]);
 
   // Memoized color function to prevent unnecessary recalculations
   const getNodeColor = useCallback((word: string) => {
@@ -141,6 +151,16 @@ export function GraphCanvas({
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);
 
+  // Helper function to convert hex to RGB
+  const hexToRgb = useCallback((hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  }, []);
+
   // Drawing function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -169,22 +189,42 @@ export function GraphCanvas({
     // Create node lookup map for better performance
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
 
-    // Draw edges with optimized rendering
-    ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
-    ctx.lineWidth = Math.max(0.5, 1 / current.scale);
-    
+    // Draw edges with highlighting and transparency
     edges.forEach((edge) => {
       const sourceNode = nodeMap.get(edge.source);
       const targetNode = nodeMap.get(edge.target);
 
       if (sourceNode && targetNode) {
+        // Create edge ID for comparison
+        const edgeId = [edge.source, edge.target].sort().join('-');
+        const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
+        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
+        
+        // Set edge style based on highlighting
+        if (isHighlighted) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color
+          ctx.lineWidth = Math.max(2, 3 / current.scale);
+          ctx.globalAlpha = 1;
+        } else if (shouldShowTransparent) {
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
+          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+          ctx.globalAlpha = 0.2;
+        } else {
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
+          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+          ctx.globalAlpha = 1;
+        }
+        
+        // Set transparency for the entire edge
+        ctx.globalAlpha = shouldShowTransparent ? 0.2 : 1;
+
         ctx.beginPath();
         ctx.moveTo(sourceNode.x, sourceNode.y);
         ctx.lineTo(targetNode.x, targetNode.y);
         ctx.stroke();
 
-        // Only draw labels if zoom level is sufficient
-        if (current.scale > 0.3) {
+        // Only draw labels if zoom level is sufficient and not too transparent
+        if (current.scale > 0.3 && (!shouldShowTransparent || ctx.globalAlpha > 0.5)) {
           const midX = (sourceNode.x + targetNode.x) / 2;
           const midY = (sourceNode.y + targetNode.y) / 2;
 
@@ -226,17 +266,20 @@ export function GraphCanvas({
           ctx.quadraticCurveTo(x, y, x + radius, y);
           ctx.closePath();
           
-          // Fill background
-          ctx.fillStyle = isDarkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+          // Fill background with current alpha
+          const bgAlpha = isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95);
+          ctx.fillStyle = isDarkMode ? `rgba(31, 41, 55, ${bgAlpha})` : `rgba(255, 255, 255, ${bgAlpha})`;
           ctx.fill();
           
           // Add subtle border
-          ctx.strokeStyle = isDarkMode ? 'rgba(156, 163, 175, 0.4)' : 'rgba(107, 114, 128, 0.3)';
+          const borderAlpha = isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3);
+          ctx.strokeStyle = isDarkMode ? `rgba(156, 163, 175, ${borderAlpha})` : `rgba(107, 114, 128, ${borderAlpha})`;
           ctx.lineWidth = Math.max(0.5, 1 / current.scale);
           ctx.stroke();
 
           // Draw text centered
-          ctx.fillStyle = isDarkMode ? '#f3f4f6' : '#1f2937';
+          const textAlpha = isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1);
+          ctx.fillStyle = isDarkMode ? `rgba(243, 244, 246, ${textAlpha})` : `rgba(31, 41, 55, ${textAlpha})`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(displayText, 0, 0);
@@ -245,41 +288,74 @@ export function GraphCanvas({
       }
     });
 
-    // Draw nodes with optimized rendering
+    // Reset global alpha for nodes
+    ctx.globalAlpha = 1;
+
+    // Draw nodes with highlighting and transparency
     nodes.forEach((node) => {
       const nodeColor = getNodeColor(node.word);
       const colors = getColorsFromTailwind(nodeColor.background);
       
-      // Draw node circle
+      const isSelected = selectedNodes.includes(node.id);
+      const isHighlighted = highlightedElements.highlightedNodes.has(node.id);
+      const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
+      
+
+
+      
+      // Set global alpha for the entire node
+      ctx.globalAlpha = shouldShowTransparent ? 0.2 : 1;
+      
+      // Draw node circle with appropriate styling
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
       
       if (colors.bg === 'transparent') {
-        ctx.fillStyle = isDarkMode ? '#374151' : '#f9fafb';
+        const bgColor = isDarkMode ? '#374151' : '#f9fafb';
+        ctx.fillStyle = bgColor;
         ctx.fill();
-        ctx.strokeStyle = colors.border;
-        ctx.lineWidth = Math.max(1, 3 / current.scale);
+        
+        // Special styling for selected nodes
+        if (isSelected) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b';
+          ctx.lineWidth = Math.max(2, 4 / current.scale);
+        } else {
+          ctx.strokeStyle = colors.border;
+          ctx.lineWidth = Math.max(1, 3 / current.scale);
+        }
       } else {
         ctx.fillStyle = colors.bg;
         ctx.fill();
-        ctx.strokeStyle = colors.border;
-        ctx.lineWidth = Math.max(0.5, 2 / current.scale);
+        
+        // Special styling for selected nodes
+        if (isSelected) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b';
+          ctx.lineWidth = Math.max(2, 4 / current.scale);
+        } else {
+          ctx.strokeStyle = colors.border;
+          ctx.lineWidth = Math.max(0.5, 2 / current.scale);
+        }
       }
       ctx.stroke();
 
       // Only draw text if zoom level is sufficient
       if (current.scale > 0.2) {
+        // Text uses the same global alpha as the node
         ctx.fillStyle = colors.text;
+        
         const fontSize = Math.max(8, 12 / current.scale);
-        ctx.font = `${fontSize}px Arial`;
+        ctx.font = `${isSelected ? 'bold ' : ''}${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(node.word, node.x, node.y);
       }
+      
+      // Reset global alpha for next node
+      ctx.globalAlpha = 1;
     });
 
     ctx.restore();
-  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, canvasSize]);
+  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements]);
 
   // Pan and zoom event handlers with smooth updates
   useEffect(() => {
@@ -352,6 +428,24 @@ export function GraphCanvas({
       const current = currentTransform.current;
       const graphX = (mouseX - current.x) / current.scale;
       const graphY = (mouseY - current.y) / current.scale;
+
+      // Check if click is on a node first
+      let clickedNode = null;
+      for (const node of nodes) {
+        const dx = graphX - node.x;
+        const dy = graphY - node.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= node.radius) {
+          clickedNode = node;
+          break;
+        }
+      }
+
+      if (clickedNode && onNodeClick) {
+        onNodeClick(clickedNode.id);
+        return;
+      }
 
       // Check if click is on an edge
       let clickedEdge = null;
@@ -447,7 +541,7 @@ export function GraphCanvas({
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('mouseleave', handleMouseUp);
     };
-  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick]);
+  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick, onNodeClick, draw]);
 
   // Effect to handle drawing
   useEffect(() => {

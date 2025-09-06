@@ -10,6 +10,7 @@ interface GraphConnection {
 
 export function useGraphState() {
   const [selectedConnections, setSelectedConnections] = useState<GraphConnection[]>([]);
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
 
   // Helper function to clean up orphaned nodes
   const cleanupOrphanedNodes = useCallback(
@@ -239,6 +240,26 @@ export function useGraphState() {
     });
   }, [cleanupOrphanedNodes]);
 
+  // Node selection handlers
+  const handleNodeClick = useCallback((nodeId: string) => {
+    setSelectedNodes(prev => {
+      if (prev.includes(nodeId)) {
+        // Deselect node
+        return prev.filter(id => id !== nodeId);
+      } else if (prev.length < 2) {
+        // Select node (max 2 nodes)
+        return [...prev, nodeId];
+      } else {
+        // Replace first selected node with new one
+        return [prev[1], nodeId];
+      }
+    });
+  }, []);
+
+  const clearNodeSelection = useCallback(() => {
+    setSelectedNodes([]);
+  }, []);
+
   return {
     selectedConnections,
     setSelectedConnections,
@@ -247,5 +268,8 @@ export function useGraphState() {
     handleDeselectAllPairings,
     allPairingsSelected,
     cleanupInvalidConnections,
+    selectedNodes,
+    handleNodeClick,
+    clearNodeSelection,
   };
 }

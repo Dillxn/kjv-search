@@ -4,8 +4,12 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GraphCanvas } from '../components/graph/graph-canvas';
 import { GraphModal } from '../components/graph/graph-modal';
 import { IconButton } from '../components/ui/button';
-import { applyForceDirectedLayout, generateInitialPosition, calculateNodeRadius } from './graph/force-layout';
-import { Fullscreen, Maximize, Maximize2, RotateCcw } from 'lucide-react';
+import {
+  applyForceDirectedLayout,
+  generateInitialPosition,
+  calculateNodeRadius,
+} from './graph/force-layout';
+import { Fullscreen, Maximize2, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 
 interface Node {
@@ -38,16 +42,26 @@ interface GraphVisualizerProps {
     y: number;
     scale: number;
   };
-  onTransformChange?: (transform: { x: number; y: number; scale: number }) => void;
+  onTransformChange?: (transform: {
+    x: number;
+    y: number;
+    scale: number;
+  }) => void;
+  selectedNodes?: string[];
+  onNodeClick?: (nodeId: string) => void;
+  onClearSelection?: () => void;
 }
 
-export function GraphVisualizer({ 
-  connections, 
-  searchTerms = '', 
-  pairingsSearchTerms = '', 
+export function GraphVisualizer({
+  connections,
+  searchTerms = '',
+  pairingsSearchTerms = '',
   isDarkMode = false,
   initialTransform = { x: 0, y: 0, scale: 1 },
-  onTransformChange
+  onTransformChange,
+  selectedNodes = [],
+  onNodeClick,
+  onClearSelection,
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -57,7 +71,7 @@ export function GraphVisualizer({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<{
     edge: Edge;
-    connection: typeof connections[0];
+    connection: (typeof connections)[0];
     allConnections?: typeof connections;
   } | null>(null);
 
@@ -100,19 +114,22 @@ export function GraphVisualizer({
     }
   }, [isFullScreen]);
 
-  const resetView = () => {
+  // Handle transform changes with persistence
+  const handleTransformChange = useCallback(
+    (newTransform: { x: number; y: number; scale: number }) => {
+      setTransform(newTransform);
+      onTransformChange?.(newTransform);
+    },
+    [onTransformChange]
+  );
+
+  const [shouldAutoFit, setShouldAutoFit] = useState(false);
+
+  const resetView = useCallback(() => {
     const newTransform = { x: 0, y: 0, scale: 1 };
     setTransform(newTransform);
     onTransformChange?.(newTransform);
-  };
-
-  // Handle transform changes with persistence
-  const handleTransformChange = useCallback((newTransform: { x: number; y: number; scale: number }) => {
-    setTransform(newTransform);
-    onTransformChange?.(newTransform);
   }, [onTransformChange]);
-
-  const [shouldAutoFit, setShouldAutoFit] = useState(false);
 
   const fitToView = useCallback(() => {
     if (nodes.length === 0) {
@@ -121,10 +138,12 @@ export function GraphVisualizer({
     }
 
     const padding = 100;
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minY = Infinity,
+      maxY = -Infinity;
 
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       minX = Math.min(minX, node.x - node.radius);
       maxX = Math.max(maxX, node.x + node.radius);
       minY = Math.min(minY, node.y - node.radius);
@@ -149,9 +168,7 @@ export function GraphVisualizer({
     const newTransform = { x, y, scale };
     setTransform(newTransform);
     onTransformChange?.(newTransform);
-  }, [nodes, canvasSize, onTransformChange]);
-
-
+  }, [nodes, canvasSize, onTransformChange, resetView]);
 
   // Update graph when connections change
   useEffect(() => {
@@ -183,9 +200,10 @@ export function GraphVisualizer({
       // Create nodes only for words that appear in connections
       wordsInConnections.forEach((word) => {
         const existingPosition = existingNodePositions.get(word);
-        const position = existingPosition || generateInitialPosition(word, newNodes);
+        const position =
+          existingPosition || generateInitialPosition(word, newNodes);
         const radius = calculateNodeRadius(word);
-        
+
         const node: Node = {
           id: word,
           x: position.x,
@@ -246,11 +264,19 @@ export function GraphVisualizer({
 
   if (selectedEdge) {
     return (
-      <div 
-        ref={containerRef} 
-        className={`w-full h-full ${isFullScreen ? 'fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center' : ''}`}
+      <div
+        ref={containerRef}
+        className={`w-full h-full ${
+          isFullScreen
+            ? 'fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center'
+            : ''
+        }`}
       >
-        <div className={isFullScreen ? 'w-4/5 h-4/5 max-w-4xl max-h-4xl' : 'w-full h-full'}>
+        <div
+          className={
+            isFullScreen ? 'w-4/5 h-4/5 max-w-4xl max-h-4xl' : 'w-full h-full'
+          }
+        >
           <GraphModal
             selectedEdge={selectedEdge}
             connections={connections}
@@ -262,9 +288,13 @@ export function GraphVisualizer({
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className={`w-full h-full relative overflow-hidden ${isFullScreen ? `fixed inset-0 z-50 ${getBackgroundClass(isDarkMode)}` : ''}`}
+    <div
+      ref={containerRef}
+      className={`w-full h-full relative overflow-hidden ${
+        isFullScreen
+          ? `fixed inset-0 z-50 ${getBackgroundClass(isDarkMode)}`
+          : ''
+      }`}
     >
       <GraphCanvas
         nodes={nodes}
@@ -277,28 +307,56 @@ export function GraphVisualizer({
         transform={transform}
         onEdgeClick={handleEdgeClick}
         onTransformChange={handleTransformChange}
+        selectedNodes={selectedNodes}
+        onNodeClick={onNodeClick}
       />
-      
+
       {/* Control buttons */}
       {nodes.length > 0 && (
         <div className='absolute top-2 right-2 flex gap-1'>
+          {selectedNodes.length > 0 && onClearSelection && (
+            <IconButton
+              onClick={onClearSelection}
+              title='Clear node selection'
+              isDarkMode={isDarkMode}
+            >
+              <RotateCcw size={16} />
+            </IconButton>
+          )}
           <IconButton
             onClick={fitToView}
-            title="Fit graph to view"
+            title='Fit graph to view'
             isDarkMode={isDarkMode}
           >
             <Fullscreen size={16} />
           </IconButton>
           <IconButton
             onClick={handleFullScreenToggle}
-            title={isFullScreen ? "Exit full screen" : "Enter full screen"}
+            title={isFullScreen ? 'Exit full screen' : 'Enter full screen'}
             isDarkMode={isDarkMode}
           >
             <Maximize2 size={16} />
           </IconButton>
         </div>
       )}
-      
+
+      {/* Selection status */}
+      {selectedNodes.length > 0 && (
+        <div className='absolute top-2 left-2 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm'>
+          {selectedNodes.length === 1 ? (
+            <span>
+              Selected: <strong>{selectedNodes[0]}</strong> (click another node
+              to see path)
+            </span>
+          ) : (
+            <span>
+              Path: <strong>{selectedNodes[0]}</strong> →{' '}
+              <strong>{selectedNodes[1]}</strong>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Empty state message */}
       {nodes.length === 0 && (
         <div className='absolute inset-0 flex items-center justify-center p-8'>

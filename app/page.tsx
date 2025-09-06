@@ -61,6 +61,9 @@ export default function Home() {
     handleDeselectAllPairings,
     allPairingsSelected,
     cleanupInvalidConnections,
+    selectedNodes,
+    handleNodeClick,
+    clearNodeSelection,
   } = useGraphState();
 
   // UI state
@@ -370,6 +373,9 @@ export default function Home() {
                 isDarkMode={isDarkMode}
                 initialTransform={graphTransform}
                 onTransformChange={handleGraphTransformChange}
+                selectedNodes={selectedNodes}
+                onNodeClick={handleNodeClick}
+                onClearSelection={clearNodeSelection}
               />
             </div>
           )}
