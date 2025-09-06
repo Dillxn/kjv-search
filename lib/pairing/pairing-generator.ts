@@ -358,6 +358,7 @@ export class PairingGenerator {
       
       // Generate valid term pairs based on the pairing type
       const validPairs: string[] = [];
+      const pairSet = new Set<string>(); // Track pairs to avoid duplicates
       
       if (firstPairing.isBetweenGroups && group1Terms && group2Terms) {
         // For between-groups pairings, only create pairs between different groups
@@ -375,9 +376,13 @@ export class PairingGenerator {
               
               // Valid if one term is in group1 and the other is in group2
               if ((term1InGroup1 && term2InGroup2) || (term1InGroup2 && term2InGroup1)) {
-                const pair = `${term1} ↔ ${term2}`;
-                if (!validPairs.includes(pair)) {
-                  validPairs.push(pair);
+                // Ensure consistent ordering to avoid duplicates (alphabetical)
+                const [first, second] = [term1, term2].sort();
+                const pairKey = `${first}↔${second}`;
+                
+                if (!pairSet.has(pairKey)) {
+                  pairSet.add(pairKey);
+                  validPairs.push(`${first} ↔ ${second}`);
                 }
               }
             }
@@ -387,10 +392,9 @@ export class PairingGenerator {
         // For within-group pairings, create all possible pairs
         for (let i = 0; i < allTerms.length; i++) {
           for (let j = i + 1; j < allTerms.length; j++) {
+            // Already in correct order (i < j), so no duplicates possible
             const pair = `${allTerms[i]} ↔ ${allTerms[j]}`;
-            if (!validPairs.includes(pair)) {
-              validPairs.push(pair);
-            }
+            validPairs.push(pair);
           }
         }
       }
