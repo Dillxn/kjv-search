@@ -731,7 +731,7 @@ export function GraphVisualizer({ connections }: GraphVisualizerProps) {
               );
               
               return currentConnections.length > 0 
-                ? `Found ${currentConnections.length} connection(s) between these words (updates in real-time)`
+                ? `Found ${currentConnections.length} connection(s) between these words`
                 : 'No connections currently selected for these words';
             })()}
           </div>
