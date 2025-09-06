@@ -26,8 +26,8 @@ export function TabNavigation({
   onDeselectAllPairings,
 }: TabNavigationProps) {
   return (
-    <div className='flex mb-2 gap-1 items-center justify-between flex-shrink-0'>
-      <div className='flex gap-1 items-center'>
+    <div className='flex gap-2 items-center justify-between flex-shrink-0'>
+      <div className='flex gap-2 items-center'>
         <Tab
           isActive={activeTab === 'all'}
           isDarkMode={isDarkMode}

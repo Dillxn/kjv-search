@@ -46,7 +46,7 @@ export function Tab({
   // Complex variant for main tabs with additional functionality
   return (
     <div
-      className={`group relative flex items-center gap-1 px-2 py-1 min-w-0 max-w-48 ${baseClasses}`}
+      className={`group relative flex items-center gap-2 px-2 py-1 min-w-0 max-w-48 ${baseClasses}`}
       onClick={onClick}
     >
       {children}

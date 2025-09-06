@@ -72,8 +72,8 @@ export function TabBar({
   };
 
   return (
-    <div className={`flex items-center px-2 py-1`}>
-      <div className='flex items-center gap-1 overflow-x-auto scrollbar-thin'>
+    <div className={`flex items-center`}>
+      <div className='flex items-center gap-2 overflow-x-auto scrollbar-thin'>
         {tabManager.tabs.map((tab) => {
           const isActive = tab.id === tabManager.activeTabId;
           const isEditing = editingTabId === tab.id;
@@ -110,7 +110,7 @@ export function TabBar({
               )}
 
               {!isEditing && (
-                <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                <div className='flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity'>
                   <button
                     onClick={(e) => handleDuplicateTab(e, tab.id)}
                     className={`p-0.5 rounded ${

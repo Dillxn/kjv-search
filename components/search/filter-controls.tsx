@@ -86,7 +86,7 @@ export function FilterControls({
             >
               Testament
             </label>
-            <div className='flex gap-1 flex-wrap'>
+            <div className='flex gap-2 flex-wrap'>
               {(['all', 'old', 'new'] as const).map((testament) => (
                 <FilterButton
                   key={testament}
@@ -118,7 +118,7 @@ export function FilterControls({
             >
               Books
             </label>
-            <div className='flex gap-1 flex-wrap max-h-32 overflow-y-auto'>
+            <div className='flex gap-2 flex-wrap max-h-32 overflow-y-auto'>
               {getAvailableBooks().map((book) => {
                 const count = getResultsByBook(book);
                 const isSelected = selectedBooks.includes(book);

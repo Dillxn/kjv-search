@@ -274,7 +274,7 @@ export default function Home() {
 
   return (
     <div
-      className={`h-screen flex flex-col overflow-hidden ${getBackgroundClass(
+      className={`h-screen flex flex-col gap-2 p-2 overflow-hidden ${getBackgroundClass(
         isDarkMode
       )}`}
     >
@@ -284,33 +284,32 @@ export default function Home() {
         isDarkMode={isDarkMode}
       />
 
-      <div className={`px-2 flex flex-col flex-1 min-h-0`}>
-        <AppHeader
-          isDarkMode={isDarkMode}
-          showGraph={showGraph}
-          searchTerms={searchTerms}
-          pairingsSearchTerms={pairingsSearchTerms}
-          activeTab={activeTab}
-          selectedTestament={selectedTestament}
-          selectedBooks={selectedBooks}
-          maxProximity={maxProximity}
-          showFilters={showFilters}
-          filterCounts={filterCounts}
-          onDarkModeToggle={() => setIsDarkMode(!isDarkMode)}
-          onGraphToggle={() => setShowGraph(!showGraph)}
-          onSearchTermsChange={setSearchTerms}
-          onPairingsSearchTermsChange={setPairingsSearchTerms}
-          onTestamentChange={handleTestamentChange}
-          onBookToggle={handleBookToggle}
-          onProximityChange={setMaxProximity}
-          onToggleFilters={() => setShowFilters(!showFilters)}
-        />
+      <AppHeader
+        isDarkMode={isDarkMode}
+        showGraph={showGraph}
+        searchTerms={searchTerms}
+        pairingsSearchTerms={pairingsSearchTerms}
+        activeTab={activeTab}
+        selectedTestament={selectedTestament}
+        selectedBooks={selectedBooks}
+        maxProximity={maxProximity}
+        showFilters={showFilters}
+        filterCounts={filterCounts}
+        onDarkModeToggle={() => setIsDarkMode(!isDarkMode)}
+        onGraphToggle={() => setShowGraph(!showGraph)}
+        onSearchTermsChange={setSearchTerms}
+        onPairingsSearchTermsChange={setPairingsSearchTerms}
+        onTestamentChange={handleTestamentChange}
+        onBookToggle={handleBookToggle}
+        onProximityChange={setMaxProximity}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+      />
 
-        {/* Content Area */}
-        <div className='flex-1 flex gap-2 min-h-0 pb-4'>
+      {/* Content Area */}
+      <div className='flex-1 flex gap-2 min-h-0'>
           {/* Results Panel */}
           <div
-            className={`flex-1 flex flex-col min-h-0 ${
+            className={`flex-1 flex flex-col gap-2 min-h-0 ${
               showGraph ? 'w-1/2' : 'w-full'
             }`}
           >
@@ -357,13 +356,13 @@ export default function Home() {
           {/* Graph Panel */}
           {showGraph && (
             <div
-              className={`w-1/2 rounded-lg shadow-md flex flex-col min-h-0 ${getBackgroundClass(
+              className={`w-1/2 rounded-lg shadow-md flex flex-col gap-2 p-2 min-h-0 ${getBackgroundClass(
                 isDarkMode,
                 'card'
               )}`}
             >
               <div
-                className={`p-2 border-b flex-shrink-0 ${getBorderClass(
+                className={`border-b flex-shrink-0 pb-2 ${getBorderClass(
                   isDarkMode
                 )}`}
               >
@@ -400,7 +399,6 @@ export default function Home() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

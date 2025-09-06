@@ -30,7 +30,7 @@ export function Slider({
   const percentage = ((value - min) / (max - min)) * 100;
 
   return (
-    <div className={`space-y-1 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {label && (
         <div className="flex justify-between items-center">
           <label className={`text-xs font-medium ${getTextClass(isDarkMode, 'secondary')}`}>

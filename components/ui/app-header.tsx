@@ -54,7 +54,7 @@ export function AppHeader({
 }: AppHeaderProps) {
   return (
     <div
-      className={`rounded-lg shadow-md mb-2 p-1.5 ${getBackgroundClass(
+      className={`rounded-lg shadow-md p-2 ${getBackgroundClass(
         isDarkMode,
         'card'
       )}`}

@@ -25,6 +25,14 @@ export const APP_CONFIG = {
     CONTAINER_BASE_OFFSET: 180,
     ESTIMATED_ITEM_HEIGHT: 60,
     DEV_BACKUP_INTERVAL: 2000,
+    // Standardized spacing - Gap-based approach
+    SPACING: {
+      GAP: 'gap-2', // 0.5rem/8px - standard gap for flexbox/grid layouts
+      GAP_SM: 'gap-1', // 0.25rem/4px - small gap for tight spaces
+      PADDING: 'p-2', // 0.5rem/8px - standard padding for containers
+      SPACE_Y: 'space-y-2', // 0.5rem/8px - vertical spacing (legacy, prefer gap)
+      SPACE_Y_SM: 'space-y-1', // 0.25rem/4px - small vertical spacing (legacy)
+    },
   },
 } as const;
 
@@ -73,3 +81,12 @@ export const PAIRINGS_HIGHLIGHT_COLORS_DARK = [
   'border-emerald-400 text-emerald-300 bg-transparent',
   'border-sky-400 text-sky-300 bg-transparent',
 ];
+
+// Standardized spacing utilities - Gap-based approach
+// Use flexbox/grid with gap instead of margins for consistent spacing:
+// - SPACING.GAP (gap-2): Standard 8px gap for flexbox/grid layouts
+// - SPACING.GAP_SM (gap-1): Small 4px gap for tight spaces
+// - SPACING.PADDING (p-2): Standard 8px padding for containers
+// - SPACING.SPACE_Y (space-y-2): Vertical spacing (use only when gap isn't possible)
+// - SPACING.SPACE_Y_SM (space-y-1): Small vertical spacing (use only when gap isn't possible)
+export const SPACING = APP_CONFIG.UI.SPACING;
