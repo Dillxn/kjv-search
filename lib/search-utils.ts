@@ -62,11 +62,17 @@ export class SearchResultsHelper {
   /**
    * Gets appropriate empty state message based on search state
    */
-  static getEmptyStateMessage(searchTerms: string, resultType: 'results' | 'pairings'): string {
+  static getEmptyStateMessage(searchTerms: string, resultType: 'results' | 'pairings' | 'linkings'): string {
     if (searchTerms.trim().length < 2) {
       return 'Enter at least 2 characters to search';
     }
-    return resultType === 'results' ? 'No results found' : 'No pairings found';
+    if (resultType === 'results') {
+      return 'No results found';
+    } else if (resultType === 'pairings') {
+      return 'No pairings found';
+    } else {
+      return 'No linkings found';
+    }
   }
 
   /**

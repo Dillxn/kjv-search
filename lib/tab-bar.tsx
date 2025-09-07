@@ -13,20 +13,37 @@ interface TabState {
   selectedBooks: string[];
   maxProximity: number;
   showFilters: boolean;
-  activeTab: 'all' | 'pairings';
+  activeTab: 'all' | 'pairings' | 'linking';
   isDarkMode: boolean;
   showGraph: boolean;
-  selectedConnections: Array<{
-    word1: string;
-    word2: string;
-    reference: string;
-    versePositions: number[];
-  }>;
-  selectedNodes: string[];
-  graphTransform: {
-    x: number;
-    y: number;
-    scale: number;
+  // Separate graph states for pairings and linking tabs
+  pairingsGraphState: {
+    selectedConnections: Array<{
+      word1: string;
+      word2: string;
+      reference: string;
+      versePositions: number[];
+    }>;
+    selectedNodes: string[];
+    graphTransform: {
+      x: number;
+      y: number;
+      scale: number;
+    };
+  };
+  linkingGraphState: {
+    selectedConnections: Array<{
+      word1: string;
+      word2: string;
+      reference: string;
+      versePositions: number[];
+    }>;
+    selectedNodes: string[];
+    graphTransform: {
+      x: number;
+      y: number;
+      scale: number;
+    };
   };
 }
 

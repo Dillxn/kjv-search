@@ -11,7 +11,7 @@ interface AppHeaderProps {
   showGraph: boolean;
   searchTerms: string;
   pairingsSearchTerms: string;
-  activeTab: 'all' | 'pairings';
+  activeTab: 'all' | 'pairings' | 'linking';
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
   maxProximity: number;
