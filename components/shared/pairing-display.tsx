@@ -3,6 +3,8 @@
 import { VersePairing } from '../../lib/kjv-parser';
 import { UnifiedHighlighter } from '../../lib/highlighting';
 import { SearchResultsHelper } from '../../lib/search-utils';
+import { RegexUtils } from '../../lib/shared/regex-utils';
+import { MatchBounds } from '../../lib/types/verse';
 
 interface PairingDisplayProps {
   pairing: VersePairing;
@@ -30,26 +32,44 @@ export function PairingDisplay({
   onToggleGraph,
   showCheckbox = true,
 }: PairingDisplayProps) {
-  const getSearchTermsArray = () => {
-    return SearchResultsHelper.processSearchString(searchTerms);
-  };
 
-  const getPairingsSearchTermsArray = () => {
-    return SearchResultsHelper.processSearchString(pairingsSearchTerms);
-  };
 
   // Function to highlight text with only the terms that contributed to this pairing result
   const highlightPairingText = (text: string): string => {
-    // Use all original search terms to maintain consistent color assignment
+    // Find matches only for the specific pairing terms
+    const pairingMatches: MatchBounds[] = [];
+
+    // Find matches for term1
+    const term1Matches = RegexUtils.findMatches(text, pairing.term1);
+    for (const match of term1Matches) {
+      pairingMatches.push({
+        term: pairing.term1,
+        start: match.start,
+        end: match.end,
+      });
+    }
+
+    // Find matches for term2
+    const term2Matches = RegexUtils.findMatches(text, pairing.term2);
+    for (const match of term2Matches) {
+      pairingMatches.push({
+        term: pairing.term2,
+        start: match.start,
+        end: match.end,
+      });
+    }
+
+    // Use full search term lists for consistent color assignment with search input
     const allSearchTerms = SearchResultsHelper.processSearchString(searchTerms || '');
     const allPairingsTerms = SearchResultsHelper.processSearchString(pairingsSearchTerms || '');
 
     return UnifiedHighlighter.highlightText(text, {
+      matches: pairingMatches,
       mainTerms: allSearchTerms,
       pairingsTerms: allPairingsTerms,
       isDarkMode,
-      usePairingsColors: allPairingsTerms.length > 0, // Use pairings colors if we have pairings terms
-      maintainInputOrder: true, // Maintain input order for consistent highlighting with search input
+      usePairingsColors: allPairingsTerms.length > 0,
+      maintainInputOrder: true,
     });
   };
 
