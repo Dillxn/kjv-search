@@ -48,6 +48,13 @@ body {
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure mark elements work well with Tailwind classes */
+mark {
+  /* Reset only padding and margin to match span behavior */
+  padding: 0;
+  margin: 0;
+}
+
 /* Custom scrollbar styles */
 .scrollbar-visible {
   scrollbar-width: thin;

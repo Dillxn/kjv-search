@@ -40,12 +40,15 @@ export function PairingDisplay({
 
   // Function to highlight text with only the terms that contributed to this pairing result
   const highlightPairingText = (text: string): string => {
-    // Only highlight the specific terms that were found in this pairing
+    // For linking mode, treat all terms as main terms (no borders) for consistency
+    // For regular pairings mode, use pairings styling (borders on second term)
+    const isLinkingMode = !pairing.term1.includes(' ') && !pairing.term2.includes(' '); // Simple heuristic
+
     return UnifiedHighlighter.highlightText(text, {
-      mainTerms: [pairing.term1],
-      pairingsTerms: [pairing.term2],
+      mainTerms: [pairing.term1, pairing.term2], // Both terms as main terms
+      pairingsTerms: [],
       isDarkMode,
-      usePairingsColors: true,
+      usePairingsColors: false, // Don't use pairings colors to avoid borders
     });
   };
 

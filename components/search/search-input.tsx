@@ -11,6 +11,7 @@ interface SearchInputProps {
   label?: string;
   isDarkMode: boolean;
   isPairingsInput?: boolean;
+  processedSearchTerms?: string[];
 }
 
 export function SearchInput({
@@ -20,17 +21,19 @@ export function SearchInput({
   label,
   isDarkMode,
   isPairingsInput = false,
+  processedSearchTerms,
 }: SearchInputProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-
-  const formatFunction = isPairingsInput ? formatPairingsTextWithColors : formatTextWithColors;
 
   // Update contentEditable when value changes externally
   useEffect(() => {
     if (editorRef.current && document.activeElement !== editorRef.current) {
-      editorRef.current.innerHTML = formatFunction(value, isDarkMode);
+      const formattedText = isPairingsInput
+        ? formatPairingsTextWithColors(value, isDarkMode)
+        : formatTextWithColors(value, isDarkMode, false);
+      editorRef.current.innerHTML = formattedText;
     }
-  }, [value, isDarkMode, formatFunction]);
+  }, [value, isDarkMode, isPairingsInput, processedSearchTerms]);
 
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const text = e.currentTarget.textContent || '';
@@ -64,7 +67,10 @@ export function SearchInput({
       }
 
       // Update HTML with colored spans
-      e.currentTarget.innerHTML = formatFunction(text, isDarkMode);
+      const formattedText = isPairingsInput
+        ? formatPairingsTextWithColors(text, isDarkMode)
+        : formatTextWithColors(text, isDarkMode, false);
+      e.currentTarget.innerHTML = formattedText;
 
       // Restore cursor position
       if (found && text) {
@@ -107,7 +113,7 @@ export function SearchInput({
         }
       }
     }
-  }, [onChange, formatFunction, isDarkMode]);
+  }, [onChange, isDarkMode, isPairingsInput]);
 
   return (
     <div className='mb-1.5'>

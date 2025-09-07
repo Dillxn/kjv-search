@@ -15,6 +15,17 @@ export function getPairingsHighlightColors(isDarkMode: boolean): string[] {
     : PAIRINGS_HIGHLIGHT_COLORS_LIGHT;
 }
 
+// Create a consistent color assignment based on term content rather than array position
+function getColorForTerm(term: string, colors: string[]): string {
+  // Use a simple hash of the term to get consistent colors
+  let hash = 0;
+  for (let i = 0; i < term.length; i++) {
+    hash = ((hash << 5) - hash) + term.charCodeAt(i);
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export function createTermColorMaps(
   mainTerms: string[],
   pairingsTerms: string[],
@@ -24,23 +35,23 @@ export function createTermColorMaps(
   const pairingsColors = getPairingsHighlightColors(isDarkMode);
 
   const mainTermToColor = new Map<string, string>();
-  mainTerms.forEach((term, index) => {
-    const normalizedTerm = term.toLowerCase().trim();
-    if (normalizedTerm) {
+  const processedMainTerms = [...new Set(mainTerms.map(term => term.toLowerCase().trim()))];
+  processedMainTerms.forEach((term) => {
+    if (term) {
       mainTermToColor.set(
-        normalizedTerm,
-        mainColors[index % mainColors.length]
+        term,
+        getColorForTerm(term, mainColors)
       );
     }
   });
 
   const pairingsTermToColor = new Map<string, string>();
-  pairingsTerms.forEach((term, index) => {
-    const normalizedTerm = term.toLowerCase().trim();
-    if (normalizedTerm) {
+  const processedPairingsTerms = [...new Set(pairingsTerms.map(term => term.toLowerCase().trim()))];
+  processedPairingsTerms.forEach((term) => {
+    if (term) {
       pairingsTermToColor.set(
-        normalizedTerm,
-        pairingsColors[index % pairingsColors.length]
+        term,
+        getColorForTerm(term, pairingsColors)
       );
     }
   });
