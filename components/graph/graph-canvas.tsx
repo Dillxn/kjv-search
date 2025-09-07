@@ -114,42 +114,150 @@ export function GraphCanvas({
 
   // Memoize color conversion function
   const getColorsFromTailwind = useCallback((classes: string) => {
-    if (classes.includes('bg-yellow-200')) return { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' };
-    if (classes.includes('bg-blue-200')) return { bg: '#dbeafe', text: '#1e40af', border: '#3b82f6' };
-    if (classes.includes('bg-green-200')) return { bg: '#dcfce7', text: '#166534', border: '#22c55e' };
-    if (classes.includes('bg-red-200')) return { bg: '#fecaca', text: '#dc2626', border: '#ef4444' };
-    if (classes.includes('bg-purple-200')) return { bg: '#e9d5ff', text: '#7c3aed', border: '#8b5cf6' };
-    if (classes.includes('bg-pink-200')) return { bg: '#fce7f3', text: '#be185d', border: '#ec4899' };
-    if (classes.includes('bg-indigo-200')) return { bg: '#c7d2fe', text: '#4338ca', border: '#6366f1' };
-    if (classes.includes('bg-orange-200')) return { bg: '#fed7aa', text: '#ea580c', border: '#f97316' };
-    
-    if (classes.includes('bg-yellow-300')) return { bg: '#fcd34d', text: '#92400e', border: '#f59e0b' };
-    if (classes.includes('bg-blue-300')) return { bg: '#93c5fd', text: '#1e40af', border: '#3b82f6' };
-    if (classes.includes('bg-green-300')) return { bg: '#86efac', text: '#166534', border: '#22c55e' };
-    if (classes.includes('bg-red-300')) return { bg: '#fca5a5', text: '#dc2626', border: '#ef4444' };
-    if (classes.includes('bg-purple-300')) return { bg: '#c4b5fd', text: '#7c3aed', border: '#8b5cf6' };
-    if (classes.includes('bg-pink-300')) return { bg: '#f9a8d4', text: '#be185d', border: '#ec4899' };
-    if (classes.includes('bg-indigo-300')) return { bg: '#a5b4fc', text: '#4338ca', border: '#6366f1' };
-    if (classes.includes('bg-orange-300')) return { bg: '#fdba74', text: '#ea580c', border: '#f97316' };
-    
-    if (classes.includes('border-teal-500')) return { bg: 'transparent', text: '#0f766e', border: '#14b8a6' };
+    // Filled background colors (main search terms)
+    if (classes.includes('bg-red-500')) return { bg: '#ef4444', text: '#ffffff', border: '#ef4444' };
+    if (classes.includes('bg-emerald-500')) return { bg: '#10b981', text: '#ffffff', border: '#10b981' };
+    if (classes.includes('bg-amber-500')) return { bg: '#f59e0b', text: '#ffffff', border: '#f59e0b' };
+    if (classes.includes('bg-purple-500')) return { bg: '#8b5cf6', text: '#ffffff', border: '#8b5cf6' };
+    if (classes.includes('bg-pink-500')) return { bg: '#ec4899', text: '#ffffff', border: '#ec4899' };
+    if (classes.includes('bg-orange-500')) return { bg: '#f97316', text: '#ffffff', border: '#f97316' };
+    if (classes.includes('bg-cyan-500')) return { bg: '#06b6d4', text: '#ffffff', border: '#06b6d4' };
+    if (classes.includes('bg-lime-500')) return { bg: '#84cc16', text: '#ffffff', border: '#84cc16' };
+    if (classes.includes('bg-indigo-500')) return { bg: '#6366f1', text: '#ffffff', border: '#6366f1' };
+    if (classes.includes('bg-rose-500')) return { bg: '#f43f5e', text: '#ffffff', border: '#f43f5e' };
+    if (classes.includes('bg-sky-500')) return { bg: '#0ea5e9', text: '#ffffff', border: '#0ea5e9' };
+    if (classes.includes('bg-teal-500')) return { bg: '#14b8a6', text: '#ffffff', border: '#14b8a6' };
+    if (classes.includes('bg-violet-500')) return { bg: '#8b5cf6', text: '#ffffff', border: '#8b5cf6' };
+    if (classes.includes('bg-yellow-500')) return { bg: '#eab308', text: '#ffffff', border: '#eab308' };
+    if (classes.includes('bg-green-500')) return { bg: '#22c55e', text: '#ffffff', border: '#22c55e' };
+    if (classes.includes('bg-blue-500')) return { bg: '#3b82f6', text: '#ffffff', border: '#3b82f6' };
+    if (classes.includes('bg-fuchsia-500')) return { bg: '#d946ef', text: '#ffffff', border: '#d946ef' };
+
+    // Darker filled colors (600 series)
+    if (classes.includes('bg-red-600')) return { bg: '#dc2626', text: '#ffffff', border: '#dc2626' };
+    if (classes.includes('bg-emerald-600')) return { bg: '#059669', text: '#ffffff', border: '#059669' };
+    if (classes.includes('bg-amber-600')) return { bg: '#d97706', text: '#ffffff', border: '#d97706' };
+    if (classes.includes('bg-purple-600')) return { bg: '#9333ea', text: '#ffffff', border: '#9333ea' };
+    if (classes.includes('bg-pink-600')) return { bg: '#db2777', text: '#ffffff', border: '#db2777' };
+    if (classes.includes('bg-orange-600')) return { bg: '#ea580c', text: '#ffffff', border: '#ea580c' };
+    if (classes.includes('bg-cyan-600')) return { bg: '#0891b2', text: '#ffffff', border: '#0891b2' };
+    if (classes.includes('bg-lime-600')) return { bg: '#65a30d', text: '#ffffff', border: '#65a30d' };
+    if (classes.includes('bg-indigo-600')) return { bg: '#4f46e5', text: '#ffffff', border: '#4f46e5' };
+    if (classes.includes('bg-rose-600')) return { bg: '#e11d48', text: '#ffffff', border: '#e11d48' };
+    if (classes.includes('bg-sky-600')) return { bg: '#0284c7', text: '#ffffff', border: '#0284c7' };
+    if (classes.includes('bg-teal-600')) return { bg: '#0d9488', text: '#ffffff', border: '#0d9488' };
+    if (classes.includes('bg-violet-600')) return { bg: '#7c3aed', text: '#ffffff', border: '#7c3aed' };
+    if (classes.includes('bg-yellow-600')) return { bg: '#ca8a04', text: '#ffffff', border: '#ca8a04' };
+    if (classes.includes('bg-green-600')) return { bg: '#16a34a', text: '#ffffff', border: '#16a34a' };
+    if (classes.includes('bg-blue-600')) return { bg: '#2563eb', text: '#ffffff', border: '#2563eb' };
+    if (classes.includes('bg-fuchsia-600')) return { bg: '#c026d3', text: '#ffffff', border: '#c026d3' };
+
+    // Even darker filled colors (700 series)
+    if (classes.includes('bg-red-700')) return { bg: '#b91c1c', text: '#ffffff', border: '#b91c1c' };
+    if (classes.includes('bg-emerald-700')) return { bg: '#047857', text: '#ffffff', border: '#047857' };
+    if (classes.includes('bg-amber-700')) return { bg: '#b45309', text: '#ffffff', border: '#b45309' };
+    if (classes.includes('bg-purple-700')) return { bg: '#7c3aed', text: '#ffffff', border: '#7c3aed' };
+    if (classes.includes('bg-pink-700')) return { bg: '#be185d', text: '#ffffff', border: '#be185d' };
+    if (classes.includes('bg-orange-700')) return { bg: '#c2410c', text: '#ffffff', border: '#c2410c' };
+    if (classes.includes('bg-cyan-700')) return { bg: '#0e7490', text: '#ffffff', border: '#0e7490' };
+    if (classes.includes('bg-lime-700')) return { bg: '#4d7c0f', text: '#ffffff', border: '#4d7c0f' };
+    if (classes.includes('bg-indigo-700')) return { bg: '#4338ca', text: '#ffffff', border: '#4338ca' };
+    if (classes.includes('bg-rose-700')) return { bg: '#be123c', text: '#ffffff', border: '#be123c' };
+    if (classes.includes('bg-sky-700')) return { bg: '#0369a1', text: '#ffffff', border: '#0369a1' };
+    if (classes.includes('bg-teal-700')) return { bg: '#0f766e', text: '#ffffff', border: '#0f766e' };
+    if (classes.includes('bg-violet-700')) return { bg: '#6d28d9', text: '#ffffff', border: '#6d28d9' };
+    if (classes.includes('bg-yellow-700')) return { bg: '#a16207', text: '#ffffff', border: '#a16207' };
+    if (classes.includes('bg-green-700')) return { bg: '#15803d', text: '#ffffff', border: '#15803d' };
+    if (classes.includes('bg-blue-700')) return { bg: '#1d4ed8', text: '#ffffff', border: '#1d4ed8' };
+    if (classes.includes('bg-fuchsia-700')) return { bg: '#a21caf', text: '#ffffff', border: '#a21caf' };
+
+    // Darkest filled colors (800 series)
+    if (classes.includes('bg-red-800')) return { bg: '#991b1b', text: '#ffffff', border: '#991b1b' };
+    if (classes.includes('bg-emerald-800')) return { bg: '#065f46', text: '#ffffff', border: '#065f46' };
+    if (classes.includes('bg-amber-800')) return { bg: '#92400e', text: '#ffffff', border: '#92400e' };
+    if (classes.includes('bg-purple-800')) return { bg: '#6b21a8', text: '#ffffff', border: '#6b21a8' };
+    if (classes.includes('bg-pink-800')) return { bg: '#9d174d', text: '#ffffff', border: '#9d174d' };
+    if (classes.includes('bg-orange-800')) return { bg: '#9a3412', text: '#ffffff', border: '#9a3412' };
+    if (classes.includes('bg-cyan-800')) return { bg: '#155e75', text: '#ffffff', border: '#155e75' };
+    if (classes.includes('bg-lime-800')) return { bg: '#365314', text: '#ffffff', border: '#365314' };
+    if (classes.includes('bg-indigo-800')) return { bg: '#3730a3', text: '#ffffff', border: '#3730a3' };
+    if (classes.includes('bg-rose-800')) return { bg: '#9f1239', text: '#ffffff', border: '#9f1239' };
+    if (classes.includes('bg-sky-800')) return { bg: '#075985', text: '#ffffff', border: '#075985' };
+    if (classes.includes('bg-teal-800')) return { bg: '#115e59', text: '#ffffff', border: '#115e59' };
+    if (classes.includes('bg-violet-800')) return { bg: '#5b21b6', text: '#ffffff', border: '#5b21b6' };
+    if (classes.includes('bg-yellow-800')) return { bg: '#854d0e', text: '#ffffff', border: '#854d0e' };
+    if (classes.includes('bg-green-800')) return { bg: '#166534', text: '#ffffff', border: '#166534' };
+    if (classes.includes('bg-blue-800')) return { bg: '#1e40af', text: '#ffffff', border: '#1e40af' };
+    if (classes.includes('bg-fuchsia-800')) return { bg: '#86198f', text: '#ffffff', border: '#86198f' };
+
+    // Outline/border colors (pairings search terms) - transparent background with colored border and text
+    if (classes.includes('border-red-500')) return { bg: 'transparent', text: '#b91c1c', border: '#ef4444' };
+    if (classes.includes('border-emerald-500')) return { bg: 'transparent', text: '#047857', border: '#10b981' };
+    if (classes.includes('border-amber-500')) return { bg: 'transparent', text: '#b45309', border: '#f59e0b' };
+    if (classes.includes('border-purple-500')) return { bg: 'transparent', text: '#7c3aed', border: '#8b5cf6' };
+    if (classes.includes('border-pink-500')) return { bg: 'transparent', text: '#be185d', border: '#ec4899' };
+    if (classes.includes('border-orange-500')) return { bg: 'transparent', text: '#c2410c', border: '#f97316' };
     if (classes.includes('border-cyan-500')) return { bg: 'transparent', text: '#0e7490', border: '#06b6d4' };
-    if (classes.includes('border-lime-500')) return { bg: 'transparent', text: '#365314', border: '#84cc16' };
-    if (classes.includes('border-amber-500')) return { bg: 'transparent', text: '#92400e', border: '#f59e0b' };
-    if (classes.includes('border-rose-500')) return { bg: 'transparent', text: '#be123c', border: '#f43f5e' };
-    if (classes.includes('border-violet-500')) return { bg: 'transparent', text: '#6b21a8', border: '#8b5cf6' };
-    if (classes.includes('border-emerald-500')) return { bg: 'transparent', text: '#065f46', border: '#10b981' };
-    if (classes.includes('border-sky-500')) return { bg: 'transparent', text: '#0c4a6e', border: '#0ea5e9' };
-    
-    if (classes.includes('border-teal-400')) return { bg: 'transparent', text: '#2dd4bf', border: '#2dd4bf' };
-    if (classes.includes('border-cyan-400')) return { bg: 'transparent', text: '#22d3ee', border: '#22d3ee' };
-    if (classes.includes('border-lime-400')) return { bg: 'transparent', text: '#a3e635', border: '#a3e635' };
-    if (classes.includes('border-amber-400')) return { bg: 'transparent', text: '#fbbf24', border: '#fbbf24' };
-    if (classes.includes('border-rose-400')) return { bg: 'transparent', text: '#fb7185', border: '#fb7185' };
-    if (classes.includes('border-violet-400')) return { bg: 'transparent', text: '#a78bfa', border: '#a78bfa' };
-    if (classes.includes('border-emerald-400')) return { bg: 'transparent', text: '#34d399', border: '#34d399' };
-    if (classes.includes('border-sky-400')) return { bg: 'transparent', text: '#38bdf8', border: '#38bdf8' };
-    
+    if (classes.includes('border-lime-500')) return { bg: 'transparent', text: '#4d7c0f', border: '#84cc16' };
+    if (classes.includes('border-indigo-500')) return { bg: 'transparent', text: '#4338ca', border: '#6366f1' };
+    if (classes.includes('border-rose-400')) return { bg: 'transparent', text: '#be123c', border: '#fb7185' };
+    if (classes.includes('border-sky-400')) return { bg: 'transparent', text: '#0369a1', border: '#38bdf8' };
+    if (classes.includes('border-teal-400')) return { bg: 'transparent', text: '#0f766e', border: '#2dd4bf' };
+    if (classes.includes('border-violet-500')) return { bg: 'transparent', text: '#6d28d9', border: '#8b5cf6' };
+    if (classes.includes('border-yellow-500')) return { bg: 'transparent', text: '#a16207', border: '#eab308' };
+    if (classes.includes('border-green-500')) return { bg: 'transparent', text: '#15803d', border: '#22c55e' };
+    if (classes.includes('border-blue-500')) return { bg: 'transparent', text: '#1d4ed8', border: '#3b82f6' };
+    if (classes.includes('border-fuchsia-500')) return { bg: 'transparent', text: '#a21caf', border: '#d946ef' };
+
+    // Darker border colors (600 series)
+    if (classes.includes('border-red-600')) return { bg: 'transparent', text: '#991b1b', border: '#dc2626' };
+    if (classes.includes('border-emerald-600')) return { bg: 'transparent', text: '#065f46', border: '#059669' };
+    if (classes.includes('border-amber-600')) return { bg: 'transparent', text: '#92400e', border: '#d97706' };
+    if (classes.includes('border-purple-600')) return { bg: 'transparent', text: '#6b21a8', border: '#9333ea' };
+    if (classes.includes('border-pink-600')) return { bg: 'transparent', text: '#9d174d', border: '#db2777' };
+    if (classes.includes('border-orange-600')) return { bg: 'transparent', text: '#9a3412', border: '#ea580c' };
+    if (classes.includes('border-cyan-600')) return { bg: 'transparent', text: '#155e75', border: '#0891b2' };
+    if (classes.includes('border-lime-600')) return { bg: 'transparent', text: '#365314', border: '#65a30d' };
+    if (classes.includes('border-indigo-600')) return { bg: 'transparent', text: '#3730a3', border: '#4f46e5' };
+    if (classes.includes('border-violet-600')) return { bg: 'transparent', text: '#5b21b6', border: '#7c3aed' };
+    if (classes.includes('border-yellow-600')) return { bg: 'transparent', text: '#854d0e', border: '#ca8a04' };
+    if (classes.includes('border-green-600')) return { bg: 'transparent', text: '#166534', border: '#16a34a' };
+    if (classes.includes('border-blue-600')) return { bg: 'transparent', text: '#1e40af', border: '#2563eb' };
+    if (classes.includes('border-fuchsia-600')) return { bg: 'transparent', text: '#86198f', border: '#c026d3' };
+
+    // Even darker border colors (700 series)
+    if (classes.includes('border-red-700')) return { bg: 'transparent', text: '#7f1d1d', border: '#b91c1c' };
+    if (classes.includes('border-emerald-700')) return { bg: 'transparent', text: '#064e3b', border: '#047857' };
+    if (classes.includes('border-amber-700')) return { bg: 'transparent', text: '#78350f', border: '#b45309' };
+    if (classes.includes('border-purple-700')) return { bg: 'transparent', text: '#581c87', border: '#7c3aed' };
+    if (classes.includes('border-pink-700')) return { bg: 'transparent', text: '#831843', border: '#be185d' };
+    if (classes.includes('border-orange-700')) return { bg: 'transparent', text: '#7c2d12', border: '#c2410c' };
+    if (classes.includes('border-cyan-700')) return { bg: 'transparent', text: '#164e63', border: '#0e7490' };
+    if (classes.includes('border-lime-700')) return { bg: 'transparent', text: '#1a2e05', border: '#4d7c0f' };
+    if (classes.includes('border-indigo-700')) return { bg: 'transparent', text: '#312e81', border: '#4338ca' };
+    if (classes.includes('border-violet-700')) return { bg: 'transparent', text: '#4c1d95', border: '#6d28d9' };
+    if (classes.includes('border-yellow-700')) return { bg: 'transparent', text: '#713f12', border: '#a16207' };
+    if (classes.includes('border-green-700')) return { bg: 'transparent', text: '#14532d', border: '#15803d' };
+    if (classes.includes('border-blue-700')) return { bg: 'transparent', text: '#1e3a8a', border: '#1d4ed8' };
+    if (classes.includes('border-fuchsia-700')) return { bg: 'transparent', text: '#701a75', border: '#a21caf' };
+
+    // Darkest border colors (800 series)
+    if (classes.includes('border-red-800')) return { bg: 'transparent', text: '#7f1d1d', border: '#991b1b' };
+    if (classes.includes('border-emerald-800')) return { bg: 'transparent', text: '#064e3b', border: '#065f46' };
+    if (classes.includes('border-amber-800')) return { bg: 'transparent', text: '#78350f', border: '#92400e' };
+    if (classes.includes('border-purple-800')) return { bg: 'transparent', text: '#581c87', border: '#6b21a8' };
+    if (classes.includes('border-pink-800')) return { bg: 'transparent', text: '#831843', border: '#9d174d' };
+    if (classes.includes('border-orange-800')) return { bg: 'transparent', text: '#7c2d12', border: '#9a3412' };
+    if (classes.includes('border-cyan-800')) return { bg: 'transparent', text: '#164e63', border: '#155e75' };
+    if (classes.includes('border-lime-800')) return { bg: 'transparent', text: '#1a2e05', border: '#365314' };
+    if (classes.includes('border-indigo-800')) return { bg: 'transparent', text: '#312e81', border: '#3730a3' };
+    if (classes.includes('border-violet-800')) return { bg: 'transparent', text: '#4c1d95', border: '#5b21b6' };
+    if (classes.includes('border-yellow-800')) return { bg: 'transparent', text: '#713f12', border: '#854d0e' };
+    if (classes.includes('border-green-800')) return { bg: 'transparent', text: '#14532d', border: '#166534' };
+    if (classes.includes('border-blue-800')) return { bg: 'transparent', text: '#1e3a8a', border: '#1e40af' };
+    if (classes.includes('border-fuchsia-800')) return { bg: 'transparent', text: '#701a75', border: '#86198f' };
+
+    // Default colors for unmatched terms
     if (classes.includes('bg-gray-600')) return { bg: '#4b5563', text: '#e5e7eb', border: '#6b7280' };
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);

@@ -1,6 +1,6 @@
 import { MatchBounds } from './types';
 import { RegexUtils } from '../shared/regex-utils';
-import { createTermColorMaps } from './colors';
+import { createTermColorMaps, getHighlightColors, getPairingsHighlightColors, createUnifiedTermColorMaps } from './colors';
 
 /**
  * Unified highlighting utility that consolidates bounds-based and regex-based highlighting
@@ -14,19 +14,35 @@ export class UnifiedHighlighter {
     text: string,
     matches: MatchBounds[],
     isDarkMode: boolean,
-    usePairingsColors: boolean = false
+    usePairingsColors: boolean = false,
+    mainTermsOrder?: string[],
+    pairingsTermsOrder?: string[]
   ): string {
     if (!matches.length) return text;
 
     // Extract unique terms and create color maps
     const uniqueTerms = [...new Set(matches.map(m => m.term.toLowerCase().trim()))];
-    const { mainTermToColor, pairingsTermToColor } = createTermColorMaps(
-      usePairingsColors ? [] : uniqueTerms,
-      usePairingsColors ? uniqueTerms : [],
-      isDarkMode
-    );
 
-    const termToColor = usePairingsColors ? pairingsTermToColor : mainTermToColor;
+    // If maintaining input order, use the provided term order
+    const mainTerms = mainTermsOrder ? mainTermsOrder : (usePairingsColors ? [] : uniqueTerms);
+    const pairingsTerms = pairingsTermsOrder ? pairingsTermsOrder : (usePairingsColors ? uniqueTerms : []);
+
+    let termToColor: Map<string, string>;
+
+    if (mainTermsOrder || pairingsTermsOrder) {
+      // Use unified color assignment for consistency with search input
+      const allTerms = [...(mainTermsOrder || []), ...(pairingsTermsOrder || [])];
+      termToColor = createUnifiedTermColorMaps(allTerms, isDarkMode, usePairingsColors);
+    } else {
+      // Use legacy color assignment
+      const { mainTermToColor, pairingsTermToColor } = createTermColorMaps(
+        mainTerms,
+        pairingsTerms,
+        isDarkMode,
+        false
+      );
+      termToColor = usePairingsColors ? pairingsTermToColor : mainTermToColor;
+    }
 
     // Sort matches by start position (reverse order to avoid index shifting)
     const sortedMatches = matches.slice().sort((a, b) => b.start - a.start);
@@ -36,13 +52,12 @@ export class UnifiedHighlighter {
     // Apply highlights using the provided bounds
     for (const match of sortedMatches) {
       const term = match.term.toLowerCase().trim();
-      const colorClass = termToColor.get(term);
-      if (colorClass) {
+      const colorClasses = termToColor.get(term);
+      if (colorClasses) {
         const before = result.slice(0, match.start);
         const matchedText = result.slice(match.start, match.end);
         const after = result.slice(match.end);
-        const borderClass = usePairingsColors ? 'border' : '';
-        result = `${before}<mark class="${colorClass} ${borderClass} px-0.5 rounded">${matchedText}</mark>${after}`;
+        result = `${before}<mark class="${colorClasses} px-0.5 rounded">${matchedText}</mark>${after}`;
       }
     }
 
@@ -56,7 +71,8 @@ export class UnifiedHighlighter {
     text: string,
     mainTerms: string[],
     pairingsTerms: string[],
-    isDarkMode: boolean
+    isDarkMode: boolean,
+    maintainInputOrder: boolean = false
   ): string {
     if (!text || (!mainTerms.length && !pairingsTerms.length)) {
       return text;
@@ -70,22 +86,35 @@ export class UnifiedHighlighter {
       return text;
     }
 
-    const { mainTermToColor, pairingsTermToColor } = createTermColorMaps(
-      validMainTerms,
-      validPairingsTerms,
-      isDarkMode
-    );
-
     let result = text;
 
-    // First highlight pairings terms (they get borders)
-    for (const [term, colorClass] of pairingsTermToColor.entries()) {
-      result = UnifiedHighlighter.highlightTermWithRegex(result, term, colorClass, true);
-    }
+    if (maintainInputOrder) {
+      // Use unified color assignment for consistency with search input
+      const allTerms = [...validMainTerms, ...validPairingsTerms];
+      const termToColor = createUnifiedTermColorMaps(allTerms, isDarkMode, false);
 
-    // Then highlight main terms (no borders)
-    for (const [term, colorClass] of mainTermToColor.entries()) {
-      result = UnifiedHighlighter.highlightTermWithRegex(result, term, colorClass, false);
+      // Highlight all terms using unified color assignment
+      for (const [term, colorClasses] of termToColor.entries()) {
+        result = UnifiedHighlighter.highlightTermWithRegex(result, term, colorClasses, false);
+      }
+    } else {
+      // Use legacy color assignment
+      const { mainTermToColor, pairingsTermToColor } = createTermColorMaps(
+        validMainTerms,
+        validPairingsTerms,
+        isDarkMode,
+        false
+      );
+
+      // First highlight pairings terms (they get borders)
+      for (const [term, colorClass] of pairingsTermToColor.entries()) {
+        result = UnifiedHighlighter.highlightTermWithRegex(result, term, colorClass, true);
+      }
+
+      // Then highlight main terms (no borders)
+      for (const [term, colorClass] of mainTermToColor.entries()) {
+        result = UnifiedHighlighter.highlightTermWithRegex(result, term, colorClass, false);
+      }
     }
 
     return result;
@@ -97,19 +126,23 @@ export class UnifiedHighlighter {
   private static highlightTermWithRegex(
     text: string,
     term: string,
-    colorClass: string,
+    colorClasses: string,
     hasBorder: boolean = false
   ): string {
     if (!RegexUtils.isValidSearchTerm(term)) {
       return text;
     }
-    
+
     const regex = RegexUtils.createWordBoundaryRegex(term);
-    const borderClass = hasBorder ? 'border' : '';
-    
+
+    // If colorClasses already includes border, don't add it again
+    const finalClasses = hasBorder && !colorClasses.includes('border')
+      ? `${colorClasses} border`
+      : colorClasses;
+
     return text.replace(
       regex,
-      (match) => `<mark class="${colorClass} ${borderClass} px-0.5 rounded">${match}</mark>`
+      (match) => `<mark class="${finalClasses} px-0.5 rounded">${match}</mark>`
     );
   }
 
@@ -124,16 +157,18 @@ export class UnifiedHighlighter {
       pairingsTerms?: string[];
       isDarkMode: boolean;
       usePairingsColors?: boolean;
+      maintainInputOrder?: boolean;
     }
   ): string {
-    const { matches, mainTerms = [], pairingsTerms = [], isDarkMode, usePairingsColors = false } = options;
+    const { matches, mainTerms = [], pairingsTerms = [], isDarkMode, usePairingsColors = false, maintainInputOrder = false } = options;
 
     // Prefer bounds-based highlighting when available
     if (matches && matches.length > 0) {
-      return UnifiedHighlighter.highlightWithBounds(text, matches, isDarkMode, usePairingsColors);
+      return UnifiedHighlighter.highlightWithBounds(text, matches, isDarkMode, usePairingsColors, maintainInputOrder ? mainTerms : undefined, maintainInputOrder ? pairingsTerms : undefined);
     }
 
     // Fall back to regex-based highlighting
-    return UnifiedHighlighter.highlightWithRegex(text, mainTerms, pairingsTerms, isDarkMode);
+    return UnifiedHighlighter.highlightWithRegex(text, mainTerms, pairingsTerms, isDarkMode, maintainInputOrder);
   }
+
 }

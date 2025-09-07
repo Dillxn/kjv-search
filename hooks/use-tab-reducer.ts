@@ -230,7 +230,7 @@ function loadStateFromStorage(): TabReducerState {
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       
@@ -256,6 +256,7 @@ function loadStateFromStorage(): TabReducerState {
       }
 
       // Convert minimal storage format back to full TabState
+
       const fullTabs: TabState[] = parsed.tabs.map((minimalTab: MinimalTabState) => {
         // Handle migration from old format with selectedConnections to new selectedConnectionKeys
         let pairingsGraphState = minimalTab.pairingsGraphState || {};
@@ -282,7 +283,7 @@ function loadStateFromStorage(): TabReducerState {
           pairingsSearchTerms: minimalTab.pairingsSearchTerms || '',
           selectedTestament: minimalTab.selectedTestament || 'all',
           selectedBooks: minimalTab.selectedBooks || [],
-          maxProximity: minimalTab.maxProximity || DEFAULT_TAB_STATE.maxProximity,
+          maxProximity: minimalTab.maxProximity !== undefined ? minimalTab.maxProximity : DEFAULT_TAB_STATE.maxProximity,
           showFilters: minimalTab.showFilters || false,
           activeTab: minimalTab.activeTab || 'all',
           isDarkMode: minimalTab.isDarkMode || false,
@@ -629,8 +630,8 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
-            ? { 
-                ...tab, 
+            ? {
+                ...tab,
                 selectedTestament: action.payload.selectedTestament,
                 selectedBooks: action.payload.selectedBooks,
                 maxProximity: action.payload.maxProximity,

@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, useCallback } from 'react';
-import { formatTextWithColors, formatPairingsTextWithColors } from '../../lib/highlighting';
+import { formatTextWithColors, formatPairingsTextWithColors, UnifiedHighlighter } from '../../lib/highlighting';
+import { SearchTermProcessor } from '../../lib/search-utils';
 import { getTextClass, getBackgroundClass, getBorderClass } from '../../lib/theme-utils';
 
 interface SearchInputProps {

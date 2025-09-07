@@ -40,15 +40,16 @@ export function PairingDisplay({
 
   // Function to highlight text with only the terms that contributed to this pairing result
   const highlightPairingText = (text: string): string => {
-    // For linking mode, treat all terms as main terms (no borders) for consistency
-    // For regular pairings mode, use pairings styling (borders on second term)
-    const isLinkingMode = !pairing.term1.includes(' ') && !pairing.term2.includes(' '); // Simple heuristic
+    // Use all original search terms to maintain consistent color assignment
+    const allSearchTerms = SearchResultsHelper.processSearchString(searchTerms || '');
+    const allPairingsTerms = SearchResultsHelper.processSearchString(pairingsSearchTerms || '');
 
     return UnifiedHighlighter.highlightText(text, {
-      mainTerms: [pairing.term1, pairing.term2], // Both terms as main terms
-      pairingsTerms: [],
+      mainTerms: allSearchTerms,
+      pairingsTerms: allPairingsTerms,
       isDarkMode,
-      usePairingsColors: false, // Don't use pairings colors to avoid borders
+      usePairingsColors: allPairingsTerms.length > 0, // Use pairings colors if we have pairings terms
+      maintainInputOrder: true, // Maintain input order for consistent highlighting with search input
     });
   };
 

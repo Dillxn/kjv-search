@@ -65,7 +65,10 @@ export function SearchResults({
         dangerouslySetInnerHTML={{
           __html: UnifiedHighlighter.highlightText(result.verse.text, {
             matches: result.matches,
+            mainTerms: getSearchTermsArray(),
             isDarkMode,
+            maintainInputOrder: true,
+            usePairingsColors: false, // Use main colors for regular search results
           }),
         }}
       />

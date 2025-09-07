@@ -1,4 +1,4 @@
-import { getHighlightColors, getPairingsHighlightColors } from './colors';
+import { getHighlightColors, getPairingsHighlightColors, createUnifiedTermColorMaps } from './colors';
 import { RegexUtils } from '../shared/regex-utils';
 
 // Create a consistent color assignment based on term content rather than array position
@@ -32,27 +32,29 @@ function formatTextWithColorArray(
   const terms = RegexUtils.processSearchString(text);
   const uniqueTerms = [...new Set(terms)];
 
-  // Create consistent color mapping based on term content
-  const mainColors = getHighlightColors(isDarkMode);
-  const pairingsColors = getPairingsHighlightColors(isDarkMode);
+  // Keep original order for alternating pattern (don't sort alphabetically)
+  // This ensures the visual order matches the alternating pattern
+  const sortedTerms = uniqueTerms;
 
-  // Apply highlighting using regex with consistent colors
+  // Use unified color assignment for consistency with search results
+  const termToColor = createUnifiedTermColorMaps(sortedTerms, isDarkMode, isPairingsInput);
+
+  // Apply highlighting using regex
   let result = text;
-  for (const term of uniqueTerms) {
+  sortedTerms.forEach((term) => {
     if (RegexUtils.isValidSearchTerm(term)) {
       const normalizedTerm = term.toLowerCase().trim();
-      const colorClass = isPairingsInput
-        ? getColorForTerm(normalizedTerm, pairingsColors)
-        : getColorForTerm(normalizedTerm, mainColors);
+      const colorClasses = termToColor.get(normalizedTerm);
 
-      const regex = RegexUtils.createWordBoundaryRegex(term);
-      const borderClass = isPairingsInput ? 'border' : '';
-      result = result.replace(
-        regex,
-        (match) => `<${wrapperTag} class="${colorClass} ${borderClass} px-0.5 rounded">${match}</${wrapperTag}>`
-      );
+      if (colorClasses) {
+        const regex = RegexUtils.createWordBoundaryRegex(term);
+        result = result.replace(
+          regex,
+          (match) => `<${wrapperTag} class="${colorClasses} px-0.5 rounded">${match}</${wrapperTag}>`
+        );
+      }
     }
-  }
+  });
 
   return result;
 }
