@@ -28,6 +28,7 @@ export interface TabState {
       y: number;
       scale: number;
     };
+    currentPathIndex: number; // Current path index for path slider
   };
   linkingGraphState: {
     selectedConnectionIndexes: number[]; // Just store result indexes instead of full objects
@@ -37,6 +38,7 @@ export interface TabState {
       y: number;
       scale: number;
     };
+    currentPathIndex: number; // Current path index for path slider
   };
   // Search results stored directly in tab state (runtime only, not persisted)
   results: SearchResult[];
@@ -72,7 +74,7 @@ export type TabAction =
   | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string; pairingsSearchTerms: string } }
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
   | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
-  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } } }
+  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; pairings: VersePairing[]; linkings: VersePairing[]; error?: string } }
   | { type: 'SET_SEARCH_ERROR'; payload: { error: string } }
@@ -92,11 +94,13 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
     selectedConnectionIndexes: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
+    currentPathIndex: 0,
   },
   linkingGraphState: {
     selectedConnectionIndexes: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
+    currentPathIndex: 0,
   },
   results: [],
   pairings: [],
@@ -245,7 +249,7 @@ function loadStateFromStorage(): TabReducerState {
         // Handle migration from old format with selectedConnections to new selectedConnectionIndexes
         let pairingsGraphState = minimalTab.pairingsGraphState || {};
         let linkingGraphState = minimalTab.linkingGraphState || {};
-        
+
         // Migrate from old selectedConnections format to selectedConnectionIndexes
         if (pairingsGraphState.selectedConnections && !pairingsGraphState.selectedConnectionIndexes) {
           // For migration, we can't convert connections to indexes without the current results
@@ -254,14 +258,16 @@ function loadStateFromStorage(): TabReducerState {
             selectedConnectionIndexes: [],
             selectedNodes: pairingsGraphState.selectedNodes || [],
             graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+            currentPathIndex: pairingsGraphState.currentPathIndex || 0,
           };
         }
-        
+
         if (linkingGraphState.selectedConnections && !linkingGraphState.selectedConnectionIndexes) {
           linkingGraphState = {
             selectedConnectionIndexes: [],
             selectedNodes: linkingGraphState.selectedNodes || [],
             graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+            currentPathIndex: linkingGraphState.currentPathIndex || 0,
           };
         }
         
@@ -283,11 +289,13 @@ function loadStateFromStorage(): TabReducerState {
             selectedConnectionIndexes: pairingsGraphState.selectedConnectionIndexes || [],
             selectedNodes: pairingsGraphState.selectedNodes || [],
             graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+            currentPathIndex: pairingsGraphState.currentPathIndex || 0,
           },
           linkingGraphState: {
             selectedConnectionIndexes: linkingGraphState.selectedConnectionIndexes || [],
             selectedNodes: linkingGraphState.selectedNodes || [],
             graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+            currentPathIndex: linkingGraphState.currentPathIndex || 0,
           },
           // Runtime state - always starts fresh
           results: [],
@@ -346,11 +354,13 @@ interface MinimalTabState {
     selectedConnectionIndexes: number[];
     selectedNodes: string[];
     graphTransform: { x: number; y: number; scale: number };
+    currentPathIndex: number;
   };
   linkingGraphState: {
     selectedConnectionIndexes: number[];
     selectedNodes: string[];
     graphTransform: { x: number; y: number; scale: number };
+    currentPathIndex: number;
   };
 }
 
@@ -401,11 +411,13 @@ function saveStateToStorage(state: TabReducerState): void {
             selectedConnectionIndexes: tab.pairingsGraphState.selectedConnectionIndexes,
             selectedNodes: tab.pairingsGraphState.selectedNodes,
             graphTransform: tab.pairingsGraphState.graphTransform,
+            currentPathIndex: tab.pairingsGraphState.currentPathIndex,
           },
           linkingGraphState: {
             selectedConnectionIndexes: tab.linkingGraphState.selectedConnectionIndexes,
             selectedNodes: tab.linkingGraphState.selectedNodes,
             graphTransform: tab.linkingGraphState.graphTransform,
+            currentPathIndex: tab.linkingGraphState.currentPathIndex,
           },
           // Exclude: results, pairings, linkings, isLoading, error, lastSearchKey, filterCounts
         })),
@@ -438,11 +450,13 @@ function saveStateToStorage(state: TabReducerState): void {
                 selectedConnectionIndexes: currentTab?.pairingsGraphState.selectedConnectionIndexes || [],
                 selectedNodes: currentTab?.pairingsGraphState.selectedNodes || [],
                 graphTransform: currentTab?.pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+                currentPathIndex: currentTab?.pairingsGraphState.currentPathIndex || 0,
               },
               linkingGraphState: {
                 selectedConnectionIndexes: currentTab?.linkingGraphState.selectedConnectionIndexes || [],
                 selectedNodes: currentTab?.linkingGraphState.selectedNodes || [],
                 graphTransform: currentTab?.linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+                currentPathIndex: currentTab?.linkingGraphState.currentPathIndex || 0,
               },
             }],
             activeTabId: state.activeTabId,
@@ -630,18 +644,19 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'UPDATE_GRAPH_STATE': {
-      const { tabType, selectedConnectionIndexes, selectedNodes, graphTransform } = action.payload;
+      const { tabType, selectedConnectionIndexes, selectedNodes, graphTransform, currentPathIndex } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
-            ? { 
-                ...tab, 
+            ? {
+                ...tab,
                 [tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState']: {
                   ...tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'],
                   ...(selectedConnectionIndexes !== undefined && { selectedConnectionIndexes }),
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
+                  ...(currentPathIndex !== undefined && { currentPathIndex }),
                 }
               }
             : tab
@@ -959,7 +974,7 @@ export function useTabReducer() {
     updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
       dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
     
-    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } }) =>
+    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
       dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { tabType, ...updates } }),
   };
 

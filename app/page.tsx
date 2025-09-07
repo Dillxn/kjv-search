@@ -225,6 +225,11 @@ export default function Home() {
     actions.updateGraphState(tabType, { graphTransform: newTransform });
   }, [actions, activeTab.activeTab]);
 
+  const handlePathIndexChange = useCallback((index: number) => {
+    const tabType = activeTab.activeTab === 'linking' ? 'linking' : 'pairings';
+    actions.updateGraphState(tabType, { currentPathIndex: index });
+  }, [actions, activeTab.activeTab]);
+
   // Computed values
   const allPairingsSelected = useCallback((pairings: VersePairing[]) => {
     if (pairings.length === 0) return false;
@@ -366,15 +371,19 @@ export default function Home() {
                 searchTerms={activeTab.searchTerms}
                 pairingsSearchTerms={activeTab.pairingsSearchTerms}
                 isDarkMode={activeTab.isDarkMode}
-                initialTransform={activeTab.activeTab === 'linking' 
-                  ? activeTab.linkingGraphState.graphTransform 
+                initialTransform={activeTab.activeTab === 'linking'
+                  ? activeTab.linkingGraphState.graphTransform
                   : activeTab.pairingsGraphState.graphTransform}
                 onTransformChange={handleGraphTransformChange}
-                selectedNodes={activeTab.activeTab === 'linking' 
-                  ? activeTab.linkingGraphState.selectedNodes 
+                selectedNodes={activeTab.activeTab === 'linking'
+                  ? activeTab.linkingGraphState.selectedNodes
                   : activeTab.pairingsGraphState.selectedNodes}
                 onNodeClick={handleNodeClick}
                 onClearSelection={clearNodeSelection}
+                currentPathIndex={activeTab.activeTab === 'linking'
+                  ? activeTab.linkingGraphState.currentPathIndex
+                  : activeTab.pairingsGraphState.currentPathIndex}
+                onPathIndexChange={handlePathIndexChange}
               />
             </div>
           )}

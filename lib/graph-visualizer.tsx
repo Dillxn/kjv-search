@@ -52,6 +52,8 @@ interface GraphVisualizerProps {
   selectedNodes?: string[];
   onNodeClick?: (nodeId: string) => void;
   onClearSelection?: () => void;
+  currentPathIndex?: number;
+  onPathIndexChange?: (index: number) => void;
 }
 
 export function GraphVisualizer({
@@ -64,6 +66,8 @@ export function GraphVisualizer({
   selectedNodes = [],
   onNodeClick,
   onClearSelection,
+  currentPathIndex = 0,
+  onPathIndexChange,
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -77,7 +81,6 @@ export function GraphVisualizer({
     allConnections?: typeof connections;
   } | null>(null);
   const [availablePaths, setAvailablePaths] = useState<string[][]>([]);
-  const [currentPathIndex, setCurrentPathIndex] = useState(0);
 
   // Update canvas size when container resizes or full-screen changes
   useEffect(() => {
@@ -316,12 +319,23 @@ export function GraphVisualizer({
       const [startNode, endNode] = selectedNodes;
       const paths = getAllPathsBetweenNodes(startNode, endNode, nodes, edges);
       setAvailablePaths(paths);
-      setCurrentPathIndex(0); // Reset to first (simplest) path
     } else {
       setAvailablePaths([]);
-      setCurrentPathIndex(0);
     }
   }, [selectedNodes, nodes, edges]);
+
+  // Reset path index if it's out of bounds when paths change
+  // Only run bounds checking after paths are available
+  useEffect(() => {
+    // Only check bounds when we have paths available
+    if (availablePaths.length > 0) {
+      // If current path index is out of bounds, reset to 0
+      if (currentPathIndex >= availablePaths.length || currentPathIndex < 0) {
+        onPathIndexChange?.(0);
+      }
+    }
+    // Don't run bounds checking when paths are empty - let the external state manage it
+  }, [availablePaths.length, currentPathIndex, onPathIndexChange]);
 
   const handleEdgeClick = (edge: Edge, allConnections: typeof connections) => {
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
@@ -431,7 +445,11 @@ export function GraphVisualizer({
             <PathSlider
               currentPathIndex={currentPathIndex}
               totalPaths={availablePaths.length}
-              onPathChange={setCurrentPathIndex}
+              onPathChange={(index) => {
+                // Ensure index is within bounds
+                const clampedIndex = Math.max(0, Math.min(index, availablePaths.length - 1));
+                onPathIndexChange?.(clampedIndex);
+              }}
               isDarkMode={isDarkMode}
             />
           )}
