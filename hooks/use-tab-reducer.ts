@@ -21,7 +21,7 @@ export interface TabState {
   showGraph: boolean;
   // Separate graph states for pairings and linking tabs - optimized for storage
   pairingsGraphState: {
-    selectedConnectionIndexes: number[]; // Just store result indexes instead of full objects
+    selectedConnectionKeys: string[]; // Store connection keys instead of indexes for robustness
     selectedNodes: string[];
     graphTransform: {
       x: number;
@@ -32,7 +32,7 @@ export interface TabState {
     excludedEdges: string[]; // Array of edge IDs (word1-word2 sorted) to exclude from pathfinding
   };
   linkingGraphState: {
-    selectedConnectionIndexes: number[]; // Just store result indexes instead of full objects
+    selectedConnectionKeys: string[]; // Store connection keys instead of indexes for robustness
     selectedNodes: string[];
     graphTransform: {
       x: number;
@@ -76,7 +76,7 @@ export type TabAction =
   | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string; pairingsSearchTerms: string } }
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
   | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
-  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
+  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
   | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { tabType: 'pairings' | 'linking'; edgeId: string } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; pairings: VersePairing[]; linkings: VersePairing[]; error?: string } }
@@ -94,14 +94,14 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   isDarkMode: false,
   showGraph: false,
   pairingsGraphState: {
-    selectedConnectionIndexes: [],
+    selectedConnectionKeys: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
     currentPathIndex: 0,
     excludedEdges: [],
   },
   linkingGraphState: {
-    selectedConnectionIndexes: [],
+    selectedConnectionKeys: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
     currentPathIndex: 0,
@@ -122,7 +122,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
 };
 
 const STORAGE_KEY = 'kjv-tab-reducer-state';
-const STORAGE_VERSION = '3.0'; // Increment when breaking changes are made to storage format
+const STORAGE_VERSION = '4.0'; // Increment when breaking changes are made to storage format
 const MAX_TABS = APP_CONFIG.TABS.MAX_TABS;
 
 
@@ -138,39 +138,43 @@ function generateSearchKey(tab: TabState): string {
 // Cache for converted connections to avoid repeated conversions
 const connectionCache = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[]; }>();
 
-// Helper functions to convert between connection indexes and full connection objects
+// Helper functions to convert between connection keys and full connection objects
 export function getSelectedConnections(
-  selectedIndexes: number[], 
+  selectedKeys: string[],
   allConnections: VersePairing[]
 ): Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }> {
-  if (selectedIndexes.length === 0 || allConnections.length === 0) {
+  if (selectedKeys.length === 0 || allConnections.length === 0) {
     return [];
   }
-  
+
   const result: Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }> = [];
-  
-  for (const index of selectedIndexes) {
-    if (index >= 0 && index < allConnections.length) {
-      const pairing = allConnections[index];
-      
+
+  for (const key of selectedKeys) {
+    // Find the connection in allConnections that matches this key
+    const pairing = allConnections.find(conn => {
+      const connectionKey = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
+      return connectionKey === key;
+    });
+
+    if (pairing) {
       // Create a cache key based on the pairing's unique properties
       const cacheKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}-${pairing.proximity}`;
-      
+
       let connection = connectionCache.get(cacheKey);
       if (!connection) {
         const verseRef = pairing.verses.length === 1
           ? pairing.verses[0].reference
           : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
-        
+
         connection = {
           word1: pairing.term1,
           word2: pairing.term2,
           reference: verseRef,
           versePositions: pairing.verses.map(v => v.position),
         };
-        
+
         connectionCache.set(cacheKey, connection);
-        
+
         // Prevent cache from growing too large
         if (connectionCache.size > 1000) {
           const firstKey = connectionCache.keys().next().value;
@@ -179,28 +183,30 @@ export function getSelectedConnections(
           }
         }
       }
-      
+
       result.push(connection);
     }
   }
-  
+
   return result;
 }
 
-export function getConnectionIndexes(
-  selectedConnections: VersePairing[], 
+export function getConnectionKeys(
+  selectedConnections: VersePairing[],
   allConnections: VersePairing[]
-): number[] {
+): string[] {
   return selectedConnections
     .map(connection => {
-      // Find matching connection by comparing key properties
-      return allConnections.findIndex(conn => 
-        conn.term1 === connection.term1 && 
-        conn.term2 === connection.term2 && 
-        conn.verses[0].reference === connection.verses[0].reference
-      );
+      // Create the key for this connection
+      return `${connection.term1}-${connection.term2}-${connection.verses[0].reference}`;
     })
-    .filter(index => index !== -1);
+    .filter(key => {
+      // Verify the connection still exists in allConnections
+      return allConnections.some(conn => {
+        const connectionKey = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
+        return connectionKey === key;
+      });
+    });
 }
 
 function createDefaultState(): TabReducerState {
@@ -251,13 +257,22 @@ function loadStateFromStorage(): TabReducerState {
 
       // Convert minimal storage format back to full TabState
       const fullTabs: TabState[] = parsed.tabs.map((minimalTab: MinimalTabState) => {
-        // Handle migration from old format with selectedConnections to new selectedConnectionIndexes
+        // Handle migration from old format with selectedConnections to new selectedConnectionKeys
         let pairingsGraphState = minimalTab.pairingsGraphState || {};
         let linkingGraphState = minimalTab.linkingGraphState || {};
 
-        // Migrate from old selectedConnections format to selectedConnectionIndexes
-        // (This code is kept for backwards compatibility but should rarely be triggered)
-        
+        // Migrate from old selectedConnectionIndexes format to selectedConnectionKeys
+        // Since we can't recover the exact connections from indexes without historical data,
+        // we'll clear the selections during migration to ensure consistency
+        if (pairingsGraphState.selectedConnectionIndexes && !pairingsGraphState.selectedConnectionKeys) {
+          console.log('Migrating pairings selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
+          pairingsGraphState.selectedConnectionKeys = [];
+        }
+        if (linkingGraphState.selectedConnectionIndexes && !linkingGraphState.selectedConnectionKeys) {
+          console.log('Migrating linking selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
+          linkingGraphState.selectedConnectionKeys = [];
+        }
+
         return {
           ...DEFAULT_TAB_STATE,
           // Restore persisted properties
@@ -273,14 +288,14 @@ function loadStateFromStorage(): TabReducerState {
           isDarkMode: minimalTab.isDarkMode || false,
           showGraph: minimalTab.showGraph || false,
           pairingsGraphState: {
-            selectedConnectionIndexes: pairingsGraphState.selectedConnectionIndexes || [],
+            selectedConnectionKeys: pairingsGraphState.selectedConnectionKeys || [],
             selectedNodes: pairingsGraphState.selectedNodes || [],
             graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
             currentPathIndex: pairingsGraphState.currentPathIndex || 0,
             excludedEdges: pairingsGraphState.excludedEdges || [],
           },
           linkingGraphState: {
-            selectedConnectionIndexes: linkingGraphState.selectedConnectionIndexes || [],
+            selectedConnectionKeys: linkingGraphState.selectedConnectionKeys || [],
             selectedNodes: linkingGraphState.selectedNodes || [],
             graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
             currentPathIndex: linkingGraphState.currentPathIndex || 0,
@@ -338,16 +353,18 @@ interface MinimalTabState {
   isDarkMode: boolean;
   showGraph: boolean;
   showFilters: boolean;
-  // Only store indexes and minimal graph state
+  // Store keys and minimal graph state (backwards compatible with old indexes)
   pairingsGraphState: {
-    selectedConnectionIndexes: number[];
+    selectedConnectionKeys?: string[];
+    selectedConnectionIndexes?: number[]; // For migration from old format
     selectedNodes: string[];
     graphTransform: { x: number; y: number; scale: number };
     currentPathIndex: number;
     excludedEdges: string[];
   };
   linkingGraphState: {
-    selectedConnectionIndexes: number[];
+    selectedConnectionKeys?: string[];
+    selectedConnectionIndexes?: number[]; // For migration from old format
     selectedNodes: string[];
     graphTransform: { x: number; y: number; scale: number };
     currentPathIndex: number;
@@ -397,16 +414,16 @@ function saveStateToStorage(state: TabReducerState): void {
           isDarkMode: tab.isDarkMode,
           showGraph: tab.showGraph,
           showFilters: tab.showFilters,
-          // Store only indexes instead of full connection objects
+          // Store only keys instead of full connection objects
           pairingsGraphState: {
-            selectedConnectionIndexes: tab.pairingsGraphState.selectedConnectionIndexes,
+            selectedConnectionKeys: tab.pairingsGraphState.selectedConnectionKeys,
             selectedNodes: tab.pairingsGraphState.selectedNodes,
             graphTransform: tab.pairingsGraphState.graphTransform,
             currentPathIndex: tab.pairingsGraphState.currentPathIndex,
             excludedEdges: tab.pairingsGraphState.excludedEdges,
           },
           linkingGraphState: {
-            selectedConnectionIndexes: tab.linkingGraphState.selectedConnectionIndexes,
+            selectedConnectionKeys: tab.linkingGraphState.selectedConnectionKeys,
             selectedNodes: tab.linkingGraphState.selectedNodes,
             graphTransform: tab.linkingGraphState.graphTransform,
             currentPathIndex: tab.linkingGraphState.currentPathIndex,
@@ -440,14 +457,14 @@ function saveStateToStorage(state: TabReducerState): void {
               showGraph: currentTab?.showGraph || false,
               showFilters: currentTab?.showFilters || false,
               pairingsGraphState: {
-                selectedConnectionIndexes: currentTab?.pairingsGraphState.selectedConnectionIndexes || [],
+                selectedConnectionKeys: currentTab?.pairingsGraphState.selectedConnectionKeys || [],
                 selectedNodes: currentTab?.pairingsGraphState.selectedNodes || [],
                 graphTransform: currentTab?.pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
                 currentPathIndex: currentTab?.pairingsGraphState.currentPathIndex || 0,
                 excludedEdges: currentTab?.pairingsGraphState.excludedEdges || [],
               },
               linkingGraphState: {
-                selectedConnectionIndexes: currentTab?.linkingGraphState.selectedConnectionIndexes || [],
+                selectedConnectionKeys: currentTab?.linkingGraphState.selectedConnectionKeys || [],
                 selectedNodes: currentTab?.linkingGraphState.selectedNodes || [],
                 graphTransform: currentTab?.linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
                 currentPathIndex: currentTab?.linkingGraphState.currentPathIndex || 0,
@@ -639,7 +656,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'UPDATE_GRAPH_STATE': {
-      const { tabType, selectedConnectionIndexes, selectedNodes, graphTransform, currentPathIndex } = action.payload;
+      const { tabType, selectedConnectionKeys, selectedNodes, graphTransform, currentPathIndex } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
@@ -648,7 +665,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
                 ...tab,
                 [tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState']: {
                   ...tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'],
-                  ...(selectedConnectionIndexes !== undefined && { selectedConnectionIndexes }),
+                  ...(selectedConnectionKeys !== undefined && { selectedConnectionKeys }),
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
                   ...(currentPathIndex !== undefined && { currentPathIndex }),
@@ -995,7 +1012,7 @@ export function useTabReducer() {
     updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
       dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
     
-    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
+    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
       dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { tabType, ...updates } }),
 
     toggleEdgeExclusion: (tabType: 'pairings' | 'linking', edgeId: string) =>
