@@ -67,7 +67,7 @@ export function PairingDisplay({
       key={`${pairing.term1}-${pairing.term2}-${pairing.verses
         .map((v) => v.position)
         .join('-')}`}
-      className={`border-l-2 flex justify-between items-start pl-2 py-1 mb-1 ${
+      className={`border-l-2 flex justify-between items-center pl-2 py-1 mb-1 ${
         isDarkMode ? 'border-green-400' : 'border-green-500'
       }`}
     >
