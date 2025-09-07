@@ -436,6 +436,15 @@ export function GraphCanvas({
       // Check if click is on a node first
       let clickedNode = null;
       for (const node of nodes) {
+        // Check if this node should be transparent (and therefore not clickable)
+        const isHighlighted = highlightedElements.highlightedNodes.has(node.id);
+        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
+        
+        // Skip click detection for transparent nodes
+        if (shouldShowTransparent) {
+          continue;
+        }
+
         const dx = graphX - node.x;
         const dy = graphY - node.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -458,6 +467,16 @@ export function GraphCanvas({
         const targetNode = nodes.find((n) => n.id === edge.target);
 
         if (sourceNode && targetNode) {
+          // Check if this edge should be transparent (and therefore not clickable)
+          const edgeId = [edge.source, edge.target].sort().join('-');
+          const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
+          const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
+          
+          // Skip click detection for transparent edges
+          if (shouldShowTransparent) {
+            continue;
+          }
+
           const A = graphX - sourceNode.x;
           const B = graphY - sourceNode.y;
           const C = targetNode.x - sourceNode.x;
