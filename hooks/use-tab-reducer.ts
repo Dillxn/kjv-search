@@ -1,7 +1,7 @@
 'use client';
 
-import { useReducer, useCallback, useEffect, useRef } from 'react';
-import { SearchResult, VersePairing, kjvParser } from '../lib';
+import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
+import { SearchResult, VersePairing, kjvParser, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib';
 import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
@@ -37,6 +37,13 @@ export interface TabState {
   isLoading: boolean;
   error: string;
   lastSearchKey: string; // To track if search needs to be re-run
+  // Filter counts
+  filterCounts: {
+    total: number;
+    oldTestament: number;
+    newTestament: number;
+    books: Record<string, number>;
+  };
 }
 
 export interface TabReducerState {
@@ -59,7 +66,8 @@ export type TabAction =
   | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnections?: TabState['selectedConnections']; selectedNodes?: string[]; graphTransform?: TabState['graphTransform'] } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; pairings: VersePairing[]; error?: string } }
-  | { type: 'SET_SEARCH_ERROR'; payload: { error: string } };
+  | { type: 'SET_SEARCH_ERROR'; payload: { error: string } }
+  | { type: 'UPDATE_FILTER_COUNTS'; payload: { filterCounts: TabState['filterCounts'] } };
 
 const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   searchTerms: '',
@@ -79,6 +87,12 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   isLoading: false,
   error: '',
   lastSearchKey: '',
+  filterCounts: {
+    total: 0,
+    oldTestament: 0,
+    newTestament: 0,
+    books: {},
+  },
 };
 
 const STORAGE_KEY = 'kjv-tab-reducer-state';
@@ -146,6 +160,12 @@ function loadStateFromStorage(): TabReducerState {
           isLoading: false, // Reset loading state on load
           error: '', // Reset error state on load
           lastSearchKey: '', // Reset search key to force re-search
+          filterCounts: {
+            total: 0,
+            oldTestament: 0,
+            newTestament: 0,
+            books: {},
+          },
         };
         
         // Debug logging for loaded connections
@@ -247,6 +267,12 @@ function saveStateToStorage(state: TabReducerState): void {
           isLoading: false,
           error: '',
           lastSearchKey: '',
+          filterCounts: {
+            total: 0,
+            oldTestament: 0,
+            newTestament: 0,
+            books: {},
+          },
         })),
         activeTabId: state.activeTabId,
         isInitialized: state.isInitialized,
@@ -521,6 +547,17 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
       return newState;
     }
 
+    case 'UPDATE_FILTER_COUNTS': {
+      return {
+        ...state,
+        tabs: state.tabs.map(tab =>
+          tab.id === state.activeTabId
+            ? { ...tab, filterCounts: action.payload.filterCounts }
+            : tab
+        ),
+      };
+    }
+
     default:
       return state;
   }
@@ -530,6 +567,7 @@ export function useTabReducer() {
   const [state, dispatch] = useReducer(tabReducer, createDefaultState());
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const stateRef = useRef(state);
+  const [parserLoaded, setParserLoaded] = useState(false);
 
   // Keep state ref updated
   useEffect(() => {
@@ -538,6 +576,42 @@ export function useTabReducer() {
 
   // Get current active tab
   const activeTab = state.tabs.find(tab => tab.id === state.activeTabId) || state.tabs[0];
+
+  // Function to calculate filter counts
+  const calculateFilterCounts = useCallback((searchTerms: string) => {
+    if (!SearchStateValidator.canPerformSearch(searchTerms) || !kjvParser.isLoaded()) {
+      return {
+        total: 0,
+        oldTestament: 0,
+        newTestament: 0,
+        books: {},
+      };
+    }
+
+    const terms = SearchTermProcessor.processSearchString(searchTerms);
+
+    // Calculate total results
+    const totalResults = kjvParser.searchWords(terms, {});
+
+    // Calculate testament counts
+    const oldTestamentResults = kjvParser.searchWords(terms, { testament: 'old' });
+    const newTestamentResults = kjvParser.searchWords(terms, { testament: 'new' });
+
+    // Calculate book counts
+    const bookCounts: Record<string, number> = {};
+    const allBooks = [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
+    allBooks.forEach((book) => {
+      const bookResults = kjvParser.searchWords(terms, { books: [book] });
+      bookCounts[book] = bookResults.length;
+    });
+
+    return {
+      total: totalResults.length,
+      oldTestament: oldTestamentResults.length,
+      newTestament: newTestamentResults.length,
+      books: bookCounts,
+    };
+  }, []);
 
   // Initialize from localStorage on mount
   useEffect(() => {
@@ -552,6 +626,23 @@ export function useTabReducer() {
       });
     }
   }, []);
+
+  // Track when parser becomes loaded
+  useEffect(() => {
+    const checkParser = () => {
+      if (kjvParser.isLoaded() && !parserLoaded) {
+        setParserLoaded(true);
+      }
+    };
+    
+    // Check immediately
+    checkParser();
+    
+    // Check periodically until loaded
+    const interval = setInterval(checkParser, 100);
+    
+    return () => clearInterval(interval);
+  }, [parserLoaded]);
 
   // Search function that updates results in the reducer
   const performSearch = useCallback(async (tabId?: string, immediate = false) => {
@@ -639,6 +730,33 @@ export function useTabReducer() {
       searchTimeoutRef.current = setTimeout(executeSearch, APP_CONFIG.SEARCH.DEBOUNCE_DELAY);
     }
   }, []); // Keep empty dependencies but use ref for current state
+
+  // Update filter counts when search terms change or when parser loads
+  useEffect(() => {
+    if (state.isInitialized && activeTab && parserLoaded && activeTab.searchTerms) {
+      const newFilterCounts = calculateFilterCounts(activeTab.searchTerms);
+      
+      // Only update if counts have actually changed or if current counts are empty (after load)
+      const currentCounts = activeTab.filterCounts;
+      const countsAreEmpty = currentCounts.total === 0 && 
+        currentCounts.oldTestament === 0 && 
+        currentCounts.newTestament === 0 && 
+        Object.keys(currentCounts.books).length === 0;
+      
+      const hasChanged = 
+        currentCounts.total !== newFilterCounts.total ||
+        currentCounts.oldTestament !== newFilterCounts.oldTestament ||
+        currentCounts.newTestament !== newFilterCounts.newTestament ||
+        JSON.stringify(currentCounts.books) !== JSON.stringify(newFilterCounts.books);
+      
+      if (hasChanged || countsAreEmpty) {
+        dispatch({
+          type: 'UPDATE_FILTER_COUNTS',
+          payload: { filterCounts: newFilterCounts },
+        });
+      }
+    }
+  }, [state.isInitialized, activeTab?.id, activeTab?.searchTerms, parserLoaded, calculateFilterCounts]);
 
   // Auto-trigger search for active tab if it has search terms but no results
   useEffect(() => {

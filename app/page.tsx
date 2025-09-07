@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { kjvParser } from '../lib';
+import { kjvParser, VersePairing } from '../lib';
 import { TabBar } from '../lib/tab-bar';
 import { GraphVisualizer } from '../lib/graph-visualizer';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
@@ -17,6 +17,14 @@ import {
   getBackgroundClass,
   getTextClass,
 } from '../lib/theme-utils';
+
+// Type for graph connections
+type GraphConnection = {
+  word1: string;
+  word2: string;
+  reference: string;
+  versePositions: number[];
+};
 
 export default function Home() {
   // All state managed by atomic reducer
@@ -127,7 +135,7 @@ export default function Home() {
   }, [actions, activeTab.selectedBooks, activeTab.selectedTestament, activeTab.maxProximity]);
 
   // Graph event handlers
-  const handleToggleGraph = useCallback((connection: any) => {
+  const handleToggleGraph = useCallback((connection: GraphConnection) => {
     const versePositions = connection.versePositions || [];
     const sortedPositions = versePositions
       .slice()
@@ -163,7 +171,7 @@ export default function Home() {
     actions.updateGraphState({ selectedConnections: newConnections });
   }, [actions, activeTab.selectedConnections]);
 
-  const handleSelectAllPairings = useCallback((pairings: any[]) => {
+  const handleSelectAllPairings = useCallback((pairings: VersePairing[]) => {
     const existingConnections = activeTab.selectedConnections;
     const existingKeys = new Set(
       existingConnections.map((conn) => {
@@ -176,10 +184,10 @@ export default function Home() {
       })
     );
 
-    const newConnections: any[] = [];
+    const newConnections: GraphConnection[] = [];
 
     pairings.forEach((pairing) => {
-      const versePositions = pairing.verses.map((v: any) => v.position);
+      const versePositions = pairing.verses.map((v) => v.position);
       const verseRef = pairing.verses.length === 1
         ? pairing.verses[0].reference
         : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
@@ -228,7 +236,7 @@ export default function Home() {
   }, [actions]);
 
   // Computed values
-  const allPairingsSelected = useCallback((pairings: any[]) => {
+  const allPairingsSelected = useCallback((pairings: VersePairing[]) => {
     if (pairings.length === 0) return false;
 
     const connectionKeys = new Set(
@@ -244,7 +252,7 @@ export default function Home() {
 
     return pairings.every((pairing) => {
       const versePositions = pairing.verses
-        .map((v: any) => v.position)
+        .map((v) => v.position)
         .sort((a: number, b: number) => a - b)
         .join(',');
       const [word1, word2] = [pairing.term1, pairing.term2].sort();
@@ -253,13 +261,8 @@ export default function Home() {
     });
   }, [activeTab.selectedConnections]);
 
-  // Calculate filter counts (simplified - could be moved to reducer if needed)
-  const filterCounts = useMemo(() => ({
-    total: activeTab.results.length,
-    oldTestament: 0, // Could calculate if needed
-    newTestament: 0, // Could calculate if needed
-    books: {} as Record<string, number>, // Could calculate if needed
-  }), [activeTab.results.length]);
+  // Use filter counts from active tab
+  const filterCounts = activeTab.filterCounts;
 
   // Loading state
   if (!isInitialized || !hasMounted || !state.isInitialized) {
