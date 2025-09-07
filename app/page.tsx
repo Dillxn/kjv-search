@@ -230,6 +230,11 @@ export default function Home() {
     actions.updateGraphState(tabType, { currentPathIndex: index });
   }, [actions, activeTab.activeTab]);
 
+  const handleEdgeExclusionToggle = useCallback((edgeId: string) => {
+    const tabType = activeTab.activeTab === 'linking' ? 'linking' : 'pairings';
+    actions.toggleEdgeExclusion(tabType, edgeId);
+  }, [actions, activeTab.activeTab]);
+
   // Computed values
   const allPairingsSelected = useCallback((pairings: VersePairing[]) => {
     if (pairings.length === 0) return false;
@@ -252,7 +257,7 @@ export default function Home() {
 
   // Memoize selected connections to avoid expensive recalculations on every render
   const selectedConnections = useMemo(() => {
-    return activeTab.activeTab === 'linking' 
+    return activeTab.activeTab === 'linking'
       ? getSelectedConnections(activeTab.linkingGraphState.selectedConnectionIndexes, activeTab.linkings)
       : getSelectedConnections(activeTab.pairingsGraphState.selectedConnectionIndexes, activeTab.pairings);
   }, [
@@ -261,6 +266,17 @@ export default function Home() {
     activeTab.pairingsGraphState.selectedConnectionIndexes,
     activeTab.linkings,
     activeTab.pairings
+  ]);
+
+  // Get excluded edges for current tab
+  const excludedEdges = useMemo(() => {
+    return activeTab.activeTab === 'linking'
+      ? activeTab.linkingGraphState.excludedEdges
+      : activeTab.pairingsGraphState.excludedEdges;
+  }, [
+    activeTab.activeTab,
+    activeTab.linkingGraphState.excludedEdges,
+    activeTab.pairingsGraphState.excludedEdges
   ]);
 
   // Loading state
@@ -384,6 +400,8 @@ export default function Home() {
                   ? activeTab.linkingGraphState.currentPathIndex
                   : activeTab.pairingsGraphState.currentPathIndex}
                 onPathIndexChange={handlePathIndexChange}
+                excludedEdges={excludedEdges}
+                onEdgeExclusionToggle={handleEdgeExclusionToggle}
               />
             </div>
           )}

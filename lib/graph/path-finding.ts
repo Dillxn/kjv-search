@@ -20,7 +20,8 @@ export function findShortestPath(
   startNodeId: string,
   endNodeId: string,
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  excludedEdges: string[] = []
 ): string[] | null {
   if (startNodeId === endNodeId) {
     return [startNodeId];
@@ -34,14 +35,19 @@ export function findShortestPath(
     adjacencyList.set(node.id, []);
   });
 
-  // Populate adjacency list with edges
+  // Populate adjacency list with edges, excluding specified edges
   edges.forEach(edge => {
+    const edgeId = [edge.source, edge.target].sort().join('-');
+    if (excludedEdges.includes(edgeId)) {
+      return; // Skip this edge if it's excluded
+    }
+
     const sourceNeighbors = adjacencyList.get(edge.source) || [];
     const targetNeighbors = adjacencyList.get(edge.target) || [];
-    
+
     sourceNeighbors.push(edge.target);
     targetNeighbors.push(edge.source);
-    
+
     adjacencyList.set(edge.source, sourceNeighbors);
     adjacencyList.set(edge.target, targetNeighbors);
   });
@@ -155,12 +161,18 @@ export function findAllSimplePaths(
   endNode: string,
   nodes: Node[],
   edges: Edge[],
-  maxLength: number = 6
+  maxLength: number = 6,
+  excludedEdges: string[] = []
 ): string[][] {
   // Build adjacency list
   const adjacencyList = new Map<string, string[]>();
   nodes.forEach(node => adjacencyList.set(node.id, []));
   edges.forEach(edge => {
+    const edgeId = [edge.source, edge.target].sort().join('-');
+    if (excludedEdges.includes(edgeId)) {
+      return; // Skip this edge if it's excluded
+    }
+
     const sourceNeighbors = adjacencyList.get(edge.source) || [];
     const targetNeighbors = adjacencyList.get(edge.target) || [];
     sourceNeighbors.push(edge.target);
@@ -207,16 +219,17 @@ function getNodesOnAllPaths(
   startNode: string,
   endNode: string,
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  excludedEdges: string[] = []
 ): Set<string> {
-  const allPaths = findAllSimplePaths(startNode, endNode, nodes, edges);
+  const allPaths = findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges);
   const pathNodes = new Set<string>();
-  
+
   // Add all nodes from all paths
   allPaths.forEach(path => {
     path.forEach(node => pathNodes.add(node));
   });
-  
+
   return pathNodes;
 }
 
@@ -227,9 +240,10 @@ export function getAllPathsBetweenNodes(
   startNode: string,
   endNode: string,
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  excludedEdges: string[] = []
 ): string[][] {
-  return findAllSimplePaths(startNode, endNode, nodes, edges);
+  return findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges);
 }
 
 /**
@@ -264,7 +278,8 @@ export function getHighlightedElementsForPath(
 export function getHighlightedElements(
   selectedNodes: string[],
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  excludedEdges: string[] = []
 ): {
   highlightedNodes: Set<string>;
   highlightedEdgeIds: Set<string>;
@@ -279,10 +294,10 @@ export function getHighlightedElements(
   }
 
   const [startNode, endNode] = selectedNodes;
-  
+
   // First find the shortest path for reference
-  const shortestPath = findShortestPath(startNode, endNode, nodes, edges);
-  
+  const shortestPath = findShortestPath(startNode, endNode, nodes, edges, excludedEdges);
+
   if (!shortestPath) {
     // If no path found, just highlight the selected nodes
     return {
@@ -293,7 +308,7 @@ export function getHighlightedElements(
   }
 
   // Find all nodes that are part of simple paths between start and end
-  const pathNodes = getNodesOnAllPaths(startNode, endNode, nodes, edges);
+  const pathNodes = getNodesOnAllPaths(startNode, endNode, nodes, edges, excludedEdges);
   
   // Find all edges that connect nodes that are both on paths between start and end
   const highlightedEdgeIds = new Set<string>();

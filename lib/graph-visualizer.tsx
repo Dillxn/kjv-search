@@ -54,6 +54,8 @@ interface GraphVisualizerProps {
   onClearSelection?: () => void;
   currentPathIndex?: number;
   onPathIndexChange?: (index: number) => void;
+  excludedEdges?: string[];
+  onEdgeExclusionToggle?: (edgeId: string) => void;
 }
 
 export function GraphVisualizer({
@@ -68,6 +70,8 @@ export function GraphVisualizer({
   onClearSelection,
   currentPathIndex = 0,
   onPathIndexChange,
+  excludedEdges = [],
+  onEdgeExclusionToggle,
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -317,12 +321,12 @@ export function GraphVisualizer({
   useEffect(() => {
     if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
       const [startNode, endNode] = selectedNodes;
-      const paths = getAllPathsBetweenNodes(startNode, endNode, nodes, edges);
+      const paths = getAllPathsBetweenNodes(startNode, endNode, nodes, edges, excludedEdges);
       setAvailablePaths(paths);
     } else {
       setAvailablePaths([]);
     }
-  }, [selectedNodes, nodes, edges]);
+  }, [selectedNodes, nodes, edges, excludedEdges]);
 
   // Reset path index if it's out of bounds when paths change
   // Only run bounds checking after paths are available
@@ -340,6 +344,12 @@ export function GraphVisualizer({
   const handleEdgeClick = (edge: Edge, allConnections: typeof connections) => {
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
   };
+
+  const handleEdgeExclusionToggle = useCallback((edgeId: string) => {
+    if (onEdgeExclusionToggle) {
+      onEdgeExclusionToggle(edgeId);
+    }
+  }, [onEdgeExclusionToggle]);
 
   const handleFullScreenToggle = () => {
     setIsFullScreen(!isFullScreen);
@@ -389,10 +399,12 @@ export function GraphVisualizer({
         canvasSize={canvasSize}
         transform={transform}
         onEdgeClick={handleEdgeClick}
+        onEdgeExclusionToggle={handleEdgeExclusionToggle}
         onTransformChange={handleTransformChange}
         selectedNodes={selectedNodes}
         onNodeClick={onNodeClick}
         currentPath={availablePaths[currentPathIndex] || null}
+        excludedEdges={excludedEdges}
       />
 
       {/* Control buttons */}
