@@ -529,7 +529,7 @@ export function GraphCanvas({
           const dy = graphY - yy;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          if (distance < 15) {
+          if (distance < 5) {
             clickedEdge = edge;
             break;
           }
