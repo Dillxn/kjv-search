@@ -19,14 +19,9 @@ export interface TabState {
   activeTab: 'all' | 'pairings' | 'linking';
   isDarkMode: boolean;
   showGraph: boolean;
-  // Separate graph states for pairings and linking tabs
+  // Separate graph states for pairings and linking tabs - optimized for storage
   pairingsGraphState: {
-    selectedConnections: Array<{
-      word1: string;
-      word2: string;
-      reference: string;
-      versePositions: number[];
-    }>;
+    selectedConnectionIndexes: number[]; // Just store result indexes instead of full objects
     selectedNodes: string[];
     graphTransform: {
       x: number;
@@ -35,12 +30,7 @@ export interface TabState {
     };
   };
   linkingGraphState: {
-    selectedConnections: Array<{
-      word1: string;
-      word2: string;
-      reference: string;
-      versePositions: number[];
-    }>;
+    selectedConnectionIndexes: number[]; // Just store result indexes instead of full objects
     selectedNodes: string[];
     graphTransform: {
       x: number;
@@ -48,14 +38,14 @@ export interface TabState {
       scale: number;
     };
   };
-  // Search results stored directly in tab state
+  // Search results stored directly in tab state (runtime only, not persisted)
   results: SearchResult[];
   pairings: VersePairing[];
   linkings: VersePairing[];
   isLoading: boolean;
   error: string;
   lastSearchKey: string; // To track if search needs to be re-run
-  // Filter counts
+  // Filter counts (derived state, not persisted)
   filterCounts: {
     total: number;
     oldTestament: number;
@@ -82,7 +72,7 @@ export type TabAction =
   | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string; pairingsSearchTerms: string } }
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
   | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
-  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnections?: Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }>; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } } }
+  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; pairings: VersePairing[]; linkings: VersePairing[]; error?: string } }
   | { type: 'SET_SEARCH_ERROR'; payload: { error: string } }
@@ -99,12 +89,12 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   isDarkMode: false,
   showGraph: false,
   pairingsGraphState: {
-    selectedConnections: [],
+    selectedConnectionIndexes: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
   },
   linkingGraphState: {
-    selectedConnections: [],
+    selectedConnectionIndexes: [],
     selectedNodes: [],
     graphTransform: { x: 0, y: 0, scale: 1 },
   },
@@ -123,7 +113,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
 };
 
 const STORAGE_KEY = 'kjv-tab-reducer-state';
-const STORAGE_VERSION = '2.0'; // Increment when breaking changes are made to storage format
+const STORAGE_VERSION = '3.0'; // Increment when breaking changes are made to storage format
 const MAX_TABS = APP_CONFIG.TABS.MAX_TABS;
 
 
@@ -134,6 +124,74 @@ function generateTabId(): string {
 
 function generateSearchKey(tab: TabState): string {
   return `${tab.searchTerms}|${tab.pairingsSearchTerms}|${tab.activeTab}|${tab.selectedTestament}|${tab.selectedBooks.join(',')}|${tab.maxProximity}`;
+}
+
+// Cache for converted connections to avoid repeated conversions
+const connectionCache = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[]; }>();
+
+// Helper functions to convert between connection indexes and full connection objects
+export function getSelectedConnections(
+  selectedIndexes: number[], 
+  allConnections: VersePairing[]
+): Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }> {
+  if (selectedIndexes.length === 0 || allConnections.length === 0) {
+    return [];
+  }
+  
+  const result: Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }> = [];
+  
+  for (const index of selectedIndexes) {
+    if (index >= 0 && index < allConnections.length) {
+      const pairing = allConnections[index];
+      
+      // Create a cache key based on the pairing's unique properties
+      const cacheKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}-${pairing.proximity}`;
+      
+      let connection = connectionCache.get(cacheKey);
+      if (!connection) {
+        const verseRef = pairing.verses.length === 1
+          ? pairing.verses[0].reference
+          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+        
+        connection = {
+          word1: pairing.term1,
+          word2: pairing.term2,
+          reference: verseRef,
+          versePositions: pairing.verses.map(v => v.position),
+        };
+        
+        connectionCache.set(cacheKey, connection);
+        
+        // Prevent cache from growing too large
+        if (connectionCache.size > 1000) {
+          const firstKey = connectionCache.keys().next().value;
+          if (firstKey) {
+            connectionCache.delete(firstKey);
+          }
+        }
+      }
+      
+      result.push(connection);
+    }
+  }
+  
+  return result;
+}
+
+export function getConnectionIndexes(
+  selectedConnections: VersePairing[], 
+  allConnections: VersePairing[]
+): number[] {
+  return selectedConnections
+    .map(connection => {
+      // Find matching connection by comparing key properties
+      return allConnections.findIndex(conn => 
+        conn.term1 === connection.term1 && 
+        conn.term2 === connection.term2 && 
+        conn.verses[0].reference === connection.verses[0].reference
+      );
+    })
+    .filter(index => index !== -1);
 }
 
 function createDefaultState(): TabReducerState {
@@ -159,13 +217,13 @@ function loadStateFromStorage(): TabReducerState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored) as TabReducerState;
+      const parsed = JSON.parse(stored);
       
       // Check if we need to migrate from an older version
       if (!parsed.version || parsed.version !== STORAGE_VERSION) {
         console.log('Migrating localStorage from version', parsed.version || '1.0', 'to', STORAGE_VERSION);
         // Clear localStorage for major version changes to avoid conflicts
-        if (!parsed.version) {
+        if (!parsed.version || parsed.version < '2.0') {
           console.log('Clearing old localStorage format and starting fresh');
           localStorage.removeItem(STORAGE_KEY);
           return createDefaultState();
@@ -173,60 +231,71 @@ function loadStateFromStorage(): TabReducerState {
       }
       
       // Validate and migrate data
-      if (parsed.tabs.length === 0) {
+      if (!parsed.tabs || parsed.tabs.length === 0) {
         return createDefaultState();
       }
 
       // Ensure activeTabId exists
-      if (!parsed.tabs.find(tab => tab.id === parsed.activeTabId)) {
+      if (!parsed.tabs.find((tab: any) => tab.id === parsed.activeTabId)) {
         parsed.activeTabId = parsed.tabs[0].id;
       }
 
-      // Migrate tabs to include new fields
-      parsed.tabs = parsed.tabs.map(tab => {
-        // Handle migration from old single graph state to separate pairings/linking states
-        const legacySelectedConnections = (tab as any).selectedConnections || [];
-        const legacySelectedNodes = (tab as any).selectedNodes || [];
-        const legacyGraphTransform = (tab as any).graphTransform || { x: 0, y: 0, scale: 1 };
+      // Convert minimal storage format back to full TabState
+      const fullTabs: TabState[] = parsed.tabs.map((minimalTab: any) => {
+        // Handle migration from old format with selectedConnections to new selectedConnectionIndexes
+        let pairingsGraphState = minimalTab.pairingsGraphState || {};
+        let linkingGraphState = minimalTab.linkingGraphState || {};
         
-        const migratedTab = {
+        // Migrate from old selectedConnections format to selectedConnectionIndexes
+        if (pairingsGraphState.selectedConnections && !pairingsGraphState.selectedConnectionIndexes) {
+          // For migration, we can't convert connections to indexes without the current results
+          // So we'll just clear the selections and let the user reselect
+          pairingsGraphState = {
+            selectedConnectionIndexes: [],
+            selectedNodes: pairingsGraphState.selectedNodes || [],
+            graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+          };
+        }
+        
+        if (linkingGraphState.selectedConnections && !linkingGraphState.selectedConnectionIndexes) {
+          linkingGraphState = {
+            selectedConnectionIndexes: [],
+            selectedNodes: linkingGraphState.selectedNodes || [],
+            graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+          };
+        }
+        
+        return {
           ...DEFAULT_TAB_STATE,
-          // Explicitly preserve only the properties we want to keep from the stored tab
-          id: tab.id,
-          name: tab.name,
-          searchTerms: tab.searchTerms || '',
-          pairingsSearchTerms: tab.pairingsSearchTerms || '',
-          selectedTestament: tab.selectedTestament || 'all',
-          selectedBooks: tab.selectedBooks || [],
-          maxProximity: tab.maxProximity || DEFAULT_TAB_STATE.maxProximity,
-          showFilters: tab.showFilters || false,
-          activeTab: tab.activeTab || 'all',
-          isDarkMode: tab.isDarkMode || false,
-          showGraph: tab.showGraph || false,
-          // Migrate legacy graph state to both pairings and linking (they can diverge from here)
-          pairingsGraphState: (tab as any).pairingsGraphState || {
-            selectedConnections: legacySelectedConnections.map((conn: any) => ({
-              ...conn,
-              versePositions: conn.versePositions || [],
-            })),
-            selectedNodes: legacySelectedNodes,
-            graphTransform: legacyGraphTransform,
+          // Restore persisted properties
+          id: minimalTab.id,
+          name: minimalTab.name,
+          searchTerms: minimalTab.searchTerms || '',
+          pairingsSearchTerms: minimalTab.pairingsSearchTerms || '',
+          selectedTestament: minimalTab.selectedTestament || 'all',
+          selectedBooks: minimalTab.selectedBooks || [],
+          maxProximity: minimalTab.maxProximity || DEFAULT_TAB_STATE.maxProximity,
+          showFilters: minimalTab.showFilters || false,
+          activeTab: minimalTab.activeTab || 'all',
+          isDarkMode: minimalTab.isDarkMode || false,
+          showGraph: minimalTab.showGraph || false,
+          pairingsGraphState: {
+            selectedConnectionIndexes: pairingsGraphState.selectedConnectionIndexes || [],
+            selectedNodes: pairingsGraphState.selectedNodes || [],
+            graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
           },
-          linkingGraphState: (tab as any).linkingGraphState || {
-            selectedConnections: legacySelectedConnections.map((conn: any) => ({
-              ...conn,
-              versePositions: conn.versePositions || [],
-            })),
-            selectedNodes: legacySelectedNodes,
-            graphTransform: legacyGraphTransform,
+          linkingGraphState: {
+            selectedConnectionIndexes: linkingGraphState.selectedConnectionIndexes || [],
+            selectedNodes: linkingGraphState.selectedNodes || [],
+            graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
           },
-          // Reset transient state
-          results: [], // Always start with empty results - they'll be regenerated
-          pairings: [], // Always start with empty pairings - they'll be regenerated
-          linkings: [], // Always start with empty linkings - they'll be regenerated
-          isLoading: false, // Reset loading state on load
-          error: '', // Reset error state on load
-          lastSearchKey: '', // Reset search key to force re-search
+          // Runtime state - always starts fresh
+          results: [],
+          pairings: [],
+          linkings: [],
+          isLoading: false,
+          error: '',
+          lastSearchKey: '',
           filterCounts: {
             total: 0,
             oldTestament: 0,
@@ -234,19 +303,14 @@ function loadStateFromStorage(): TabReducerState {
             books: {},
           },
         };
-        
-        // Debug logging for loaded connections
-        if (migratedTab.pairingsGraphState.selectedConnections.length > 0 || migratedTab.linkingGraphState.selectedConnections.length > 0) {
-          console.log(`Loading tab "${migratedTab.name}" with selected connections:`, {
-            pairings: migratedTab.pairingsGraphState.selectedConnections.length,
-            linking: migratedTab.linkingGraphState.selectedConnections.length
-          });
-        }
-        
-        return migratedTab;
       });
 
-      return { ...parsed, isInitialized: true, version: STORAGE_VERSION };
+      return {
+        tabs: fullTabs,
+        activeTabId: parsed.activeTabId,
+        isInitialized: true,
+        version: STORAGE_VERSION,
+      };
     }
   } catch (error) {
     console.error('Failed to load tab state from localStorage:', error);
@@ -264,6 +328,38 @@ function loadStateFromStorage(): TabReducerState {
 let saveTimeout: NodeJS.Timeout | null = null;
 let pendingState: TabReducerState | null = null;
 
+// Minimal state interface for localStorage - only essential data
+interface MinimalTabState {
+  id: string;
+  name: string;
+  searchTerms: string;
+  pairingsSearchTerms: string;
+  selectedTestament: 'all' | 'old' | 'new';
+  selectedBooks: string[];
+  maxProximity: number;
+  activeTab: 'all' | 'pairings' | 'linking';
+  isDarkMode: boolean;
+  showGraph: boolean;
+  showFilters: boolean;
+  // Only store indexes and minimal graph state
+  pairingsGraphState: {
+    selectedConnectionIndexes: number[];
+    selectedNodes: string[];
+    graphTransform: { x: number; y: number; scale: number };
+  };
+  linkingGraphState: {
+    selectedConnectionIndexes: number[];
+    selectedNodes: string[];
+    graphTransform: { x: number; y: number; scale: number };
+  };
+}
+
+interface MinimalStorageState {
+  tabs: MinimalTabState[];
+  activeTabId: string;
+  version: string;
+}
+
 function saveStateToStorage(state: TabReducerState): void {
   if (typeof window === 'undefined') return;
 
@@ -280,48 +376,15 @@ function saveStateToStorage(state: TabReducerState): void {
     if (!pendingState) return;
 
     try {
-      // Debug logging for selected connections
-      const activeTab = pendingState?.tabs.find(tab => tab.id === pendingState?.activeTabId);
-      if (activeTab && (activeTab.pairingsGraphState.selectedConnections.length > 0 || activeTab.linkingGraphState.selectedConnections.length > 0)) {
-        console.log('Saving tab state with selected connections:', {
-          pairings: activeTab.pairingsGraphState.selectedConnections.length,
-          linking: activeTab.linkingGraphState.selectedConnections.length
-        });
-      }
-      
       // Check storage usage and cleanup if needed
       if (DevStorageHelper.isStorageNearLimit()) {
         console.warn('localStorage near capacity, cleaning up old data');
         DevStorageHelper.cleanupOldData();
       }
 
-    // Create a lightweight version for storage - exclude large data that can be regenerated
-    const stateToSave = {
-      ...state,
-      version: STORAGE_VERSION,
-      tabs: state.tabs.map(tab => ({
-        ...tab,
-        isLoading: false, // Don't persist loading state
-        results: [], // Don't store search results - they can be regenerated
-        pairings: [], // Don't store pairings - they can be regenerated
-        linkings: [], // Don't store linkings - they can be regenerated
-        error: '', // Don't persist errors
-        // Keep pairingsGraphState and linkingGraphState - these are user selections that can't be regenerated
-      })),
-    };
-    
-    const serialized = JSON.stringify(stateToSave);
-    
-    // Check if the serialized data is too large
-    const storageInfo = DevStorageHelper.getStorageUsage();
-    const estimatedNewSize = storageInfo.used + serialized.length;
-    const maxSafeSize = 4 * 1024 * 1024; // 4MB conservative limit
-    
-    if (estimatedNewSize > maxSafeSize || serialized.length > 2 * 1024 * 1024) { // 2MB per state (increased from 1MB)
-      console.warn('Tab state too large for localStorage, using minimal state');
-      // Save only essential data
-      const minimalState = {
-        tabs: state.tabs.slice(-3).map(tab => ({ // Keep only last 3 tabs
+      // Create minimal state for storage - exclude all runtime/derived data
+      const minimalState: MinimalStorageState = {
+        tabs: state.tabs.map(tab => ({
           id: tab.id,
           name: tab.name,
           searchTerms: tab.searchTerms,
@@ -333,85 +396,73 @@ function saveStateToStorage(state: TabReducerState): void {
           isDarkMode: tab.isDarkMode,
           showGraph: tab.showGraph,
           showFilters: tab.showFilters,
-          // Keep user selections even in minimal state - these are important
-          pairingsGraphState: tab.pairingsGraphState || {
-            selectedConnections: [],
-            selectedNodes: [],
-            graphTransform: { x: 0, y: 0, scale: 1 },
+          // Store only indexes instead of full connection objects
+          pairingsGraphState: {
+            selectedConnectionIndexes: tab.pairingsGraphState.selectedConnectionIndexes,
+            selectedNodes: tab.pairingsGraphState.selectedNodes,
+            graphTransform: tab.pairingsGraphState.graphTransform,
           },
-          linkingGraphState: tab.linkingGraphState || {
-            selectedConnections: [],
-            selectedNodes: [],
-            graphTransform: { x: 0, y: 0, scale: 1 },
+          linkingGraphState: {
+            selectedConnectionIndexes: tab.linkingGraphState.selectedConnectionIndexes,
+            selectedNodes: tab.linkingGraphState.selectedNodes,
+            graphTransform: tab.linkingGraphState.graphTransform,
           },
-          results: [],
-          pairings: [],
-          linkings: [],
-          isLoading: false,
-          error: '',
-          lastSearchKey: '',
-          filterCounts: {
-            total: 0,
-            oldTestament: 0,
-            newTestament: 0,
-            books: {},
-          },
+          // Exclude: results, pairings, linkings, isLoading, error, lastSearchKey, filterCounts
         })),
         activeTabId: state.activeTabId,
-        isInitialized: state.isInitialized,
+        version: STORAGE_VERSION,
       };
+      
       localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalState));
-    } else {
-      localStorage.setItem(STORAGE_KEY, serialized);
-    }
-  } catch (error) {
-    console.error('Failed to save tab state to localStorage:', error);
-    if (error instanceof Error && error.name === 'QuotaExceededError') {
-      try {
-        // Cleanup and try with minimal state
-        DevStorageHelper.cleanupOldData();
-        localStorage.removeItem(STORAGE_KEY);
-        
-        // Try to preserve at least the current tab's user selections
-        const currentTab = state.tabs.find(tab => tab.id === state.activeTabId);
-        const emergencyState = {
-          tabs: [{
-            id: state.activeTabId,
-            name: currentTab?.name || 'Search 1',
-            ...DEFAULT_TAB_STATE,
-            // Preserve user selections if possible
-            pairingsGraphState: currentTab?.pairingsGraphState || {
-              selectedConnections: [],
-              selectedNodes: [],
-              graphTransform: { x: 0, y: 0, scale: 1 },
-            },
-            linkingGraphState: currentTab?.linkingGraphState || {
-              selectedConnections: [],
-              selectedNodes: [],
-              graphTransform: { x: 0, y: 0, scale: 1 },
-            },
-            isDarkMode: currentTab?.isDarkMode || false,
-            showGraph: currentTab?.showGraph || false,
-          }],
-          activeTabId: state.activeTabId,
-          isInitialized: true,
-          version: STORAGE_VERSION,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(emergencyState));
-        console.warn('Saved emergency minimal state due to quota exceeded');
-      } catch (retryError) {
-        console.error('Failed to save even minimal state:', retryError);
-        // Clear localStorage entirely if we can't save anything
+      
+    } catch (error) {
+      console.error('Failed to save tab state to localStorage:', error);
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
         try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch (clearError) {
-          console.error('Failed to clear localStorage:', clearError);
+          // Emergency fallback - save only current tab
+          const currentTab = state.tabs.find(tab => tab.id === state.activeTabId);
+          const emergencyState: MinimalStorageState = {
+            tabs: [{
+              id: state.activeTabId,
+              name: currentTab?.name || 'Search 1',
+              searchTerms: currentTab?.searchTerms || '',
+              pairingsSearchTerms: currentTab?.pairingsSearchTerms || '',
+              selectedTestament: currentTab?.selectedTestament || 'all',
+              selectedBooks: currentTab?.selectedBooks || [],
+              maxProximity: currentTab?.maxProximity || DEFAULT_TAB_STATE.maxProximity,
+              activeTab: currentTab?.activeTab || 'all',
+              isDarkMode: currentTab?.isDarkMode || false,
+              showGraph: currentTab?.showGraph || false,
+              showFilters: currentTab?.showFilters || false,
+              pairingsGraphState: {
+                selectedConnectionIndexes: currentTab?.pairingsGraphState.selectedConnectionIndexes || [],
+                selectedNodes: currentTab?.pairingsGraphState.selectedNodes || [],
+                graphTransform: currentTab?.pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+              },
+              linkingGraphState: {
+                selectedConnectionIndexes: currentTab?.linkingGraphState.selectedConnectionIndexes || [],
+                selectedNodes: currentTab?.linkingGraphState.selectedNodes || [],
+                graphTransform: currentTab?.linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
+              },
+            }],
+            activeTabId: state.activeTabId,
+            version: STORAGE_VERSION,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(emergencyState));
+          console.warn('Saved emergency minimal state due to quota exceeded');
+        } catch (retryError) {
+          console.error('Failed to save even minimal state:', retryError);
+          // Clear localStorage entirely if we can't save anything
+          try {
+            localStorage.removeItem(STORAGE_KEY);
+          } catch (clearError) {
+            console.error('Failed to clear localStorage:', clearError);
+          }
         }
       }
+    } finally {
+      pendingState = null;
     }
-  } finally {
-    pendingState = null;
-  }
   }, 100);
 }
 
@@ -579,7 +630,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'UPDATE_GRAPH_STATE': {
-      const { tabType, selectedConnections, selectedNodes, graphTransform } = action.payload;
+      const { tabType, selectedConnectionIndexes, selectedNodes, graphTransform } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
@@ -588,7 +639,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
                 ...tab, 
                 [tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState']: {
                   ...tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'],
-                  ...(selectedConnections !== undefined && { selectedConnections }),
+                  ...(selectedConnectionIndexes !== undefined && { selectedConnectionIndexes }),
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
                 }
@@ -908,7 +959,7 @@ export function useTabReducer() {
     updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
       dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
     
-    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnections?: Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }>; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } }) =>
+    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionIndexes?: number[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; } }) =>
       dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { tabType, ...updates } }),
   };
 

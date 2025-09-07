@@ -9,7 +9,7 @@ import { AppHeader } from '../components/ui/app-header';
 import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
 
-import { useTabReducer } from '../hooks/use-tab-reducer';
+import { useTabReducer, getSelectedConnections } from '../hooks/use-tab-reducer';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 
@@ -134,101 +134,72 @@ export default function Home() {
     actions.updateFilters(activeTab.selectedTestament, newBooks, activeTab.maxProximity);
   }, [actions, activeTab.selectedBooks, activeTab.selectedTestament, activeTab.maxProximity]);
 
+  // Create a memoized lookup map for faster connection index finding
+  const connectionIndexMap = useMemo(() => {
+    const allConnections = activeTab.activeTab === 'linking' 
+      ? activeTab.linkings 
+      : activeTab.pairings;
+    
+    const map = new Map<string, number>();
+    allConnections.forEach((conn, index) => {
+      const key = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
+      map.set(key, index);
+    });
+    return map;
+  }, [activeTab.activeTab, activeTab.linkings, activeTab.pairings]);
+
   // Graph event handlers
   const handleToggleGraph = useCallback((connection: GraphConnection) => {
     const currentGraphState = activeTab.activeTab === 'linking' 
       ? activeTab.linkingGraphState 
       : activeTab.pairingsGraphState;
     
-    const versePositions = connection.versePositions || [];
-    const sortedPositions = versePositions
-      .slice()
-      .sort((a: number, b: number) => a - b)
-      .join(',');
-    const [word1, word2] = [connection.word1, connection.word2].sort();
-    const connectionKey = `${word1}-${word2}-${sortedPositions}`;
-
-    const exists = currentGraphState.selectedConnections.some(conn => {
-      const connVersePositions = conn.versePositions || [];
-      const connSortedPositions = connVersePositions
-        .slice()
-        .sort((a, b) => a - b)
-        .join(',');
-      const [connWord1, connWord2] = [conn.word1, conn.word2].sort();
-      const connKey = `${connWord1}-${connWord2}-${connSortedPositions}`;
-      return connKey === connectionKey;
-    });
+    // Use the lookup map for O(1) index finding instead of O(n) findIndex
+    const connectionKey = `${connection.word1}-${connection.word2}-${connection.reference}`;
+    const connectionIndex = connectionIndexMap.get(connectionKey);
     
-    const newConnections = exists
-      ? currentGraphState.selectedConnections.filter(conn => {
-          const connVersePositions = conn.versePositions || [];
-          const connSortedPositions = connVersePositions
-            .slice()
-            .sort((a, b) => a - b)
-            .join(',');
-          const [connWord1, connWord2] = [conn.word1, conn.word2].sort();
-          const connKey = `${connWord1}-${connWord2}-${connSortedPositions}`;
-          return connKey !== connectionKey;
-        })
-      : [...currentGraphState.selectedConnections, connection];
+    if (connectionIndex === undefined) return; // Connection not found in current results
+    
+    const currentIndexes = currentGraphState.selectedConnectionIndexes;
+    const exists = currentIndexes.includes(connectionIndex);
+    
+    const newIndexes = exists
+      ? currentIndexes.filter(index => index !== connectionIndex)
+      : [...currentIndexes, connectionIndex];
     
     const tabType = activeTab.activeTab === 'linking' ? 'linking' : 'pairings';
-    actions.updateGraphState(tabType, { selectedConnections: newConnections });
-  }, [actions, activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState]);
+    actions.updateGraphState(tabType, { selectedConnectionIndexes: newIndexes });
+  }, [actions, activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState, connectionIndexMap]);
 
   const handleSelectAllPairings = useCallback((pairings: VersePairing[]) => {
     const currentGraphState = activeTab.activeTab === 'linking' 
       ? activeTab.linkingGraphState 
       : activeTab.pairingsGraphState;
     
-    const existingConnections = currentGraphState.selectedConnections;
-    const existingKeys = new Set(
-      existingConnections.map((conn) => {
-        const versePositions = conn.versePositions
-          ?.slice()
-          .sort((a, b) => a - b)
-          .join(',') || '';
-        const [word1, word2] = [conn.word1, conn.word2].sort();
-        return `${word1}-${word2}-${versePositions}`;
-      })
-    );
-
-    const newConnections: GraphConnection[] = [];
-
+    const currentIndexes = currentGraphState.selectedConnectionIndexes;
+    const existingIndexSet = new Set(currentIndexes);
+    
+    // Find indexes of pairings that aren't already selected using the lookup map
+    const newIndexes: number[] = [];
     pairings.forEach((pairing) => {
-      const versePositions = pairing.verses.map((v) => v.position);
-      const verseRef = pairing.verses.length === 1
-        ? pairing.verses[0].reference
-        : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
-
-      const sortedPositions = versePositions
-        .slice()
-        .sort((a: number, b: number) => a - b)
-        .join(',');
-      const [word1, word2] = [pairing.term1, pairing.term2].sort();
-      const key = `${word1}-${word2}-${sortedPositions}`;
-
-      if (!existingKeys.has(key)) {
-        newConnections.push({
-          word1: pairing.term1,
-          word2: pairing.term2,
-          reference: verseRef,
-          versePositions: versePositions,
-        });
+      const key = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+      const index = connectionIndexMap.get(key);
+      if (index !== undefined && !existingIndexSet.has(index)) {
+        newIndexes.push(index);
       }
     });
 
-    if (newConnections.length > 0) {
+    if (newIndexes.length > 0) {
       const tabType = activeTab.activeTab === 'linking' ? 'linking' : 'pairings';
       actions.updateGraphState(tabType, { 
-        selectedConnections: [...existingConnections, ...newConnections] 
+        selectedConnectionIndexes: [...currentIndexes, ...newIndexes] 
       });
     }
-  }, [actions, activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState]);
+  }, [actions, activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState, connectionIndexMap]);
 
   const handleDeselectAllPairings = useCallback(() => {
     const tabType = activeTab.activeTab === 'linking' ? 'linking' : 'pairings';
-    actions.updateGraphState(tabType, { selectedConnections: [] });
+    actions.updateGraphState(tabType, { selectedConnectionIndexes: [] });
   }, [actions, activeTab.activeTab]);
 
   const handleNodeClick = useCallback((nodeId: string) => {
@@ -261,31 +232,31 @@ export default function Home() {
     const currentGraphState = activeTab.activeTab === 'linking' 
       ? activeTab.linkingGraphState 
       : activeTab.pairingsGraphState;
-
-    const connectionKeys = new Set(
-      currentGraphState.selectedConnections.map((conn) => {
-        const versePositions = conn.versePositions
-          ?.slice()
-          .sort((a, b) => a - b)
-          .join(',') || '';
-        const [word1, word2] = [conn.word1, conn.word2].sort();
-        return `${word1}-${word2}-${versePositions}`;
-      })
-    );
+    
+    const selectedIndexSet = new Set(currentGraphState.selectedConnectionIndexes);
 
     return pairings.every((pairing) => {
-      const versePositions = pairing.verses
-        .map((v) => v.position)
-        .sort((a: number, b: number) => a - b)
-        .join(',');
-      const [word1, word2] = [pairing.term1, pairing.term2].sort();
-      const key = `${word1}-${word2}-${versePositions}`;
-      return connectionKeys.has(key);
+      const key = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+      const index = connectionIndexMap.get(key);
+      return index !== undefined && selectedIndexSet.has(index);
     });
-  }, [activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState]);
+  }, [activeTab.activeTab, activeTab.pairingsGraphState, activeTab.linkingGraphState, connectionIndexMap]);
 
   // Use filter counts from active tab
   const filterCounts = activeTab.filterCounts;
+
+  // Memoize selected connections to avoid expensive recalculations on every render
+  const selectedConnections = useMemo(() => {
+    return activeTab.activeTab === 'linking' 
+      ? getSelectedConnections(activeTab.linkingGraphState.selectedConnectionIndexes, activeTab.linkings)
+      : getSelectedConnections(activeTab.pairingsGraphState.selectedConnectionIndexes, activeTab.pairings);
+  }, [
+    activeTab.activeTab,
+    activeTab.linkingGraphState.selectedConnectionIndexes,
+    activeTab.pairingsGraphState.selectedConnectionIndexes,
+    activeTab.linkings,
+    activeTab.pairings
+  ]);
 
   // Loading state
   if (!isInitialized || !hasMounted || !state.isInitialized) {
@@ -375,9 +346,7 @@ export default function Home() {
                   isDarkMode={activeTab.isDarkMode}
                   scrollPositionKey={scrollPositionKey}
                   showGraph={activeTab.showGraph}
-                  selectedConnections={activeTab.activeTab === 'linking' 
-                    ? activeTab.linkingGraphState.selectedConnections 
-                    : activeTab.pairingsGraphState.selectedConnections}
+                  selectedConnections={selectedConnections}
                   onToggleGraph={handleToggleGraph}
                 />
               )}
@@ -393,9 +362,7 @@ export default function Home() {
               )}`}
             >
               <GraphVisualizer
-                connections={activeTab.activeTab === 'linking' 
-                  ? activeTab.linkingGraphState.selectedConnections 
-                  : activeTab.pairingsGraphState.selectedConnections}
+                connections={selectedConnections}
                 searchTerms={activeTab.searchTerms}
                 pairingsSearchTerms={activeTab.pairingsSearchTerms}
                 isDarkMode={activeTab.isDarkMode}

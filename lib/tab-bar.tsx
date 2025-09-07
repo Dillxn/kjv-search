@@ -18,12 +18,7 @@ interface TabState {
   showGraph: boolean;
   // Separate graph states for pairings and linking tabs
   pairingsGraphState: {
-    selectedConnections: Array<{
-      word1: string;
-      word2: string;
-      reference: string;
-      versePositions: number[];
-    }>;
+    selectedConnectionIndexes: number[];
     selectedNodes: string[];
     graphTransform: {
       x: number;
@@ -32,12 +27,7 @@ interface TabState {
     };
   };
   linkingGraphState: {
-    selectedConnections: Array<{
-      word1: string;
-      word2: string;
-      reference: string;
-      versePositions: number[];
-    }>;
+    selectedConnectionIndexes: number[];
     selectedNodes: string[];
     graphTransform: {
       x: number;
