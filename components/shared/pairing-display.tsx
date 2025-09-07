@@ -38,14 +38,12 @@ export function PairingDisplay({
     return SearchResultsHelper.processSearchString(pairingsSearchTerms);
   };
 
-  // Function to highlight text with both color schemes
+  // Function to highlight text with only the terms that contributed to this pairing result
   const highlightPairingText = (text: string): string => {
-    const searchTermsArray = getSearchTermsArray();
-    const pairingsSearchTermsArray = getPairingsSearchTermsArray();
-
+    // Only highlight the specific terms that were found in this pairing
     return UnifiedHighlighter.highlightText(text, {
-      mainTerms: searchTermsArray,
-      pairingsTerms: pairingsSearchTermsArray,
+      mainTerms: [pairing.term1],
+      pairingsTerms: [pairing.term2],
       isDarkMode,
       usePairingsColors: true,
     });
