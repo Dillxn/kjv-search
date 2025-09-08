@@ -3,14 +3,14 @@
 import { Tab } from './tab';
 
 interface TabNavigationProps {
-  activeTab: 'all' | 'pairings' | 'linking';
+  activeTab: 'all' | 'linking';
   resultsCount: number;
   pairingsCount: number;
   linkingsCount: number;
   isDarkMode: boolean;
   showGraph: boolean;
   allPairingsSelected: boolean;
-  onTabChange: (tab: 'all' | 'pairings' | 'linking') => void;
+  onTabChange: (tab: 'all' | 'linking') => void;
   onSelectAllPairings: () => void;
   onDeselectAllPairings: () => void;
 }
@@ -38,13 +38,6 @@ export function TabNavigation({
           All Results ({resultsCount})
         </Tab>
         <Tab
-          isActive={activeTab === 'pairings'}
-          isDarkMode={isDarkMode}
-          onClick={() => onTabChange('pairings')}
-        >
-          Pairings ({pairingsCount})
-        </Tab>
-        <Tab
           isActive={activeTab === 'linking'}
           isDarkMode={isDarkMode}
           onClick={() => onTabChange('linking')}
@@ -53,8 +46,7 @@ export function TabNavigation({
         </Tab>
       </div>
 
-      {(activeTab === 'pairings' || activeTab === 'linking') && showGraph && 
-       ((activeTab === 'pairings' && pairingsCount > 0) || (activeTab === 'linking' && linkingsCount > 0)) && (
+      {activeTab === 'linking' && showGraph && linkingsCount > 0 && (
         <label
           className='mr-2 flex items-center cursor-pointer'
           title={

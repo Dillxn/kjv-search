@@ -61,7 +61,7 @@ export function PairingDisplay({
 
     // Use full search term lists for consistent color assignment with search input
     const allSearchTerms = SearchResultsHelper.processSearchString(searchTerms || '');
-    const allPairingsTerms = SearchResultsHelper.processSearchString(pairingsSearchTerms || '');
+    const allPairingsTerms: string[] = [];
 
     return UnifiedHighlighter.highlightText(text, {
       matches: pairingMatches,

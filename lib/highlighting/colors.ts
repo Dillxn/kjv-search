@@ -1,8 +1,6 @@
 import {
   HIGHLIGHT_COLORS_LIGHT,
   HIGHLIGHT_COLORS_DARK,
-  PAIRINGS_HIGHLIGHT_COLORS_LIGHT,
-  PAIRINGS_HIGHLIGHT_COLORS_DARK,
 } from '../constants';
 
 export function getHighlightColors(isDarkMode: boolean): string[] {
@@ -10,9 +8,8 @@ export function getHighlightColors(isDarkMode: boolean): string[] {
 }
 
 export function getPairingsHighlightColors(isDarkMode: boolean): string[] {
-  return isDarkMode
-    ? PAIRINGS_HIGHLIGHT_COLORS_DARK
-    : PAIRINGS_HIGHLIGHT_COLORS_LIGHT;
+  // Use the same colors as regular highlights since pairings are deprecated
+  return getHighlightColors(isDarkMode);
 }
 
 /**

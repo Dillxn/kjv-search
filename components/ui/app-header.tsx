@@ -10,8 +10,7 @@ interface AppHeaderProps {
   isDarkMode: boolean;
   showGraph: boolean;
   searchTerms: string;
-  pairingsSearchTerms: string;
-  activeTab: 'all' | 'pairings' | 'linking';
+  activeTab: 'all' | 'linking';
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
   maxProximity: number;
@@ -25,7 +24,6 @@ interface AppHeaderProps {
   onDarkModeToggle: () => void;
   onGraphToggle: () => void;
   onSearchTermsChange: (terms: string) => void;
-  onPairingsSearchTermsChange: (terms: string) => void;
   onTestamentChange: (testament: 'all' | 'old' | 'new') => void;
   onBookToggle: (book: string) => void;
   onProximityChange: (proximity: number) => void;
@@ -36,7 +34,6 @@ export function AppHeader({
   isDarkMode,
   showGraph,
   searchTerms,
-  pairingsSearchTerms,
   activeTab,
   selectedTestament,
   selectedBooks,
@@ -46,7 +43,6 @@ export function AppHeader({
   onDarkModeToggle,
   onGraphToggle,
   onSearchTermsChange,
-  onPairingsSearchTermsChange,
   onTestamentChange,
   onBookToggle,
   onProximityChange,
@@ -94,16 +90,6 @@ export function AppHeader({
         placeholder='Start typing to search... (min 2 characters)'
         isDarkMode={isDarkMode}
       />
-
-      {activeTab === 'pairings' && (
-        <SearchInput
-          value={pairingsSearchTerms}
-          onChange={onPairingsSearchTermsChange}
-          placeholder='Enter second group of words...'
-          isDarkMode={isDarkMode}
-          isPairingsInput={true}
-        />
-      )}
 
       <FilterControls
         selectedTestament={selectedTestament}

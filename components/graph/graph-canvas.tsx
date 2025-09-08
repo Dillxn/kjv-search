@@ -31,7 +31,6 @@ interface GraphCanvasProps {
     versePositions?: number[];
   }>;
   searchTerms: string;
-  pairingsSearchTerms: string;
   isDarkMode: boolean;
   canvasSize: { width: number; height: number };
   transform: { x: number; y: number; scale: number };
@@ -54,7 +53,6 @@ export function GraphCanvas({
   edges,
   connections,
   searchTerms,
-  pairingsSearchTerms,
   isDarkMode,
   canvasSize,
   transform,
@@ -78,9 +76,9 @@ export function GraphCanvas({
   // Create color mappings for search terms
   const termColorMaps = React.useMemo(() => {
     const mainTerms = SearchTermProcessor.processSearchString(searchTerms);
-    const pairingsTerms = SearchTermProcessor.processSearchString(pairingsSearchTerms);
+    const pairingsTerms: string[] = [];
     return createTermColorMaps(mainTerms, pairingsTerms, isDarkMode);
-  }, [searchTerms, pairingsSearchTerms, isDarkMode]);
+  }, [searchTerms, isDarkMode]);
 
   // Calculate highlighted elements for path visualization
   const highlightedElements = React.useMemo(() => {

@@ -37,7 +37,6 @@ interface GraphVisualizerProps {
     versePositions?: number[];
   }>;
   searchTerms?: string;
-  pairingsSearchTerms?: string;
   isDarkMode?: boolean;
   initialTransform?: {
     x: number;
@@ -61,7 +60,6 @@ interface GraphVisualizerProps {
 export function GraphVisualizer({
   connections,
   searchTerms = '',
-  pairingsSearchTerms = '',
   isDarkMode = false,
   initialTransform = { x: 0, y: 0, scale: 1 },
   onTransformChange,
@@ -394,7 +392,6 @@ export function GraphVisualizer({
         edges={edges}
         connections={connections}
         searchTerms={searchTerms}
-        pairingsSearchTerms={pairingsSearchTerms}
         isDarkMode={isDarkMode}
         canvasSize={canvasSize}
         transform={transform}

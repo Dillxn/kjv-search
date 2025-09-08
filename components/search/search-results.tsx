@@ -10,9 +10,8 @@ interface SearchResultsProps {
   results: SearchResult[];
   pairings: VersePairing[];
   linkings: VersePairing[];
-  activeTab: 'all' | 'pairings' | 'linking';
+  activeTab: 'all' | 'linking';
   searchTerms: string;
-  pairingsSearchTerms: string;
   isDarkMode: boolean;
   scrollPositionKey: string;
   showGraph: boolean;
@@ -31,7 +30,6 @@ export function SearchResults({
   linkings,
   activeTab,
   searchTerms,
-  pairingsSearchTerms,
   isDarkMode,
   scrollPositionKey,
   showGraph,
@@ -80,7 +78,7 @@ export function SearchResults({
       <PairingDisplay
         pairing={pairing}
         searchTerms={searchTerms}
-        pairingsSearchTerms={pairingsSearchTerms}
+        pairingsSearchTerms=""
         isDarkMode={isDarkMode}
         showGraph={showGraph}
         selectedConnections={selectedConnections}
@@ -108,32 +106,6 @@ export function SearchResults({
       <VirtualScroll
         items={results}
         renderItem={renderResult}
-        estimatedItemHeight={60}
-        className={`${
-          isDarkMode ? 'bg-gray-800' : 'bg-white'
-        } rounded-sm shadow-md p-2`}
-        localStorageKey={scrollPositionKey}
-      />
-    );
-  } else if (activeTab === 'pairings') {
-    if (pairings.length === 0) {
-      return (
-        <div
-          className={`flex items-center justify-center h-full ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}
-        >
-          <p className='text-sm'>
-            {SearchResultsHelper.getEmptyStateMessage(searchTerms, 'pairings')}
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <VirtualScroll
-        items={pairings}
-        renderItem={renderPairing}
         estimatedItemHeight={60}
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'

@@ -11,26 +11,14 @@ export interface TabState {
   id: string;
   name: string;
   searchTerms: string;
-  pairingsSearchTerms: string;
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
   maxProximity: number;
   showFilters: boolean;
-  activeTab: 'all' | 'pairings' | 'linking';
+  activeTab: 'all' | 'linking';
   isDarkMode: boolean;
   showGraph: boolean;
-  // Separate graph states for pairings and linking tabs - optimized for storage
-  pairingsGraphState: {
-    selectedConnectionKeys: string[]; // Store connection keys instead of indexes for robustness
-    selectedNodes: string[];
-    graphTransform: {
-      x: number;
-      y: number;
-      scale: number;
-    };
-    currentPathIndex: number; // Current path index for path slider
-    excludedEdges: string[]; // Array of edge IDs (word1-word2 sorted) to exclude from pathfinding
-  };
+  // Graph state for linking tab - optimized for storage
   linkingGraphState: {
     selectedConnectionKeys: string[]; // Store connection keys instead of indexes for robustness
     selectedNodes: string[];
@@ -44,7 +32,6 @@ export interface TabState {
   };
   // Search results stored directly in tab state (runtime only, not persisted)
   results: SearchResult[];
-  pairings: VersePairing[];
   linkings: VersePairing[];
   isLoading: boolean;
   error: string;
@@ -73,19 +60,18 @@ export type TabAction =
   | { type: 'SWITCH_TAB'; payload: { tabId: string } }
   | { type: 'RENAME_TAB'; payload: { tabId: string; name: string } }
   | { type: 'DUPLICATE_TAB'; payload: { tabId: string } }
-  | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string; pairingsSearchTerms: string } }
+  | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string } }
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
-  | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
-  | { type: 'UPDATE_GRAPH_STATE'; payload: { tabType: 'pairings' | 'linking'; selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
-  | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { tabType: 'pairings' | 'linking'; edgeId: string } }
+  | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
+  | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
+  | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { edgeId: string } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
-  | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; pairings: VersePairing[]; linkings: VersePairing[]; error?: string } }
+  | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; linkings: VersePairing[]; error?: string } }
   | { type: 'SET_SEARCH_ERROR'; payload: { error: string } }
   | { type: 'UPDATE_FILTER_COUNTS'; payload: { filterCounts: TabState['filterCounts'] } };
 
 const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   searchTerms: '',
-  pairingsSearchTerms: '',
   selectedTestament: 'all',
   selectedBooks: [],
   maxProximity: APP_CONFIG.PAIRINGS.MAX_PROXIMITY,
@@ -93,13 +79,6 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   activeTab: 'all',
   isDarkMode: false,
   showGraph: false,
-  pairingsGraphState: {
-    selectedConnectionKeys: [],
-    selectedNodes: [],
-    graphTransform: { x: 0, y: 0, scale: 1 },
-    currentPathIndex: 0,
-    excludedEdges: [],
-  },
   linkingGraphState: {
     selectedConnectionKeys: [],
     selectedNodes: [],
@@ -108,7 +87,6 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
     excludedEdges: [],
   },
   results: [],
-  pairings: [],
   linkings: [],
   isLoading: false,
   error: '',
@@ -132,7 +110,7 @@ function generateTabId(): string {
 }
 
 function generateSearchKey(tab: TabState): string {
-  return `${tab.searchTerms}|${tab.pairingsSearchTerms}|${tab.activeTab}|${tab.selectedTestament}|${tab.selectedBooks.join(',')}|${tab.maxProximity}`;
+  return `${tab.searchTerms}|${tab.activeTab}|${tab.selectedTestament}|${tab.selectedBooks.join(',')}|${tab.maxProximity}`;
 }
 
 // Cache for converted connections to avoid repeated conversions
@@ -259,19 +237,21 @@ function loadStateFromStorage(): TabReducerState {
 
       const fullTabs: TabState[] = parsed.tabs.map((minimalTab: MinimalTabState) => {
         // Handle migration from old format with selectedConnections to new selectedConnectionKeys
-        let pairingsGraphState = minimalTab.pairingsGraphState || {};
         let linkingGraphState = minimalTab.linkingGraphState || {};
 
         // Migrate from old selectedConnectionIndexes format to selectedConnectionKeys
         // Since we can't recover the exact connections from indexes without historical data,
         // we'll clear the selections during migration to ensure consistency
-        if (pairingsGraphState.selectedConnectionIndexes && !pairingsGraphState.selectedConnectionKeys) {
-          console.log('Migrating pairings selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
-          pairingsGraphState.selectedConnectionKeys = [];
-        }
         if (linkingGraphState.selectedConnectionIndexes && !linkingGraphState.selectedConnectionKeys) {
           console.log('Migrating linking selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
           linkingGraphState.selectedConnectionKeys = [];
+        }
+
+        // Handle migration from pairings tab to linking tab
+        let activeTab = minimalTab.activeTab;
+        if (activeTab === 'pairings') {
+          console.log('Migrating from pairings tab to linking tab');
+          activeTab = 'linking';
         }
 
         return {
@@ -280,21 +260,13 @@ function loadStateFromStorage(): TabReducerState {
           id: minimalTab.id,
           name: minimalTab.name,
           searchTerms: minimalTab.searchTerms || '',
-          pairingsSearchTerms: minimalTab.pairingsSearchTerms || '',
           selectedTestament: minimalTab.selectedTestament || 'all',
           selectedBooks: minimalTab.selectedBooks || [],
           maxProximity: minimalTab.maxProximity !== undefined ? minimalTab.maxProximity : DEFAULT_TAB_STATE.maxProximity,
           showFilters: minimalTab.showFilters || false,
-          activeTab: minimalTab.activeTab || 'all',
+          activeTab: activeTab || 'all',
           isDarkMode: minimalTab.isDarkMode || false,
           showGraph: minimalTab.showGraph || false,
-          pairingsGraphState: {
-            selectedConnectionKeys: pairingsGraphState.selectedConnectionKeys || [],
-            selectedNodes: pairingsGraphState.selectedNodes || [],
-            graphTransform: pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
-            currentPathIndex: pairingsGraphState.currentPathIndex || 0,
-            excludedEdges: pairingsGraphState.excludedEdges || [],
-          },
           linkingGraphState: {
             selectedConnectionKeys: linkingGraphState.selectedConnectionKeys || [],
             selectedNodes: linkingGraphState.selectedNodes || [],
@@ -304,7 +276,6 @@ function loadStateFromStorage(): TabReducerState {
           },
           // Runtime state - always starts fresh
           results: [],
-          pairings: [],
           linkings: [],
           isLoading: false,
           error: '',
@@ -346,23 +317,14 @@ interface MinimalTabState {
   id: string;
   name: string;
   searchTerms: string;
-  pairingsSearchTerms: string;
   selectedTestament: 'all' | 'old' | 'new';
   selectedBooks: string[];
   maxProximity: number;
-  activeTab: 'all' | 'pairings' | 'linking';
+  activeTab: 'all' | 'linking' | 'pairings'; // Include 'pairings' for migration from old versions
   isDarkMode: boolean;
   showGraph: boolean;
   showFilters: boolean;
   // Store keys and minimal graph state (backwards compatible with old indexes)
-  pairingsGraphState: {
-    selectedConnectionKeys?: string[];
-    selectedConnectionIndexes?: number[]; // For migration from old format
-    selectedNodes: string[];
-    graphTransform: { x: number; y: number; scale: number };
-    currentPathIndex: number;
-    excludedEdges: string[];
-  };
   linkingGraphState: {
     selectedConnectionKeys?: string[];
     selectedConnectionIndexes?: number[]; // For migration from old format
@@ -407,7 +369,6 @@ function saveStateToStorage(state: TabReducerState): void {
           id: tab.id,
           name: tab.name,
           searchTerms: tab.searchTerms,
-          pairingsSearchTerms: tab.pairingsSearchTerms,
           selectedTestament: tab.selectedTestament,
           selectedBooks: tab.selectedBooks,
           maxProximity: tab.maxProximity,
@@ -416,13 +377,6 @@ function saveStateToStorage(state: TabReducerState): void {
           showGraph: tab.showGraph,
           showFilters: tab.showFilters,
           // Store only keys instead of full connection objects
-          pairingsGraphState: {
-            selectedConnectionKeys: tab.pairingsGraphState.selectedConnectionKeys,
-            selectedNodes: tab.pairingsGraphState.selectedNodes,
-            graphTransform: tab.pairingsGraphState.graphTransform,
-            currentPathIndex: tab.pairingsGraphState.currentPathIndex,
-            excludedEdges: tab.pairingsGraphState.excludedEdges,
-          },
           linkingGraphState: {
             selectedConnectionKeys: tab.linkingGraphState.selectedConnectionKeys,
             selectedNodes: tab.linkingGraphState.selectedNodes,
@@ -430,7 +384,7 @@ function saveStateToStorage(state: TabReducerState): void {
             currentPathIndex: tab.linkingGraphState.currentPathIndex,
             excludedEdges: tab.linkingGraphState.excludedEdges,
           },
-          // Exclude: results, pairings, linkings, isLoading, error, lastSearchKey, filterCounts
+          // Exclude: results, linkings, isLoading, error, lastSearchKey, filterCounts
         })),
         activeTabId: state.activeTabId,
         version: STORAGE_VERSION,
@@ -449,7 +403,6 @@ function saveStateToStorage(state: TabReducerState): void {
               id: state.activeTabId,
               name: currentTab?.name || 'Search 1',
               searchTerms: currentTab?.searchTerms || '',
-              pairingsSearchTerms: currentTab?.pairingsSearchTerms || '',
               selectedTestament: currentTab?.selectedTestament || 'all',
               selectedBooks: currentTab?.selectedBooks || [],
               maxProximity: currentTab?.maxProximity || DEFAULT_TAB_STATE.maxProximity,
@@ -457,13 +410,6 @@ function saveStateToStorage(state: TabReducerState): void {
               isDarkMode: currentTab?.isDarkMode || false,
               showGraph: currentTab?.showGraph || false,
               showFilters: currentTab?.showFilters || false,
-              pairingsGraphState: {
-                selectedConnectionKeys: currentTab?.pairingsGraphState.selectedConnectionKeys || [],
-                selectedNodes: currentTab?.pairingsGraphState.selectedNodes || [],
-                graphTransform: currentTab?.pairingsGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
-                currentPathIndex: currentTab?.pairingsGraphState.currentPathIndex || 0,
-                excludedEdges: currentTab?.pairingsGraphState.excludedEdges || [],
-              },
               linkingGraphState: {
                 selectedConnectionKeys: currentTab?.linkingGraphState.selectedConnectionKeys || [],
                 selectedNodes: currentTab?.linkingGraphState.selectedNodes || [],
@@ -613,10 +559,9 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
-            ? { 
-                ...tab, 
+            ? {
+                ...tab,
                 searchTerms: action.payload.searchTerms,
-                pairingsSearchTerms: action.payload.pairingsSearchTerms,
               }
             : tab
         ),
@@ -657,15 +602,15 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'UPDATE_GRAPH_STATE': {
-      const { tabType, selectedConnectionKeys, selectedNodes, graphTransform, currentPathIndex } = action.payload;
+      const { selectedConnectionKeys, selectedNodes, graphTransform, currentPathIndex } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
             ? {
                 ...tab,
-                [tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState']: {
-                  ...tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'],
+                linkingGraphState: {
+                  ...tab.linkingGraphState,
                   ...(selectedConnectionKeys !== undefined && { selectedConnectionKeys }),
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
@@ -680,17 +625,17 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'TOGGLE_EDGE_EXCLUSION': {
-      const { tabType, edgeId } = action.payload;
+      const { edgeId } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
             ? {
                 ...tab,
-                [tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState']: {
-                  ...tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'],
+                linkingGraphState: {
+                  ...tab.linkingGraphState,
                   excludedEdges: (() => {
-                    const currentExcluded = tab[tabType === 'pairings' ? 'pairingsGraphState' : 'linkingGraphState'].excludedEdges;
+                    const currentExcluded = tab.linkingGraphState.excludedEdges;
                     const isExcluded = currentExcluded.includes(edgeId);
                     return isExcluded
                       ? currentExcluded.filter(id => id !== edgeId)
@@ -725,10 +670,9 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
         ...state,
         tabs: state.tabs.map(tab =>
           tab.id === state.activeTabId
-            ? { 
-                ...tab, 
+            ? {
+                ...tab,
                 results: action.payload.results,
-                pairings: action.payload.pairings,
                 linkings: action.payload.linkings,
                 isLoading: false,
                 error: action.payload.error || '',
@@ -863,8 +807,8 @@ export function useTabReducer() {
     const searchKey = generateSearchKey(targetTab);
     
     // Skip search if already performed for this configuration
-    if (targetTab.lastSearchKey === searchKey && 
-        (targetTab.results.length > 0 || targetTab.pairings.length > 0 || targetTab.error)) {
+    if (targetTab.lastSearchKey === searchKey &&
+        (targetTab.results.length > 0 || targetTab.linkings.length > 0 || targetTab.error)) {
       return;
     }
 
@@ -877,10 +821,10 @@ export function useTabReducer() {
       // Check if we can perform search
       if (!SearchStateValidator.canPerformSearch(targetTab.searchTerms)) {
         // Only dispatch if we need to clear existing results
-        if (targetTab.results.length > 0 || targetTab.pairings.length > 0 || targetTab.error) {
+        if (targetTab.results.length > 0 || targetTab.linkings.length > 0 || targetTab.error) {
           dispatch({
             type: 'SET_SEARCH_RESULTS',
-            payload: { results: [], pairings: [], linkings: [], error: '' },
+            payload: { results: [], linkings: [], error: '' },
           });
         }
         return;
@@ -898,30 +842,10 @@ export function useTabReducer() {
 
         const searchResults = kjvParser.searchWords(terms, searchFilters);
 
-        let versePairings: VersePairing[] = [];
         let verseLinkings: VersePairing[] = [];
-        
-        // Always calculate linkings (internal pairings within main search terms)
+
+        // Calculate linkings (internal pairings within main search terms)
         verseLinkings = kjvParser.findVersePairings(terms, searchFilters);
-        
-        // Always calculate pairings (between two search groups if both exist)
-        const { mainTerms, pairingsTerms, hasValidMain, hasValidPairings } = 
-          SearchTermProcessor.processBothSearchStrings(targetTab.searchTerms, targetTab.pairingsSearchTerms);
-
-        if (hasValidMain && hasValidPairings) {
-          // Calculate pairings between the two search groups
-          versePairings = kjvParser.findVersePairingsBetweenGroups(mainTerms, pairingsTerms, searchFilters);
-        } else {
-          // If no valid pairings search terms, pairings will be empty
-          versePairings = [];
-        }
-
-        versePairings = versePairings.sort((a, b) => {
-          if (a.proximity !== b.proximity) {
-            return a.proximity - b.proximity;
-          }
-          return a.verses[0].position - b.verses[0].position;
-        });
 
         verseLinkings = verseLinkings.sort((a, b) => {
           if (a.proximity !== b.proximity) {
@@ -932,13 +856,12 @@ export function useTabReducer() {
 
         console.log(`Search completed for tab ${targetTab.activeTab}:`, {
           results: searchResults.length,
-          pairings: versePairings.length,
           linkings: verseLinkings.length
         });
 
         dispatch({
           type: 'SET_SEARCH_RESULTS',
-          payload: { results: searchResults, pairings: versePairings, linkings: verseLinkings },
+          payload: { results: searchResults, linkings: verseLinkings },
         });
       } catch (err) {
         console.error('Search failed:', err);
@@ -1003,21 +926,21 @@ export function useTabReducer() {
     switchTab: (tabId: string) => dispatch({ type: 'SWITCH_TAB', payload: { tabId } }),
     renameTab: (tabId: string, name: string) => dispatch({ type: 'RENAME_TAB', payload: { tabId, name } }),
     duplicateTab: (tabId: string) => dispatch({ type: 'DUPLICATE_TAB', payload: { tabId } }),
-    
-    updateSearchTerms: (searchTerms: string, pairingsSearchTerms: string) => 
-      dispatch({ type: 'UPDATE_SEARCH_TERMS', payload: { searchTerms, pairingsSearchTerms } }),
-    
+
+    updateSearchTerms: (searchTerms: string) =>
+      dispatch({ type: 'UPDATE_SEARCH_TERMS', payload: { searchTerms } }),
+
     updateFilters: (selectedTestament: 'all' | 'old' | 'new', selectedBooks: string[], maxProximity: number) =>
       dispatch({ type: 'UPDATE_FILTERS', payload: { selectedTestament, selectedBooks, maxProximity } }),
-    
-    updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'pairings' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
-      dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
-    
-    updateGraphState: (tabType: 'pairings' | 'linking', updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
-      dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { tabType, ...updates } }),
 
-    toggleEdgeExclusion: (tabType: 'pairings' | 'linking', edgeId: string) =>
-      dispatch({ type: 'TOGGLE_EDGE_EXCLUSION', payload: { tabType, edgeId } }),
+    updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
+      dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
+
+    updateGraphState: (updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
+      dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { ...updates } }),
+
+    toggleEdgeExclusion: (edgeId: string) =>
+      dispatch({ type: 'TOGGLE_EDGE_EXCLUSION', payload: { edgeId } }),
   };
 
   // Cleanup timeout on unmount

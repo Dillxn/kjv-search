@@ -3,39 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Tab } from '../components/ui/tab';
-
-interface TabState {
-  id: string;
-  name: string;
-  searchTerms: string;
-  pairingsSearchTerms: string;
-  selectedTestament: 'all' | 'old' | 'new';
-  selectedBooks: string[];
-  maxProximity: number;
-  showFilters: boolean;
-  activeTab: 'all' | 'pairings' | 'linking';
-  isDarkMode: boolean;
-  showGraph: boolean;
-  // Separate graph states for pairings and linking tabs
-  pairingsGraphState: {
-    selectedConnectionKeys: string[];
-    selectedNodes: string[];
-    graphTransform: {
-      x: number;
-      y: number;
-      scale: number;
-    };
-  };
-  linkingGraphState: {
-    selectedConnectionKeys: string[];
-    selectedNodes: string[];
-    graphTransform: {
-      x: number;
-      y: number;
-      scale: number;
-    };
-  };
-}
+import { TabState } from '../hooks/use-tab-reducer';
 
 interface TabBarProps {
   tabs: TabState[];

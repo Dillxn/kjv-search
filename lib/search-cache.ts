@@ -3,7 +3,7 @@ import { SearchResult, VersePairing } from './kjv-parser';
 
 interface CachedSearchResults {
   results: SearchResult[];
-  pairings: VersePairing[];
+  pairings: VersePairing[]; // Keep as pairings for backwards compatibility with cached data
   timestamp: number;
 }
 
@@ -15,15 +15,13 @@ class SearchCache {
   // Generate cache key from search parameters
   private generateCacheKey(
     searchTerms: string,
-    pairingsSearchTerms: string,
-    activeTab: 'all' | 'pairings',
+    activeTab: 'all' | 'linking',
     selectedTestament: 'all' | 'old' | 'new',
     selectedBooks: string[],
     maxProximity: number
   ): string {
     const params = {
       searchTerms: searchTerms.trim().toLowerCase(),
-      pairingsSearchTerms: pairingsSearchTerms.trim().toLowerCase(),
       activeTab,
       selectedTestament,
       selectedBooks: selectedBooks.sort(),
@@ -35,15 +33,13 @@ class SearchCache {
   // Get cached results if they exist and are not expired
   get(
     searchTerms: string,
-    pairingsSearchTerms: string,
-    activeTab: 'all' | 'pairings',
+    activeTab: 'all' | 'linking',
     selectedTestament: 'all' | 'old' | 'new',
     selectedBooks: string[],
     maxProximity: number
-  ): { results: SearchResult[]; pairings: VersePairing[] } | null {
+  ): { results: SearchResult[]; linkings: VersePairing[] } | null {
     const key = this.generateCacheKey(
       searchTerms,
-      pairingsSearchTerms,
       activeTab,
       selectedTestament,
       selectedBooks,
@@ -61,24 +57,22 @@ class SearchCache {
 
     return {
       results: cached.results,
-      pairings: cached.pairings,
+      linkings: cached.pairings, // Use cached.pairings but return as linkings for backwards compatibility
     };
   }
 
   // Store results in cache
   set(
     searchTerms: string,
-    pairingsSearchTerms: string,
-    activeTab: 'all' | 'pairings',
+    activeTab: 'all' | 'linking',
     selectedTestament: 'all' | 'old' | 'new',
     selectedBooks: string[],
     maxProximity: number,
     results: SearchResult[],
-    pairings: VersePairing[]
+    linkings: VersePairing[]
   ): void {
     const key = this.generateCacheKey(
       searchTerms,
-      pairingsSearchTerms,
       activeTab,
       selectedTestament,
       selectedBooks,
@@ -95,7 +89,7 @@ class SearchCache {
 
     this.cache.set(key, {
       results: [...results], // Clone arrays to prevent mutations
-      pairings: [...pairings],
+      pairings: [...linkings],
       timestamp: Date.now(),
     });
   }
