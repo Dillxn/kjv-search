@@ -5,6 +5,7 @@ import { SearchResult, VersePairing, kjvParser, OLD_TESTAMENT_BOOKS, NEW_TESTAME
 import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
+import { searchCache } from '../lib/search-cache';
 
 // Complete tab state including search results
 export interface TabState {
@@ -801,11 +802,11 @@ export function useTabReducer() {
     const currentState = stateRef.current;
     const currentActiveTab = currentState.tabs.find(tab => tab.id === currentState.activeTabId) || currentState.tabs[0];
     const targetTab = tabId ? currentState.tabs.find(tab => tab.id === tabId) : currentActiveTab;
-    
+
     if (!targetTab || !kjvParser.isLoaded()) return;
 
     const searchKey = generateSearchKey(targetTab);
-    
+
     // Skip search if already performed for this configuration
     if (targetTab.lastSearchKey === searchKey &&
         (targetTab.results.length > 0 || targetTab.linkings.length > 0 || targetTab.error)) {
@@ -818,6 +819,24 @@ export function useTabReducer() {
     }
 
     const executeSearch = async () => {
+      // Early validation - check if search terms are valid
+      const trimmedTerms = targetTab.searchTerms.trim();
+      if (!trimmedTerms || trimmedTerms.length < 2) {
+        // Clear results for empty/short input
+        if (targetTab.results.length > 0 || targetTab.linkings.length > 0 || targetTab.error) {
+          dispatch({
+            type: 'SET_SEARCH_RESULTS',
+            payload: { results: [], linkings: [], error: '' },
+          });
+        }
+        return;
+      }
+
+      // Check for repeated characters (like typing the same letter repeatedly)
+      if (/(.)\1{10,}/.test(trimmedTerms)) {
+        return; // Skip search for obviously invalid input
+      }
+
       // Check if we can perform search
       if (!SearchStateValidator.canPerformSearch(targetTab.searchTerms)) {
         // Only dispatch if we need to clear existing results
@@ -830,16 +849,42 @@ export function useTabReducer() {
         return;
       }
 
+      const terms = SearchTermProcessor.processSearchString(targetTab.searchTerms);
+      const searchFilters = {
+        ...(targetTab.selectedTestament !== 'all' && { testament: targetTab.selectedTestament }),
+        ...(targetTab.selectedBooks.length > 0 && { books: targetTab.selectedBooks }),
+        ...(targetTab.maxProximity !== APP_CONFIG.PAIRINGS.MAX_PROXIMITY && { maxProximity: targetTab.maxProximity }),
+      };
+
+      // Check cache first
+      const cacheKey = {
+        searchTerms: targetTab.searchTerms,
+        activeTab: targetTab.activeTab,
+        selectedTestament: targetTab.selectedTestament,
+        selectedBooks: targetTab.selectedBooks,
+        maxProximity: targetTab.maxProximity,
+      };
+
+      const cachedResults = searchCache.get(
+        cacheKey.searchTerms,
+        cacheKey.activeTab,
+        cacheKey.selectedTestament,
+        cacheKey.selectedBooks,
+        cacheKey.maxProximity
+      );
+
+      if (cachedResults) {
+        console.log('Using cached search results');
+        dispatch({
+          type: 'SET_SEARCH_RESULTS',
+          payload: { results: cachedResults.results, linkings: cachedResults.linkings },
+        });
+        return;
+      }
+
       dispatch({ type: 'SET_SEARCH_LOADING', payload: { isLoading: true } });
 
       try {
-        const terms = SearchTermProcessor.processSearchString(targetTab.searchTerms);
-        const searchFilters = {
-          ...(targetTab.selectedTestament !== 'all' && { testament: targetTab.selectedTestament }),
-          ...(targetTab.selectedBooks.length > 0 && { books: targetTab.selectedBooks }),
-          ...(targetTab.maxProximity !== APP_CONFIG.PAIRINGS.MAX_PROXIMITY && { maxProximity: targetTab.maxProximity }),
-        };
-
         const searchResults = kjvParser.searchWords(terms, searchFilters);
 
         let verseLinkings: VersePairing[] = [];
@@ -858,6 +903,17 @@ export function useTabReducer() {
           results: searchResults.length,
           linkings: verseLinkings.length
         });
+
+        // Cache the results
+        searchCache.set(
+          cacheKey.searchTerms,
+          cacheKey.activeTab,
+          cacheKey.selectedTestament,
+          cacheKey.selectedBooks,
+          cacheKey.maxProximity,
+          searchResults,
+          verseLinkings
+        );
 
         dispatch({
           type: 'SET_SEARCH_RESULTS',

@@ -107,6 +107,7 @@ export function SearchResults({
         items={results}
         renderItem={renderResult}
         estimatedItemHeight={60}
+        overscan={10} // Increased overscan for smoother scrolling
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
         } rounded-sm shadow-md p-2`}
@@ -134,6 +135,7 @@ export function SearchResults({
         items={linkings}
         renderItem={renderPairing}
         estimatedItemHeight={60}
+        overscan={10} // Increased overscan for smoother scrolling
         className={`${
           isDarkMode ? 'bg-gray-800' : 'bg-white'
         } rounded-sm shadow-md p-2`}

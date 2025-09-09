@@ -18,7 +18,7 @@ export class KJVParser {
       const text = await response.text();
       this.parseKJVText(text);
       this.buildWordIndex();
-      this.verseSearcher = new VerseSearcher(this.verses);
+      this.verseSearcher = new VerseSearcher(this.verses, this.wordIndex);
     } catch (error) {
       console.error('Error fetching KJV text:', error);
       throw error;
