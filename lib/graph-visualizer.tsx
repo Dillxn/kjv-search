@@ -50,7 +50,7 @@ interface GraphVisualizerProps {
     scale: number;
   }) => void;
   selectedNodes?: string[];
-  onNodeClick?: (nodeId: string) => void;
+  onNodeClick?: (nodeId: string | string[]) => void;
   onClearSelection?: () => void;
   currentPathIndex?: number;
   onPathIndexChange?: (index: number) => void;
@@ -86,7 +86,38 @@ export function GraphVisualizer({
     allConnections?: typeof connections;
   } | null>(null);
 
-  const [availablePaths, setAvailablePaths] = useState<string[][]>([]);
+  const availablePaths = React.useMemo(() => {
+    if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
+      const [startNode, endNode] = selectedNodes;
+      return getAllPathsBetweenNodes(startNode, endNode, nodes, edges, excludedEdges);
+    }
+    return [];
+  }, [selectedNodes, nodes, edges, excludedEdges]);
+
+  // Local path index to prevent external resets from affecting the UI
+  const [localPathIndex, setLocalPathIndex] = useState<number>(0);
+
+  // Only clamp local index when it goes out of bounds; never reset to 0
+  useEffect(() => {
+    if (availablePaths.length > 0 && localPathIndex >= availablePaths.length) {
+      setLocalPathIndex(availablePaths.length - 1);
+    }
+  }, [availablePaths.length, localPathIndex]);
+
+  // Reset path index when selectedNodes changes from 2 to 1 (or vice versa)
+  useEffect(() => {
+    if (selectedNodes.length !== 2) {
+      setLocalPathIndex(0);
+    }
+  }, [selectedNodes.length]);
+
+  // Effective index used for rendering
+  const effectivePathIndex = React.useMemo(() => {
+    if (availablePaths.length === 0) return 0;
+    if (localPathIndex < 0) return 0;
+    if (localPathIndex >= availablePaths.length) return availablePaths.length - 1;
+    return localPathIndex;
+  }, [localPathIndex, availablePaths.length]);
 
   // Update canvas size when container resizes or full-screen changes
   useEffect(() => {
@@ -190,6 +221,7 @@ export function GraphVisualizer({
   // Update graph when connections change
   useEffect(() => {
     if (connections.length === 0) {
+      console.log('GraphVisualizer: clearing nodes and edges (no connections)');
       setNodes([]);
       setEdges([]);
       // Don't reset transform when clearing - let it maintain the current state
@@ -277,6 +309,13 @@ export function GraphVisualizer({
       const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
       setEdges(newEdges);
 
+      const newNodeIds = layoutedNodes.map(n => n.id).sort();
+      const prevNodeIds = prevNodes.map(n => n.id).sort();
+
+      if (JSON.stringify(newNodeIds) !== JSON.stringify(prevNodeIds)) {
+        console.log('GraphVisualizer: nodes changed from', prevNodeIds, 'to', newNodeIds);
+      }
+
       // Mark for auto-fit when first nodes are added, but only if we don't have a meaningful transform
       if (!hadNodes && layoutedNodes.length > 0) {
         // Only auto-fit if we're at the default transform (no meaningful pan/zoom)
@@ -319,29 +358,34 @@ export function GraphVisualizer({
     fitToView,
   ]);
 
-  // Calculate available paths when two nodes are selected
+  // Filter out selectedNodes that no longer exist after nodes are updated
   useEffect(() => {
-    if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
-      const [startNode, endNode] = selectedNodes;
-      const paths = getAllPathsBetweenNodes(startNode, endNode, nodes, edges, excludedEdges);
-      setAvailablePaths(paths);
-    } else {
-      setAvailablePaths([]);
-    }
-  }, [selectedNodes, nodes, edges, excludedEdges]);
+    const currentNodeIds = new Set(nodes.map(node => node.id));
+    const validSelectedNodes = selectedNodes.filter(nodeId => currentNodeIds.has(nodeId));
 
-  // Reset path index if it's out of bounds when paths change
-  // Only run bounds checking after paths are available
-  useEffect(() => {
-    // Only check bounds when we have paths available
-    if (availablePaths.length > 0) {
-      // If current path index is out of bounds, reset to 0
-      if (currentPathIndex >= availablePaths.length || currentPathIndex < 0) {
-        onPathIndexChange?.(0);
+    // Always check for invalid nodes, even when nodes.length === 0
+    if (validSelectedNodes.length !== selectedNodes.length) {
+      console.log('Node filtering triggered:', {
+        nodesLength: nodes.length,
+        currentNodeIds: Array.from(currentNodeIds),
+        selectedNodes,
+        validSelectedNodes,
+        removed: selectedNodes.filter(id => !currentNodeIds.has(id))
+      });
+
+      if (onNodeClick) {
+        console.log('Filtering selected nodes:', selectedNodes, '->', validSelectedNodes);
+        onNodeClick(validSelectedNodes);
+
+        // Reset local path state immediately
+        if (validSelectedNodes.length !== 2) {
+          setLocalPathIndex(0);
+        }
       }
     }
-    // Don't run bounds checking when paths are empty - let the external state manage it
-  }, [availablePaths.length, currentPathIndex, onPathIndexChange]);
+  }, [nodes, selectedNodes, onNodeClick]);
+
+  // No state resets here; we clamp locally via effectivePathIndex
 
   const handleEdgeClick = (edge: Edge, allConnections: typeof connections) => {
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
@@ -404,7 +448,7 @@ export function GraphVisualizer({
         onTransformChange={handleTransformChange}
         selectedNodes={selectedNodes}
         onNodeClick={onNodeClick}
-        currentPath={availablePaths[currentPathIndex] || null}
+        currentPath={availablePaths[effectivePathIndex] || null}
         excludedEdges={excludedEdges}
         connectionCardinalities={connectionCardinalities}
       />
@@ -447,22 +491,25 @@ export function GraphVisualizer({
                 Selected: <strong>{selectedNodes[0]}</strong> (click another node
                 to see path)
               </span>
-            ) : (
+            ) : selectedNodes.length === 2 ? (
               <span>
                 Path: <strong>{selectedNodes[0]}</strong> →{' '}
                 <strong>{selectedNodes[1]}</strong>
+              </span>
+            ) : (
+              <span>
+                Selected: {selectedNodes.length} nodes
               </span>
             )}
           </div>
           
           {selectedNodes.length === 2 && availablePaths.length > 1 && (
             <PathSlider
-              currentPathIndex={currentPathIndex}
+              currentPathIndex={effectivePathIndex}
               totalPaths={availablePaths.length}
               onPathChange={(index) => {
-                // Ensure index is within bounds
-                const clampedIndex = Math.max(0, Math.min(index, availablePaths.length - 1));
-                onPathIndexChange?.(clampedIndex);
+                // Control locally to avoid any external resets overriding selection
+                setLocalPathIndex(index);
               }}
               isDarkMode={isDarkMode}
             />

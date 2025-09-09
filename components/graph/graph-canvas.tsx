@@ -44,7 +44,7 @@ interface GraphCanvasProps {
   onEdgeExclusionToggle?: (edgeId: string) => void;
   onTransformChange: (transform: { x: number; y: number; scale: number }) => void;
   selectedNodes?: string[];
-  onNodeClick?: (nodeId: string) => void;
+  onNodeClick?: (nodeId: string | string[]) => void;
   currentPath?: string[] | null;
   excludedEdges?: string[];
   connectionCardinalities?: Record<string, CardinalityType>;
@@ -94,7 +94,7 @@ export function GraphCanvas({
   }, [selectedNodes, nodes, edges, currentPath, excludedEdges]);
 
   // Calculate cumulative edge directions based on all connections
-  const getEdgeDirection = useCallback((edge: Edge): { left: boolean; right: boolean } => {
+  const getEdgeDirection = useCallback((edge: Edge): { left: boolean; right: boolean; isPathEdge?: boolean } => {
     const edgeConnections = connections.filter(conn =>
       (conn.word1 === edge.source && conn.word2 === edge.target) ||
       (conn.word1 === edge.target && conn.word2 === edge.source)
@@ -102,35 +102,61 @@ export function GraphCanvas({
 
     let hasLeftDirection = false;
     let hasRightDirection = false;
+    let isPathEdge = false;
 
+    // Check if this edge is part of the current path
+    if (currentPath && currentPath.length > 1) {
+      for (let i = 0; i < currentPath.length - 1; i++) {
+        const pathSource = currentPath[i];
+        const pathTarget = currentPath[i + 1];
 
-    edgeConnections.forEach(conn => {
-      const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
-      const cardinality = connectionCardinalities[connectionKey];
+        // Check if this edge matches the path direction
+        if ((edge.source === pathSource && edge.target === pathTarget) ||
+            (edge.source === pathTarget && edge.target === pathSource)) {
+          isPathEdge = true;
 
-      if (cardinality === 'left') {
-        // Left means second term points to first term
-        if (conn.word1 === edge.source && conn.word2 === edge.target) {
-          hasRightDirection = true; // Arrow from target to source (right to left)
-        } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
-          hasLeftDirection = true; // Arrow from source to target (left to right)
+          // For path edges, we want to show the arrow in the direction of the path flow
+          if (edge.source === pathSource && edge.target === pathTarget) {
+            hasLeftDirection = true; // Path flows from source to target
+          } else if (edge.source === pathTarget && edge.target === pathSource) {
+            hasRightDirection = true; // Path flows from target to source
+          }
+          break; // Found the path edge, no need to check further
         }
-      } else if (cardinality === 'right') {
-        // Right means first term points to second term
-        if (conn.word1 === edge.source && conn.word2 === edge.target) {
-          hasLeftDirection = true; // Arrow from source to target (left to right)
-        } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
-          hasRightDirection = true; // Arrow from target to source (right to left)
-        }
-      } else if (cardinality === 'omni') {
-        // Omni means both directions
-        hasLeftDirection = true;
-        hasRightDirection = true;
       }
-      // If cardinality is null, no arrow is shown for this connection
-    });
-    return { left: hasLeftDirection, right: hasRightDirection };
-  }, [connections, connectionCardinalities]);
+    }
+
+    // If this is not a path edge, fall back to cardinality-based direction
+    if (!isPathEdge) {
+      edgeConnections.forEach(conn => {
+        const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
+        const cardinality = connectionCardinalities[connectionKey];
+
+        if (cardinality === 'left') {
+          // Left means second term points to first term
+          if (conn.word1 === edge.source && conn.word2 === edge.target) {
+            hasRightDirection = true; // Arrow from target to source (right to left)
+          } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
+            hasLeftDirection = true; // Arrow from source to target (left to right)
+          }
+        } else if (cardinality === 'right') {
+          // Right means first term points to second term
+          if (conn.word1 === edge.source && conn.word2 === edge.target) {
+            hasLeftDirection = true; // Arrow from source to target (left to right)
+          } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
+            hasRightDirection = true; // Arrow from target to source (right to left)
+          }
+        } else if (cardinality === 'omni') {
+          // Omni means both directions
+          hasLeftDirection = true;
+          hasRightDirection = true;
+        }
+        // If cardinality is null, no arrow is shown for this connection
+      });
+    }
+
+    return { left: hasLeftDirection, right: hasRightDirection, isPathEdge };
+  }, [connections, connectionCardinalities, currentPath]);
 
   // Memoized color function to prevent unnecessary recalculations
   const getNodeColor = useCallback((word: string) => {
@@ -429,9 +455,14 @@ export function GraphCanvas({
         ctx.save();
 
         if (edgeDirection.left || edgeDirection.right) {
-          // Use the same color as the edge line for arrows
-          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
-          ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
+          // Use highlighted color for path edges, regular color for others
+          if (edgeDirection.isPathEdge) {
+            ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for path edges
+            ctx.lineWidth = Math.max(4, 5 / current.scale); // Even thicker for path edges
+          } else {
+            ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777'; // Regular color for non-path edges
+            ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
+          }
           ctx.globalAlpha = 1;
 
           if (edgeDirection.left) {
@@ -592,7 +623,7 @@ export function GraphCanvas({
     });
 
     ctx.restore();
-  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow]);
+  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow, currentPath]);
 
   // Always sync the ref with the prop, but track internal updates to prevent feedback loops
   useEffect(() => {

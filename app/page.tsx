@@ -184,13 +184,23 @@ export default function Home() {
     actions.updateGraphState({ selectedConnectionKeys: [] });
   }, [actions, activeTab.linkingGraphState]);
 
-  const handleNodeClick = useCallback((nodeId: string) => {
+  const handleNodeClick = useCallback((nodeId: string | string[]) => {
     const currentGraphState = activeTab.linkingGraphState;
 
-    const newNodes = currentGraphState.selectedNodes.includes(nodeId)
-      ? currentGraphState.selectedNodes.filter(id => id !== nodeId)
-      : [...currentGraphState.selectedNodes, nodeId];
+    let newNodes: string[];
+    if (Array.isArray(nodeId)) {
+      // Direct set of selected nodes (used for filtering out invalid nodes)
+      console.log('handleNodeClick called with array:', nodeId);
+      newNodes = nodeId;
+    } else {
+      // Toggle individual node
+      console.log('handleNodeClick called with string:', nodeId);
+      newNodes = currentGraphState.selectedNodes.includes(nodeId)
+        ? currentGraphState.selectedNodes.filter(id => id !== nodeId)
+        : [...currentGraphState.selectedNodes, nodeId];
+    }
 
+    console.log('Updating selectedNodes from:', currentGraphState.selectedNodes, 'to:', newNodes);
     actions.updateGraphState({ selectedNodes: newNodes });
   }, [actions, activeTab.linkingGraphState]);
 
@@ -203,6 +213,7 @@ export default function Home() {
   }, [actions]);
 
   const handlePathIndexChange = useCallback((index: number) => {
+    console.log('Setting path index to:', index);
     actions.updateGraphState({ currentPathIndex: index });
   }, [actions]);
 
@@ -286,7 +297,13 @@ export default function Home() {
 
   // Memoize selected connections to avoid expensive recalculations on every render
   const selectedConnections = useMemo(() => {
-    return getSelectedConnections(activeTab.linkingGraphState.selectedConnectionKeys, activeTab.linkings);
+    const connections = getSelectedConnections(activeTab.linkingGraphState.selectedConnectionKeys, activeTab.linkings);
+    console.log('selectedConnections recalculated:', {
+      keys: activeTab.linkingGraphState.selectedConnectionKeys.length,
+      connections: connections.length,
+      connectionWords: connections.map(c => `${c.word1}-${c.word2}`)
+    });
+    return connections;
   }, [
     activeTab.linkingGraphState.selectedConnectionKeys,
     activeTab.linkings
