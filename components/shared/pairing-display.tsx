@@ -5,6 +5,7 @@ import { UnifiedHighlighter } from '../../lib/highlighting';
 import { SearchResultsHelper } from '../../lib/search-utils';
 import { RegexUtils } from '../../lib/shared/regex-utils';
 import { MatchBounds } from '../../lib/types/verse';
+import { CardinalityToggle, CardinalityType } from '../ui/cardinality-toggle';
 
 interface PairingDisplayProps {
   pairing: VersePairing;
@@ -19,7 +20,9 @@ interface PairingDisplayProps {
     versePositions?: number[];
   }>;
   onToggleGraph?: (connection: { word1: string; word2: string; reference: string; versePositions: number[] }) => void;
-  showCheckbox?: boolean;
+  onUpdateCardinality?: (connectionKey: string, cardinality: CardinalityType) => void;
+  connectionCardinalities?: Record<string, CardinalityType>;
+  showCardinalityToggle?: boolean;
 }
 
 export function PairingDisplay({
@@ -30,7 +33,9 @@ export function PairingDisplay({
   showGraph = false,
   selectedConnections = [],
   onToggleGraph,
-  showCheckbox = true,
+  onUpdateCardinality,
+  connectionCardinalities = {},
+  showCardinalityToggle = true,
 }: PairingDisplayProps) {
 
 
@@ -79,12 +84,17 @@ export function PairingDisplay({
     const positionsMatch = conn.versePositions &&
       conn.versePositions.length === versePositions.length &&
       conn.versePositions.every((pos) => versePositions.includes(pos));
-    
+
     const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
                       (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-    
+
     return wordsMatch && positionsMatch;
   });
+
+  // Create connection key for cardinality tracking
+  const connectionKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+  const currentCardinality = connectionCardinalities[connectionKey] || null;
+
 
   return (
     <div
@@ -119,12 +129,14 @@ export function PairingDisplay({
           </div>
         ))}
       </div>
-      {showGraph && showCheckbox && onToggleGraph && (
-        <label className='ml-2 flex items-center cursor-pointer' title={isInGraph ? 'Remove from graph' : 'Add to graph'}>
-          <input
-            type="checkbox"
-            checked={isInGraph}
-            onChange={() => {
+      {showGraph && showCardinalityToggle && onToggleGraph && onUpdateCardinality && (
+        <div className='ml-2'>
+          <CardinalityToggle
+            value={currentCardinality}
+            onChange={(cardinality) => onUpdateCardinality(connectionKey, cardinality)}
+            isDarkMode={isDarkMode}
+            isInGraph={isInGraph}
+            onToggleGraph={() => {
               // Convert pairing to connection format expected by handleToggleGraph
               const connection = {
                 word1: pairing.term1,
@@ -134,13 +146,8 @@ export function PairingDisplay({
               };
               onToggleGraph(connection);
             }}
-            className={`w-4 h-4 rounded border-2 transition-colors ${
-              isDarkMode
-                ? 'border-gray-500 bg-gray-700 checked:bg-blue-600 checked:border-blue-600'
-                : 'border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500'
-            }`}
           />
-        </label>
+        </div>
       )}
     </div>
   );

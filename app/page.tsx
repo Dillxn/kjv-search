@@ -8,6 +8,7 @@ import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { AppHeader } from '../components/ui/app-header';
 import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
+import { CardinalityType } from '../components/ui/cardinality-toggle';
 
 import { useTabReducer, getSelectedConnections, getConnectionKeys } from '../hooks/use-tab-reducer';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
@@ -200,6 +201,21 @@ export default function Home() {
     actions.toggleEdgeExclusion(edgeId);
   }, [actions]);
 
+  const handleUpdateCardinality = useCallback((connectionKey: string, cardinality: CardinalityType) => {
+    actions.updateConnectionCardinality(connectionKey, cardinality);
+  }, [actions]);
+
+  const handleBulkCardinalityChange = useCallback((cardinality: CardinalityType) => {
+    // First add all pairings to graph
+    handleSelectAllPairings(activeTab.linkings);
+
+    // Then set the cardinality for all of them
+    activeTab.linkings.forEach(pairing => {
+      const connectionKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+      actions.updateConnectionCardinality(connectionKey, cardinality);
+    });
+  }, [actions, activeTab.linkings, handleSelectAllPairings]);
+
   // Computed values
   const allPairingsSelected = useCallback((pairings: VersePairing[]) => {
     if (pairings.length === 0) return false;
@@ -224,6 +240,7 @@ export default function Home() {
     activeTab.linkingGraphState.selectedConnectionKeys,
     activeTab.linkings
   ]);
+
 
   // Get excluded edges for current tab
   const excludedEdges = useMemo(() => {
@@ -294,6 +311,7 @@ export default function Home() {
               onTabChange={(tab) => actions.updateUIState({ activeTab: tab })}
               onSelectAllPairings={() => handleSelectAllPairings(activeTab.linkings)}
               onDeselectAllPairings={handleDeselectAllPairings}
+              onBulkCardinalityChange={handleBulkCardinalityChange}
             />
 
             {/* Search Results */}
@@ -319,6 +337,8 @@ export default function Home() {
                   showGraph={activeTab.showGraph}
                   selectedConnections={selectedConnections}
                   onToggleGraph={handleToggleGraph}
+                  onUpdateCardinality={handleUpdateCardinality}
+                  connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
                 />
               )}
             </div>
@@ -345,6 +365,7 @@ export default function Home() {
                 onPathIndexChange={handlePathIndexChange}
                 excludedEdges={excludedEdges}
                 onEdgeExclusionToggle={handleEdgeExclusionToggle}
+                connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
               />
             </div>
           )}

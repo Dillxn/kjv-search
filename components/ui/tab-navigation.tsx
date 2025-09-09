@@ -1,6 +1,7 @@
 'use client';
 
 import { Tab } from './tab';
+import { CardinalityToggle, CardinalityType } from './cardinality-toggle';
 
 interface TabNavigationProps {
   activeTab: 'all' | 'linking';
@@ -13,6 +14,7 @@ interface TabNavigationProps {
   onTabChange: (tab: 'all' | 'linking') => void;
   onSelectAllPairings: () => void;
   onDeselectAllPairings: () => void;
+  onBulkCardinalityChange?: (cardinality: CardinalityType) => void;
 }
 
 export function TabNavigation({
@@ -26,6 +28,7 @@ export function TabNavigation({
   onTabChange,
   onSelectAllPairings,
   onDeselectAllPairings,
+  onBulkCardinalityChange,
 }: TabNavigationProps) {
   return (
     <div className='flex gap-2 items-center justify-between flex-shrink-0'>
@@ -46,32 +49,28 @@ export function TabNavigation({
         </Tab>
       </div>
 
-      {activeTab === 'linking' && showGraph && linkingsCount > 0 && (
-        <label
-          className='mr-2 flex items-center cursor-pointer'
-          title={
-            allPairingsSelected
-              ? 'Deselect all pairings'
-              : 'Select all pairings'
-          }
-        >
-          <input
-            type='checkbox'
-            checked={allPairingsSelected}
-            onChange={() => {
+      {activeTab === 'linking' && showGraph && linkingsCount > 0 && onBulkCardinalityChange && (
+        <div className='mr-2'>
+          <CardinalityToggle
+            value={null} // Always start unselected for bulk operations
+            onChange={(cardinality) => {
+              if (cardinality === null) {
+                onDeselectAllPairings();
+              } else {
+                onBulkCardinalityChange(cardinality);
+              }
+            }}
+            isDarkMode={isDarkMode}
+            isInGraph={allPairingsSelected}
+            onToggleGraph={() => {
               if (allPairingsSelected) {
                 onDeselectAllPairings();
               } else {
                 onSelectAllPairings();
               }
             }}
-            className={`w-4 h-4 rounded border-2 transition-colors ${
-              isDarkMode
-                ? 'border-gray-500 bg-gray-700 checked:bg-blue-600 checked:border-blue-600'
-                : 'border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500'
-            }`}
           />
-        </label>
+        </div>
       )}
     </div>
   );

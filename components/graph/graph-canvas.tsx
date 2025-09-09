@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { createTermColorMaps } from '../../lib/highlighting/colors';
 import { SearchTermProcessor } from '../../lib/search-utils';
 import { getHighlightedElements, getHighlightedElementsForPath } from '../../lib/graph/path-finding';
+import { CardinalityType } from '../ui/cardinality-toggle';
 import React from 'react';
 
 interface Node {
@@ -46,6 +47,7 @@ interface GraphCanvasProps {
   onNodeClick?: (nodeId: string) => void;
   currentPath?: string[] | null;
   excludedEdges?: string[];
+  connectionCardinalities?: Record<string, CardinalityType>;
 }
 
 export function GraphCanvas({
@@ -63,6 +65,7 @@ export function GraphCanvas({
   onNodeClick,
   currentPath = null,
   excludedEdges = [],
+  connectionCardinalities = {},
 }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -89,6 +92,45 @@ export function GraphCanvas({
     // Otherwise, fall back to the original behavior (show all paths)
     return getHighlightedElements(selectedNodes, nodes, edges, excludedEdges);
   }, [selectedNodes, nodes, edges, currentPath, excludedEdges]);
+
+  // Calculate cumulative edge directions based on all connections
+  const getEdgeDirection = useCallback((edge: Edge): { left: boolean; right: boolean } => {
+    const edgeConnections = connections.filter(conn =>
+      (conn.word1 === edge.source && conn.word2 === edge.target) ||
+      (conn.word1 === edge.target && conn.word2 === edge.source)
+    );
+
+    let hasLeftDirection = false;
+    let hasRightDirection = false;
+
+
+    edgeConnections.forEach(conn => {
+      const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
+      const cardinality = connectionCardinalities[connectionKey];
+
+      if (cardinality === 'left') {
+        // Left means second term points to first term
+        if (conn.word1 === edge.source && conn.word2 === edge.target) {
+          hasRightDirection = true; // Arrow from target to source (right to left)
+        } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
+          hasLeftDirection = true; // Arrow from source to target (left to right)
+        }
+      } else if (cardinality === 'right') {
+        // Right means first term points to second term
+        if (conn.word1 === edge.source && conn.word2 === edge.target) {
+          hasLeftDirection = true; // Arrow from source to target (left to right)
+        } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
+          hasRightDirection = true; // Arrow from target to source (right to left)
+        }
+      } else if (cardinality === 'omni') {
+        // Omni means both directions
+        hasLeftDirection = true;
+        hasRightDirection = true;
+      }
+      // If cardinality is null, no arrow is shown for this connection
+    });
+    return { left: hasLeftDirection, right: hasRightDirection };
+  }, [connections, connectionCardinalities]);
 
   // Memoized color function to prevent unnecessary recalculations
   const getNodeColor = useCallback((word: string) => {
@@ -260,6 +302,39 @@ export function GraphCanvas({
     return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
   }, []);
 
+  // Function to draw an arrow
+  const drawArrow = useCallback((
+    ctx: CanvasRenderingContext2D,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    arrowSize: number = 8,
+    nodeRadius: number = 15
+  ) => {
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    const arrowAngle = Math.PI / 6; // 30 degrees
+
+    // Position arrowhead to touch the node edge exactly
+    const arrowOffset = nodeRadius; // Touch the node edge
+    const arrowTipX = toX - arrowOffset * Math.cos(angle);
+    const arrowTipY = toY - arrowOffset * Math.sin(angle);
+
+    // Calculate arrow head points from the tip
+    const arrowX1 = arrowTipX - arrowSize * Math.cos(angle - arrowAngle);
+    const arrowY1 = arrowTipY - arrowSize * Math.sin(angle - arrowAngle);
+    const arrowX2 = arrowTipX - arrowSize * Math.cos(angle + arrowAngle);
+    const arrowY2 = arrowTipY - arrowSize * Math.sin(angle + arrowAngle);
+
+    // Draw arrow head
+    ctx.beginPath();
+    ctx.moveTo(arrowTipX, arrowTipY);
+    ctx.lineTo(arrowX1, arrowY1);
+    ctx.moveTo(arrowTipX, arrowTipY);
+    ctx.lineTo(arrowX2, arrowY2);
+    ctx.stroke();
+  }, []);
+
   // Drawing function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -270,16 +345,21 @@ export function GraphCanvas({
 
     const current = currentTransform.current;
 
+    // Debug: Draw a test rectangle to ensure canvas is working
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(10, 10, 20, 20);
+
     // Enable image smoothing for better quality at different scales
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
     // Clear canvas with proper background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Set background color to ensure it's not transparent
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
 
     ctx.save();
     ctx.translate(current.x, current.y);
@@ -320,12 +400,12 @@ export function GraphCanvas({
           ctx.globalAlpha = 1;
           ctx.setLineDash([]); // Solid line
         } else if (shouldShowTransparent) {
-          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
           ctx.lineWidth = Math.max(0.5, 1 / current.scale);
           ctx.globalAlpha = 0.2;
           ctx.setLineDash([]); // Solid line
         } else {
-          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#666';
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
           ctx.lineWidth = Math.max(0.5, 1 / current.scale);
           ctx.globalAlpha = 1;
           ctx.setLineDash([]); // Solid line
@@ -334,10 +414,39 @@ export function GraphCanvas({
         // Set transparency for the entire edge
         ctx.globalAlpha = shouldShowTransparent ? 0.2 : 1;
 
+        // Draw the complete edge line first
         ctx.beginPath();
         ctx.moveTo(sourceNode.x, sourceNode.y);
         ctx.lineTo(targetNode.x, targetNode.y);
         ctx.stroke();
+
+        // Draw arrows based on edge direction (after edge line to avoid gaps)
+        const edgeDirection = getEdgeDirection(edge);
+        const arrowSize = Math.max(8, 12 / current.scale); // Reasonable arrow size
+        const nodeRadius = Math.max(sourceNode.radius, targetNode.radius); // Use the larger node radius
+
+        // Save current context state
+        ctx.save();
+
+        if (edgeDirection.left || edgeDirection.right) {
+          // Use the same color as the edge line for arrows
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
+          ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
+          ctx.globalAlpha = 1;
+
+          if (edgeDirection.left) {
+            // Draw arrow from source to target (left to right)
+            drawArrow(ctx, sourceNode.x, sourceNode.y, targetNode.x, targetNode.y, arrowSize, nodeRadius);
+          }
+
+          if (edgeDirection.right) {
+            // Draw arrow from target to source (right to left)
+            drawArrow(ctx, targetNode.x, targetNode.y, sourceNode.x, sourceNode.y, arrowSize, nodeRadius);
+          }
+        }
+
+        // Restore context state
+        ctx.restore();
 
         // Reset line dash for next edge
         ctx.setLineDash([]);
@@ -483,7 +592,7 @@ export function GraphCanvas({
     });
 
     ctx.restore();
-  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges]);
+  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow]);
 
   // Always sync the ref with the prop, but track internal updates to prevent feedback loops
   useEffect(() => {

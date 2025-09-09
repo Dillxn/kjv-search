@@ -132,7 +132,7 @@ export function GraphModal({
                   pairing={mockPairing}
                   searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
                   isDarkMode={false}
-                  showCheckbox={false}
+                  showCardinalityToggle={false}
                 />
               );
             })}

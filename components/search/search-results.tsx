@@ -22,6 +22,8 @@ interface SearchResultsProps {
     versePositions: number[];
   }>;
   onToggleGraph: (connection: { word1: string; word2: string; reference: string; versePositions: number[] }) => void;
+  onUpdateCardinality?: (connectionKey: string, cardinality: import('../ui/cardinality-toggle').CardinalityType) => void;
+  connectionCardinalities?: Record<string, import('../ui/cardinality-toggle').CardinalityType>;
 }
 
 export function SearchResults({
@@ -35,6 +37,8 @@ export function SearchResults({
   showGraph,
   selectedConnections,
   onToggleGraph,
+  onUpdateCardinality,
+  connectionCardinalities,
 }: SearchResultsProps) {
   const getSearchTermsArray = () => {
     return SearchResultsHelper.processSearchString(searchTerms);
@@ -83,6 +87,8 @@ export function SearchResults({
         showGraph={showGraph}
         selectedConnections={selectedConnections}
         onToggleGraph={onToggleGraph}
+        onUpdateCardinality={onUpdateCardinality}
+        connectionCardinalities={connectionCardinalities}
       />
     );
   };

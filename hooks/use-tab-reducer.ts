@@ -6,6 +6,7 @@ import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 import { searchCache } from '../lib/search-cache';
+import { CardinalityType } from '../components/ui/cardinality-toggle';
 
 // Complete tab state including search results
 export interface TabState {
@@ -30,6 +31,7 @@ export interface TabState {
     };
     currentPathIndex: number; // Current path index for path slider
     excludedEdges: string[]; // Array of edge IDs (word1-word2 sorted) to exclude from pathfinding
+    connectionCardinalities: Record<string, CardinalityType>; // Cardinality for each connection key
   };
   // Search results stored directly in tab state (runtime only, not persisted)
   results: SearchResult[];
@@ -65,6 +67,7 @@ export type TabAction =
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
   | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
   | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
+  | { type: 'UPDATE_CONNECTION_CARDINALITY'; payload: { connectionKey: string; cardinality: CardinalityType } }
   | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { edgeId: string } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; linkings: VersePairing[]; error?: string } }
@@ -86,6 +89,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
     graphTransform: { x: 0, y: 0, scale: 1 },
     currentPathIndex: 0,
     excludedEdges: [],
+    connectionCardinalities: {},
   },
   results: [],
   linkings: [],
@@ -274,6 +278,7 @@ function loadStateFromStorage(): TabReducerState {
             graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
             currentPathIndex: linkingGraphState.currentPathIndex || 0,
             excludedEdges: linkingGraphState.excludedEdges || [],
+            connectionCardinalities: linkingGraphState.connectionCardinalities || {},
           },
           // Runtime state - always starts fresh
           results: [],
@@ -333,6 +338,7 @@ interface MinimalTabState {
     graphTransform: { x: number; y: number; scale: number };
     currentPathIndex: number;
     excludedEdges: string[];
+    connectionCardinalities?: Record<string, CardinalityType>;
   };
 }
 
@@ -384,6 +390,7 @@ function saveStateToStorage(state: TabReducerState): void {
             graphTransform: tab.linkingGraphState.graphTransform,
             currentPathIndex: tab.linkingGraphState.currentPathIndex,
             excludedEdges: tab.linkingGraphState.excludedEdges,
+            connectionCardinalities: tab.linkingGraphState.connectionCardinalities,
           },
           // Exclude: results, linkings, isLoading, error, lastSearchKey, filterCounts
         })),
@@ -417,6 +424,7 @@ function saveStateToStorage(state: TabReducerState): void {
                 graphTransform: currentTab?.linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
                 currentPathIndex: currentTab?.linkingGraphState.currentPathIndex || 0,
                 excludedEdges: currentTab?.linkingGraphState.excludedEdges || [],
+                connectionCardinalities: currentTab?.linkingGraphState.connectionCardinalities || {},
               },
             }],
             activeTabId: state.activeTabId,
@@ -616,6 +624,29 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
                   ...(currentPathIndex !== undefined && { currentPathIndex }),
+                }
+              }
+            : tab
+        ),
+      };
+      saveStateToStorage(newState);
+      return newState;
+    }
+
+    case 'UPDATE_CONNECTION_CARDINALITY': {
+      const { connectionKey, cardinality } = action.payload;
+      const newState = {
+        ...state,
+        tabs: state.tabs.map(tab =>
+          tab.id === state.activeTabId
+            ? {
+                ...tab,
+                linkingGraphState: {
+                  ...tab.linkingGraphState,
+                  connectionCardinalities: {
+                    ...tab.linkingGraphState.connectionCardinalities,
+                    [connectionKey]: cardinality,
+                  }
                 }
               }
             : tab
@@ -994,6 +1025,9 @@ export function useTabReducer() {
 
     updateGraphState: (updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
       dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { ...updates } }),
+
+    updateConnectionCardinality: (connectionKey: string, cardinality: CardinalityType) =>
+      dispatch({ type: 'UPDATE_CONNECTION_CARDINALITY', payload: { connectionKey, cardinality } }),
 
     toggleEdgeExclusion: (edgeId: string) =>
       dispatch({ type: 'TOGGLE_EDGE_EXCLUSION', payload: { edgeId } }),

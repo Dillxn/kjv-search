@@ -13,6 +13,7 @@ import {
 import { getAllPathsBetweenNodes } from './graph/path-finding';
 import { Fullscreen, Maximize2, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
+import { CardinalityType } from '../components/ui/cardinality-toggle';
 
 interface Node {
   id: string;
@@ -55,6 +56,7 @@ interface GraphVisualizerProps {
   onPathIndexChange?: (index: number) => void;
   excludedEdges?: string[];
   onEdgeExclusionToggle?: (edgeId: string) => void;
+  connectionCardinalities?: Record<string, CardinalityType>;
 }
 
 export function GraphVisualizer({
@@ -70,6 +72,7 @@ export function GraphVisualizer({
   onPathIndexChange,
   excludedEdges = [],
   onEdgeExclusionToggle,
+  connectionCardinalities = {},
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -82,6 +85,7 @@ export function GraphVisualizer({
     connection: (typeof connections)[0];
     allConnections?: typeof connections;
   } | null>(null);
+
   const [availablePaths, setAvailablePaths] = useState<string[][]>([]);
 
   // Update canvas size when container resizes or full-screen changes
@@ -402,6 +406,7 @@ export function GraphVisualizer({
         onNodeClick={onNodeClick}
         currentPath={availablePaths[currentPathIndex] || null}
         excludedEdges={excludedEdges}
+        connectionCardinalities={connectionCardinalities}
       />
 
       {/* Control buttons */}
