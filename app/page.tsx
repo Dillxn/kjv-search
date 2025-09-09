@@ -172,8 +172,17 @@ export default function Home() {
   }, [actions, activeTab.linkingGraphState]);
 
   const handleDeselectAllPairings = useCallback(() => {
+    const currentGraphState = activeTab.linkingGraphState;
+    const selectedKeys = currentGraphState.selectedConnectionKeys;
+
+    // Clear cardinality values for all currently selected connections
+    selectedKeys.forEach(connectionKey => {
+      actions.updateConnectionCardinality(connectionKey, null);
+    });
+
+    // Clear the selected connection keys
     actions.updateGraphState({ selectedConnectionKeys: [] });
-  }, [actions]);
+  }, [actions, activeTab.linkingGraphState]);
 
   const handleNodeClick = useCallback((nodeId: string) => {
     const currentGraphState = activeTab.linkingGraphState;
@@ -228,6 +237,48 @@ export default function Home() {
       const key = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
       return selectedKeySet.has(key);
     });
+  }, [activeTab.linkingGraphState]);
+
+  // Check if all selected pairings have the same cardinality type
+  const allSelectedHaveSameCardinality = useCallback(() => {
+    const currentGraphState = activeTab.linkingGraphState;
+    const selectedKeys = currentGraphState.selectedConnectionKeys;
+    const cardinalities = currentGraphState.connectionCardinalities;
+
+    if (selectedKeys.length === 0) return false;
+
+    // Get cardinality values for all selected connections
+    const selectedCardinalities = selectedKeys
+      .map(key => cardinalities[key])
+      .filter(cardinality => cardinality !== null && cardinality !== undefined);
+
+    if (selectedCardinalities.length === 0) return false;
+
+    // Check if all have the same cardinality
+    const firstCardinality = selectedCardinalities[0];
+    return selectedCardinalities.every(cardinality => cardinality === firstCardinality);
+  }, [activeTab.linkingGraphState]);
+
+  // Get the common cardinality type of all selected pairings (if they all have the same)
+  const getSelectedCardinalityType = useCallback((): CardinalityType | null => {
+    const currentGraphState = activeTab.linkingGraphState;
+    const selectedKeys = currentGraphState.selectedConnectionKeys;
+    const cardinalities = currentGraphState.connectionCardinalities;
+
+    if (selectedKeys.length === 0) return null;
+
+    // Get cardinality values for all selected connections
+    const selectedCardinalities = selectedKeys
+      .map(key => cardinalities[key])
+      .filter(cardinality => cardinality !== null && cardinality !== undefined);
+
+    if (selectedCardinalities.length === 0) return null;
+
+    // Check if all have the same cardinality
+    const firstCardinality = selectedCardinalities[0];
+    const allSame = selectedCardinalities.every(cardinality => cardinality === firstCardinality);
+
+    return allSame ? firstCardinality : null;
   }, [activeTab.linkingGraphState]);
 
   // Use filter counts from active tab
@@ -308,6 +359,8 @@ export default function Home() {
               isDarkMode={activeTab.isDarkMode}
               showGraph={activeTab.showGraph}
               allPairingsSelected={allPairingsSelected(activeTab.linkings)}
+              allSelectedHaveSameCardinality={allSelectedHaveSameCardinality()}
+              selectedCardinalityType={getSelectedCardinalityType()}
               onTabChange={(tab) => actions.updateUIState({ activeTab: tab })}
               onSelectAllPairings={() => handleSelectAllPairings(activeTab.linkings)}
               onDeselectAllPairings={handleDeselectAllPairings}

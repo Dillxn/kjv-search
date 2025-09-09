@@ -11,6 +11,8 @@ interface TabNavigationProps {
   isDarkMode: boolean;
   showGraph: boolean;
   allPairingsSelected: boolean;
+  allSelectedHaveSameCardinality: boolean;
+  selectedCardinalityType: CardinalityType | null;
   onTabChange: (tab: 'all' | 'linking') => void;
   onSelectAllPairings: () => void;
   onDeselectAllPairings: () => void;
@@ -25,6 +27,8 @@ export function TabNavigation({
   isDarkMode,
   showGraph,
   allPairingsSelected,
+  allSelectedHaveSameCardinality,
+  selectedCardinalityType,
   onTabChange,
   onSelectAllPairings,
   onDeselectAllPairings,
@@ -52,7 +56,7 @@ export function TabNavigation({
       {activeTab === 'linking' && showGraph && linkingsCount > 0 && onBulkCardinalityChange && (
         <div className='mr-2'>
           <CardinalityToggle
-            value={null} // Always start unselected for bulk operations
+            value={allSelectedHaveSameCardinality ? selectedCardinalityType : null}
             onChange={(cardinality) => {
               if (cardinality === null) {
                 onDeselectAllPairings();
@@ -61,9 +65,10 @@ export function TabNavigation({
               }
             }}
             isDarkMode={isDarkMode}
-            isInGraph={allPairingsSelected}
+            isInGraph={allSelectedHaveSameCardinality}
             onToggleGraph={() => {
-              if (allPairingsSelected) {
+              // If all selected pairings have the same cardinality, deselect all
+              if (allSelectedHaveSameCardinality) {
                 onDeselectAllPairings();
               } else {
                 onSelectAllPairings();
