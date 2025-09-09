@@ -47,7 +47,9 @@ function formatTextWithColorArray(
       const colorClasses = termToColor.get(normalizedTerm);
 
       if (colorClasses) {
-        const regex = RegexUtils.createWordBoundaryRegex(term);
+        // Use exact word boundary match for input highlighting (not partial word matches)
+        const escapedTerm = RegexUtils.escapeRegex(term.toLowerCase().trim());
+        const regex = new RegExp(`\\b${escapedTerm}\\b`, 'gi');
         result = result.replace(
           regex,
           (match) => `<${wrapperTag} class="${colorClasses} px-0.5 rounded">${match}</${wrapperTag}>`
