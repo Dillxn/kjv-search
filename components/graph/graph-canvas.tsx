@@ -90,8 +90,8 @@ export function GraphCanvas({
       return getHighlightedElementsForPath(currentPath, edges);
     }
     // Otherwise, fall back to the original behavior (show all paths)
-    return getHighlightedElements(selectedNodes, nodes, edges, excludedEdges);
-  }, [selectedNodes, nodes, edges, currentPath, excludedEdges]);
+    return getHighlightedElements(selectedNodes, nodes, edges, excludedEdges, connectionCardinalities);
+  }, [selectedNodes, nodes, edges, currentPath, excludedEdges, connectionCardinalities]);
 
   // Calculate cumulative edge directions based on all connections
   const getEdgeDirection = useCallback((edge: Edge): { left: boolean; right: boolean; isPathEdge?: boolean } => {

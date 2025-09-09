@@ -89,10 +89,10 @@ export function GraphVisualizer({
   const availablePaths = React.useMemo(() => {
     if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
       const [startNode, endNode] = selectedNodes;
-      return getAllPathsBetweenNodes(startNode, endNode, nodes, edges, excludedEdges);
+      return getAllPathsBetweenNodes(startNode, endNode, nodes, edges, excludedEdges, connectionCardinalities);
     }
     return [];
-  }, [selectedNodes, nodes, edges, excludedEdges]);
+  }, [selectedNodes, nodes, edges, excludedEdges, connectionCardinalities]);
 
   // Local path index to prevent external resets from affecting the UI
   const [localPathIndex, setLocalPathIndex] = useState<number>(0);

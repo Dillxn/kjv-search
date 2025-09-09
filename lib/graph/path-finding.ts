@@ -13,6 +13,62 @@ interface Edge {
   versePositions?: number[];
 }
 
+type CardinalityType = 'left' | 'omni' | 'right' | null;
+
+/**
+ * Get the allowed direction for a connection based on cardinality
+ */
+function getAllowedDirection(
+  word1: string,
+  word2: string,
+  reference: string,
+  connectionCardinalities: Record<string, CardinalityType>
+): { forward: boolean; reverse: boolean } {
+  // Create keys with the reference included, matching the format used in pairing display
+  const forwardKey = `${word1}-${word2}-${reference}`;
+  const reverseKey = `${word2}-${word1}-${reference}`;
+
+  const forwardCardinality = connectionCardinalities[forwardKey];
+  const reverseCardinality = connectionCardinalities[reverseKey];
+
+  // Use explicit cardinality if set, otherwise default to omni (bidirectional)
+  const effectiveCardinality = forwardCardinality || reverseCardinality;
+
+  // Debug logging
+  if (effectiveCardinality && effectiveCardinality !== 'omni') {
+    console.log('Cardinality check:', {
+      word1,
+      word2,
+      reference,
+      forwardKey,
+      reverseKey,
+      forwardCardinality,
+      reverseCardinality,
+      effectiveCardinality
+    });
+  }
+
+  if (!effectiveCardinality || effectiveCardinality === 'omni') {
+    return { forward: true, reverse: true };
+  }
+
+  switch (effectiveCardinality) {
+    case 'left':
+      // Second term points to first term (word2 -> word1)
+      console.log('LEFT: Allowing reverse direction only for', word1, '->', word2);
+      return { forward: false, reverse: true };
+    case 'right':
+      // First term points to second term (word1 -> word2)
+      console.log('RIGHT: Allowing forward direction only for', word1, '->', word2);
+      return { forward: true, reverse: false };
+    case null:
+      console.log('NULL: No direction allowed for', word1, '->', word2);
+      return { forward: false, reverse: false };
+    default:
+      return { forward: true, reverse: true };
+  }
+}
+
 /**
  * Find the shortest path between two nodes using Dijkstra's algorithm
  */
@@ -21,7 +77,8 @@ export function findShortestPath(
   endNodeId: string,
   nodes: Node[],
   edges: Edge[],
-  excludedEdges: string[] = []
+  excludedEdges: string[] = [],
+  connectionCardinalities: Record<string, CardinalityType> = {}
 ): string[] | null {
   if (startNodeId === endNodeId) {
     return [startNodeId];
@@ -35,18 +92,41 @@ export function findShortestPath(
     adjacencyList.set(node.id, []);
   });
 
-  // Populate adjacency list with edges, excluding specified edges
+  // Populate adjacency list with edges, excluding specified edges and respecting cardinality
   edges.forEach(edge => {
     const edgeId = [edge.source, edge.target].sort().join('-');
     if (excludedEdges.includes(edgeId)) {
       return; // Skip this edge if it's excluded
     }
 
+    const directions = getAllowedDirection(edge.source, edge.target, edge.reference, connectionCardinalities);
+
     const sourceNeighbors = adjacencyList.get(edge.source) || [];
     const targetNeighbors = adjacencyList.get(edge.target) || [];
 
-    sourceNeighbors.push(edge.target);
-    targetNeighbors.push(edge.source);
+    console.log('Adjacency list construction:', {
+      edge: `${edge.source} -> ${edge.target}`,
+      reference: edge.reference,
+      directions,
+      sourceNeighborsBefore: [...sourceNeighbors],
+      targetNeighborsBefore: [...targetNeighbors]
+    });
+
+    // Add forward direction (source -> target) if allowed
+    if (directions.forward) {
+      sourceNeighbors.push(edge.target);
+      console.log(`  Added forward: ${edge.source} -> ${edge.target}`);
+    } else {
+      console.log(`  Blocked forward: ${edge.source} -> ${edge.target}`);
+    }
+
+    // Add reverse direction (target -> source) if allowed
+    if (directions.reverse) {
+      targetNeighbors.push(edge.source);
+      console.log(`  Added reverse: ${edge.target} -> ${edge.source}`);
+    } else {
+      console.log(`  Blocked reverse: ${edge.target} -> ${edge.source}`);
+    }
 
     adjacencyList.set(edge.source, sourceNeighbors);
     adjacencyList.set(edge.target, targetNeighbors);
@@ -162,9 +242,10 @@ export function findAllSimplePaths(
   nodes: Node[],
   edges: Edge[],
   maxLength: number = 6,
-  excludedEdges: string[] = []
+  excludedEdges: string[] = [],
+  connectionCardinalities: Record<string, CardinalityType> = {}
 ): string[][] {
-  // Build adjacency list
+  // Build adjacency list respecting cardinality restrictions
   const adjacencyList = new Map<string, string[]>();
   nodes.forEach(node => adjacencyList.set(node.id, []));
   edges.forEach(edge => {
@@ -173,10 +254,21 @@ export function findAllSimplePaths(
       return; // Skip this edge if it's excluded
     }
 
+    const directions = getAllowedDirection(edge.source, edge.target, edge.reference, connectionCardinalities);
+
     const sourceNeighbors = adjacencyList.get(edge.source) || [];
     const targetNeighbors = adjacencyList.get(edge.target) || [];
-    sourceNeighbors.push(edge.target);
-    targetNeighbors.push(edge.source);
+
+    // Add forward direction (source -> target) if allowed
+    if (directions.forward) {
+      sourceNeighbors.push(edge.target);
+    }
+
+    // Add reverse direction (target -> source) if allowed
+    if (directions.reverse) {
+      targetNeighbors.push(edge.source);
+    }
+
     adjacencyList.set(edge.source, sourceNeighbors);
     adjacencyList.set(edge.target, targetNeighbors);
   });
@@ -220,9 +312,10 @@ function getNodesOnAllPaths(
   endNode: string,
   nodes: Node[],
   edges: Edge[],
-  excludedEdges: string[] = []
+  excludedEdges: string[] = [],
+  connectionCardinalities: Record<string, CardinalityType> = {}
 ): Set<string> {
-  const allPaths = findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges);
+  const allPaths = findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges, connectionCardinalities);
   const pathNodes = new Set<string>();
 
   // Add all nodes from all paths
@@ -241,9 +334,10 @@ export function getAllPathsBetweenNodes(
   endNode: string,
   nodes: Node[],
   edges: Edge[],
-  excludedEdges: string[] = []
+  excludedEdges: string[] = [],
+  connectionCardinalities: Record<string, CardinalityType> = {}
 ): string[][] {
-  return findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges);
+  return findAllSimplePaths(startNode, endNode, nodes, edges, 6, excludedEdges, connectionCardinalities);
 }
 
 /**
@@ -279,7 +373,8 @@ export function getHighlightedElements(
   selectedNodes: string[],
   nodes: Node[],
   edges: Edge[],
-  excludedEdges: string[] = []
+  excludedEdges: string[] = [],
+  connectionCardinalities: Record<string, CardinalityType> = {}
 ): {
   highlightedNodes: Set<string>;
   highlightedEdgeIds: Set<string>;
@@ -296,7 +391,7 @@ export function getHighlightedElements(
   const [startNode, endNode] = selectedNodes;
 
   // First find the shortest path for reference
-  const shortestPath = findShortestPath(startNode, endNode, nodes, edges, excludedEdges);
+  const shortestPath = findShortestPath(startNode, endNode, nodes, edges, excludedEdges, connectionCardinalities);
 
   if (!shortestPath) {
     // If no path found, just highlight the selected nodes
@@ -308,7 +403,7 @@ export function getHighlightedElements(
   }
 
   // Find all nodes that are part of simple paths between start and end
-  const pathNodes = getNodesOnAllPaths(startNode, endNode, nodes, edges, excludedEdges);
+  const pathNodes = getNodesOnAllPaths(startNode, endNode, nodes, edges, excludedEdges, connectionCardinalities);
   
   // Find all edges that connect nodes that are both on paths between start and end
   const highlightedEdgeIds = new Set<string>();
