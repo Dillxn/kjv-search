@@ -401,7 +401,36 @@ export function GraphCanvas({
     // Create node lookup map for better performance
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
 
-    // Draw edges with highlighting and transparency
+    // Collect arrow drawing operations for proper z-ordering
+    const arrowOperations: Array<{
+      fromX: number;
+      fromY: number;
+      toX: number;
+      toY: number;
+      arrowSize: number;
+      nodeRadius: number;
+      isHighlighted: boolean;
+      isPathEdge: boolean;
+    }> = [];
+
+    // Collect edge drawing operations for proper z-ordering
+    const nonHighlightedEdgeOperations: Array<{
+      edge: Edge;
+      sourceNode: Node;
+      targetNode: Node;
+      isExcluded: boolean;
+      shouldShowTransparent: boolean;
+    }> = [];
+
+    const highlightedEdgeOperations: Array<{
+      edge: Edge;
+      sourceNode: Node;
+      targetNode: Node;
+      isExcluded: boolean;
+      shouldShowTransparent: boolean;
+    }> = [];
+
+    // Collect edge operations instead of drawing immediately
     edges.forEach((edge) => {
       const sourceNode = nodeMap.get(edge.source);
       const targetNode = nodeMap.get(edge.target);
@@ -413,148 +442,211 @@ export function GraphCanvas({
         const isExcluded = excludedEdges.includes(edgeId);
         const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
 
-        // Set edge style based on highlighting and exclusion
-        if (isExcluded) {
-          // Excluded edges: dashed red line
-          ctx.strokeStyle = isDarkMode ? '#ef4444' : '#dc2626'; // Red color
-          ctx.lineWidth = Math.max(1, 2 / current.scale);
-          ctx.globalAlpha = 1;
-          ctx.setLineDash([5, 5]); // Dashed line
-        } else if (isHighlighted) {
-          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color
-          ctx.lineWidth = Math.max(2, 3 / current.scale);
-          ctx.globalAlpha = 1;
-          ctx.setLineDash([]); // Solid line
-        } else if (shouldShowTransparent) {
-          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
-          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
-          ctx.globalAlpha = 0.2;
-          ctx.setLineDash([]); // Solid line
+        // Collect edge operation for later rendering
+        const edgeOperation = {
+          edge,
+          sourceNode,
+          targetNode,
+          isExcluded,
+          shouldShowTransparent
+        };
+
+        if (isHighlighted || isExcluded) {
+          highlightedEdgeOperations.push(edgeOperation);
         } else {
-          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
-          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
-          ctx.globalAlpha = 1;
-          ctx.setLineDash([]); // Solid line
+          nonHighlightedEdgeOperations.push(edgeOperation);
         }
 
-        // Set transparency for the entire edge
-        ctx.globalAlpha = shouldShowTransparent ? 0.2 : 1;
-
-        // Draw the complete edge line first
-        ctx.beginPath();
-        ctx.moveTo(sourceNode.x, sourceNode.y);
-        ctx.lineTo(targetNode.x, targetNode.y);
-        ctx.stroke();
-
-        // Draw arrows based on edge direction (after edge line to avoid gaps)
+        // Collect arrow drawing operations
         const edgeDirection = getEdgeDirection(edge);
         const arrowSize = Math.max(8, 12 / current.scale); // Reasonable arrow size
         const nodeRadius = Math.max(sourceNode.radius, targetNode.radius); // Use the larger node radius
 
-        // Save current context state
-        ctx.save();
-
         if (edgeDirection.left || edgeDirection.right) {
-          // Use highlighted color for path edges, regular color for others
-          if (edgeDirection.isPathEdge) {
-            ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for path edges
-            ctx.lineWidth = Math.max(4, 5 / current.scale); // Even thicker for path edges
-          } else {
-            ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777'; // Regular color for non-path edges
-            ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
-          }
-          ctx.globalAlpha = 1;
-
           if (edgeDirection.left) {
-            // Draw arrow from source to target (left to right)
-            drawArrow(ctx, sourceNode.x, sourceNode.y, targetNode.x, targetNode.y, arrowSize, nodeRadius);
+            // Collect arrow from source to target (left to right)
+            arrowOperations.push({
+              fromX: sourceNode.x,
+              fromY: sourceNode.y,
+              toX: targetNode.x,
+              toY: targetNode.y,
+              arrowSize,
+              nodeRadius,
+              isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
+              isPathEdge: edgeDirection.isPathEdge ?? false
+            });
           }
 
           if (edgeDirection.right) {
-            // Draw arrow from target to source (right to left)
-            drawArrow(ctx, targetNode.x, targetNode.y, sourceNode.x, sourceNode.y, arrowSize, nodeRadius);
+            // Collect arrow from target to source (right to left)
+            arrowOperations.push({
+              fromX: targetNode.x,
+              fromY: targetNode.y,
+              toX: sourceNode.x,
+              toY: sourceNode.y,
+              arrowSize,
+              nodeRadius,
+              isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
+              isPathEdge: edgeDirection.isPathEdge ?? false
+            });
           }
-        }
-
-        // Restore context state
-        ctx.restore();
-
-        // Reset line dash for next edge
-        ctx.setLineDash([]);
-
-        // Only draw labels if zoom level is sufficient and not too transparent
-        if (current.scale > 0.3 && (!shouldShowTransparent || ctx.globalAlpha > 0.5)) {
-          const midX = (sourceNode.x + targetNode.x) / 2;
-          const midY = (sourceNode.y + targetNode.y) / 2;
-
-          const connectionCount = connections.filter(conn => 
-            (conn.word1 === edge.source && conn.word2 === edge.target) ||
-            (conn.word1 === edge.target && conn.word2 === edge.source)
-          ).length;
-
-          const displayText = connectionCount.toString();
-
-          ctx.save();
-          ctx.translate(midX, midY);
-
-          const fontSize = Math.max(8, 10 / current.scale);
-          ctx.font = `bold ${fontSize}px Arial`;
-          const textMetrics = ctx.measureText(displayText);
-          const textWidth = textMetrics.width;
-          const textHeight = fontSize;
-          
-          // Calculate label dimensions with padding
-          const padding = Math.max(3, 4 / current.scale);
-          const labelWidth = textWidth + padding * 2;
-          const labelHeight = textHeight + padding * 1.5;
-          const radius = Math.min(labelWidth, labelHeight) * 0.2;
-          
-          // Draw rounded rectangle background
-          const x = -labelWidth / 2;
-          const y = -labelHeight / 2;
-          
-          ctx.beginPath();
-          ctx.moveTo(x + radius, y);
-          ctx.lineTo(x + labelWidth - radius, y);
-          ctx.quadraticCurveTo(x + labelWidth, y, x + labelWidth, y + radius);
-          ctx.lineTo(x + labelWidth, y + labelHeight - radius);
-          ctx.quadraticCurveTo(x + labelWidth, y + labelHeight, x + labelWidth - radius, y + labelHeight);
-          ctx.lineTo(x + radius, y + labelHeight);
-          ctx.quadraticCurveTo(x, y + labelHeight, x, y + labelHeight - radius);
-          ctx.lineTo(x, y + radius);
-          ctx.quadraticCurveTo(x, y, x + radius, y);
-          ctx.closePath();
-          
-          // Fill background with current alpha
-          const bgAlpha = isExcluded ? 0.95 : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95));
-          const bgColor = isExcluded
-            ? (isDarkMode ? `rgba(127, 29, 29, ${bgAlpha})` : `rgba(254, 202, 202, ${bgAlpha})`) // Red background for excluded
-            : (isDarkMode ? `rgba(31, 41, 55, ${bgAlpha})` : `rgba(255, 255, 255, ${bgAlpha})`);
-          ctx.fillStyle = bgColor;
-          ctx.fill();
-
-          // Add subtle border
-          const borderAlpha = isExcluded ? 0.6 : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3));
-          const borderColor = isExcluded
-            ? `rgba(220, 38, 38, ${borderAlpha})` // Red border for excluded
-            : (isDarkMode ? `rgba(156, 163, 175, ${borderAlpha})` : `rgba(107, 114, 128, ${borderAlpha})`);
-          ctx.strokeStyle = borderColor;
-          ctx.lineWidth = Math.max(0.5, 1 / current.scale);
-          ctx.stroke();
-
-          // Draw text centered
-          const textAlpha = isExcluded ? 1 : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1));
-          const textColor = isExcluded
-            ? `rgba(31, 41, 55, ${textAlpha})` // Dark text for excluded
-            : (isDarkMode ? `rgba(243, 244, 246, ${textAlpha})` : `rgba(31, 41, 55, ${textAlpha})`);
-          ctx.fillStyle = textColor;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(displayText, 0, 0);
-          ctx.restore();
         }
       }
     });
+
+    // Helper function to draw an edge with its label
+    const drawEdgeWithLabel = (edgeOp: typeof nonHighlightedEdgeOperations[0]) => {
+      const { edge, sourceNode, targetNode, isExcluded, shouldShowTransparent } = edgeOp;
+      const edgeId = [edge.source, edge.target].sort().join('-');
+      const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
+
+      // Set edge style based on highlighting and exclusion
+      if (isExcluded) {
+        // Excluded edges: dashed red line
+        ctx.strokeStyle = isDarkMode ? '#ef4444' : '#dc2626'; // Red color
+        ctx.lineWidth = Math.max(1, 2 / current.scale);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([5, 5]); // Dashed line
+      } else if (isHighlighted) {
+        ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color
+        ctx.lineWidth = Math.max(2, 3 / current.scale);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]); // Solid line
+      } else if (shouldShowTransparent) {
+        ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
+        ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+        ctx.globalAlpha = 0.2;
+        ctx.setLineDash([]); // Solid line
+      } else {
+        ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777';
+        ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]); // Solid line
+      }
+
+      // Set transparency for the entire edge
+      ctx.globalAlpha = shouldShowTransparent ? 0.2 : 1;
+
+      // Draw the complete edge line
+      ctx.beginPath();
+      ctx.moveTo(sourceNode.x, sourceNode.y);
+      ctx.lineTo(targetNode.x, targetNode.y);
+      ctx.stroke();
+
+      // Reset line dash for next edge
+      ctx.setLineDash([]);
+
+      // Only draw labels if zoom level is sufficient and not too transparent
+      if (current.scale > 0.3 && (!shouldShowTransparent || ctx.globalAlpha > 0.5)) {
+        const midX = (sourceNode.x + targetNode.x) / 2;
+        const midY = (sourceNode.y + targetNode.y) / 2;
+
+        const connectionCount = connections.filter(conn =>
+          (conn.word1 === edge.source && conn.word2 === edge.target) ||
+          (conn.word1 === edge.target && conn.word2 === edge.source)
+        ).length;
+
+        const displayText = connectionCount.toString();
+
+        ctx.save();
+        ctx.translate(midX, midY);
+
+        const fontSize = Math.max(8, 10 / current.scale);
+        ctx.font = `bold ${fontSize}px Arial`;
+        const textMetrics = ctx.measureText(displayText);
+        const textWidth = textMetrics.width;
+        const textHeight = fontSize;
+
+        // Calculate label dimensions with padding
+        const padding = Math.max(3, 4 / current.scale);
+        const labelWidth = textWidth + padding * 2;
+        const labelHeight = textHeight + padding * 1.5;
+        const radius = Math.min(labelWidth, labelHeight) * 0.2;
+
+        // Draw rounded rectangle background
+        const x = -labelWidth / 2;
+        const y = -labelHeight / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + labelWidth - radius, y);
+        ctx.quadraticCurveTo(x + labelWidth, y, x + labelWidth, y + radius);
+        ctx.lineTo(x + labelWidth, y + labelHeight - radius);
+        ctx.quadraticCurveTo(x + labelWidth, y + labelHeight, x + labelWidth - radius, y + labelHeight);
+        ctx.lineTo(x + radius, y + labelHeight);
+        ctx.quadraticCurveTo(x, y + labelHeight, x, y + labelHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+
+        // Fill background with current alpha
+        const bgAlpha = isExcluded ? 0.95 : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95));
+        const bgColor = isExcluded
+          ? (isDarkMode ? `rgba(127, 29, 29, ${bgAlpha})` : `rgba(254, 202, 202, ${bgAlpha})`) // Red background for excluded
+          : (isDarkMode ? `rgba(31, 41, 55, ${bgAlpha})` : `rgba(255, 255, 255, ${bgAlpha})`);
+        ctx.fillStyle = bgColor;
+        ctx.fill();
+
+        // Add subtle border
+        const borderAlpha = isExcluded ? 0.6 : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3));
+        const borderColor = isExcluded
+          ? `rgba(220, 38, 38, ${borderAlpha})` // Red border for excluded
+          : (isDarkMode ? `rgba(156, 163, 175, ${borderAlpha})` : `rgba(107, 114, 128, ${borderAlpha})`);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+        ctx.stroke();
+
+        // Draw text centered
+        const textAlpha = isExcluded ? 1 : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1));
+        const textColor = isExcluded
+          ? `rgba(31, 41, 55, ${textAlpha})` // Dark text for excluded
+          : (isDarkMode ? `rgba(243, 244, 246, ${textAlpha})` : `rgba(31, 41, 55, ${textAlpha})`);
+        ctx.fillStyle = textColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(displayText, 0, 0);
+        ctx.restore();
+      }
+    };
+
+    // Render in correct z-order:
+    // 1. Non-highlighted edges (lines + labels)
+    nonHighlightedEdgeOperations.forEach(drawEdgeWithLabel);
+
+    // 2. All arrows (non-highlighted first, then highlighted)
+    arrowOperations
+      .sort((a, b) => {
+        // Sort by highlight status: non-highlighted (0) before highlighted (1)
+        const aPriority = a.isHighlighted ? 1 : 0;
+        const bPriority = b.isHighlighted ? 1 : 0;
+        return aPriority - bPriority;
+      })
+      .forEach(arrowOp => {
+        // Save current context state
+        ctx.save();
+
+        // Set arrow style based on highlighting
+        if (arrowOp.isPathEdge) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for path edges
+          ctx.lineWidth = Math.max(4, 5 / current.scale); // Even thicker for path edges
+        } else if (arrowOp.isHighlighted) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for highlighted edges
+          ctx.lineWidth = Math.max(3, 4 / current.scale); // Thicker for highlighted edges
+        } else {
+          ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777'; // Regular color for non-highlighted edges
+          ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
+        }
+        ctx.globalAlpha = 1;
+
+        // Draw the arrow
+        drawArrow(ctx, arrowOp.fromX, arrowOp.fromY, arrowOp.toX, arrowOp.toY, arrowOp.arrowSize, arrowOp.nodeRadius);
+
+        // Restore context state
+        ctx.restore();
+      });
+
+    // 3. Highlighted edges (lines + labels) - renders above arrows
+    highlightedEdgeOperations.forEach(drawEdgeWithLabel);
 
     // Reset global alpha for nodes
     ctx.globalAlpha = 1;
