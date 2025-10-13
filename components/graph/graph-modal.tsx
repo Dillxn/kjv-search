@@ -86,37 +86,61 @@ export function GraphModal({
   const allVerses = kjvParser.getVerses();
 
   return (
-    <div className='w-full h-full flex flex-col bg-white'>
+    <div
+      className={`w-full h-full flex flex-col ${
+        isDarkMode ? 'bg-gray-900' : 'bg-gray-100'
+      }`}
+    >
       {/* Header */}
-      <div className='px-3 py-2 border-b bg-white shadow-sm flex justify-between items-center flex-shrink-0'>
-        <h3 className='text-sm font-semibold text-gray-800'>
+      <div
+        className={`px-3 py-2 border-b shadow-sm flex justify-between items-center flex-shrink-0 ${
+          isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        }`}
+      >
+        <h3
+          className={`text-sm font-semibold ${
+            isDarkMode ? 'text-gray-100' : 'text-gray-800'
+          }`}
+        >
           {selectedEdge.edge.source} ↔ {selectedEdge.edge.target}
         </h3>
         <button
           onClick={onClose}
-          className='text-gray-500 hover:text-gray-700 text-lg font-bold px-1 py-0.5 rounded hover:bg-gray-100'
+          className={`text-lg font-bold px-1 py-0.5 rounded ${
+            isDarkMode
+              ? 'text-gray-300 hover:text-white hover:bg-gray-700'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+          }`}
         >
           ×
         </button>
       </div>
 
       {/* Content */}
-      <div className='flex-1 overflow-y-auto p-4'>
-        <div className='text-sm text-gray-600 mb-4'>
+      <div className='flex-1 overflow-y-auto p-4 space-y-4'>
+        <div
+          className={`text-sm ${
+            isDarkMode ? 'text-gray-300' : 'text-gray-600'
+          }`}
+        >
           {currentConnections.length > 0
             ? `Found ${currentConnections.length} connection(s) between these words`
             : 'No connections currently selected for these words'}
         </div>
 
         {currentConnections.length === 0 ? (
-          <div className='text-center py-8 text-gray-500'>
+          <div
+            className={`text-center py-8 ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}
+          >
             <p>No verses currently selected for this word pair.</p>
             <p className='text-sm mt-2'>
               Add pairings from the search results to see verses here.
             </p>
           </div>
         ) : (
-          <div className='space-y-2'>
+          <div className='space-y-3'>
             {currentConnections.map((conn, index) => {
               const versePositions = conn.versePositions || [];
               const verseObjects = versePositions
@@ -139,20 +163,26 @@ export function GraphModal({
               };
 
               return (
-                <PairingDisplay
-                  key={`${conn.word1}-${conn.word2}-${versePositions.join(
-                    '-'
-                  )}-${index}`}
-                  pairing={mockPairing}
-                  searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
-                  isDarkMode={isDarkMode}
-                  showGraph={true}
-                  selectedConnections={connections}
-                  onToggleGraph={onToggleGraph}
-                  onUpdateCardinality={onUpdateCardinality}
-                  connectionCardinalities={connectionCardinalities}
-                  showCardinalityToggle={Boolean(onToggleGraph && onUpdateCardinality)}
-                />
+                <div
+                  key={`${conn.word1}-${conn.word2}-${versePositions.join('-')}-${index}`}
+                  className={`rounded-md border shadow-sm p-3 ${
+                    isDarkMode
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-200'
+                  }`}
+                >
+                  <PairingDisplay
+                    pairing={mockPairing}
+                    searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
+                    isDarkMode={isDarkMode}
+                    showGraph={true}
+                    selectedConnections={connections}
+                    onToggleGraph={onToggleGraph}
+                    onUpdateCardinality={onUpdateCardinality}
+                    connectionCardinalities={connectionCardinalities}
+                    showCardinalityToggle={Boolean(onToggleGraph && onUpdateCardinality)}
+                  />
+                </div>
               );
             })}
           </div>
