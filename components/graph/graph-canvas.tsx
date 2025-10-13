@@ -22,10 +22,19 @@ interface Edge {
   versePositions?: number[];
 }
 
+const getEdgeKey = (word1: string, word2: string) =>
+  [word1, word2].sort((a, b) => a.localeCompare(b)).join('|');
+
 interface GraphCanvasProps {
   nodes: Node[];
   edges: Edge[];
   connections: Array<{
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions?: number[];
+  }>;
+  allConnections?: Array<{
     word1: string;
     word2: string;
     reference: string;
@@ -54,6 +63,7 @@ export function GraphCanvas({
   nodes,
   edges,
   connections,
+  allConnections = [],
   searchTerms,
   isDarkMode,
   canvasSize,
@@ -401,6 +411,41 @@ export function GraphCanvas({
     // Create node lookup map for better performance
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
 
+    const selectedEdgeKeys = new Set(edges.map(edge => getEdgeKey(edge.source, edge.target)));
+
+    const dottedEdgeOperations: Array<{
+      key: string;
+      sourceNode: Node;
+      targetNode: Node;
+    }> = [];
+
+    if (allConnections.length > 0) {
+      const processedKeys = new Set<string>();
+
+      allConnections.forEach(conn => {
+        if (!conn || typeof conn.word1 !== 'string' || typeof conn.word2 !== 'string') {
+          return;
+        }
+
+        const key = getEdgeKey(conn.word1, conn.word2);
+        if (selectedEdgeKeys.has(key) || processedKeys.has(key)) {
+          return;
+        }
+
+        const sourceNode = nodeMap.get(conn.word1);
+        const targetNode = nodeMap.get(conn.word2);
+
+        if (sourceNode && targetNode) {
+          dottedEdgeOperations.push({
+            key,
+            sourceNode,
+            targetNode,
+          });
+          processedKeys.add(key);
+        }
+      });
+    }
+
     // Collect arrow drawing operations for proper z-ordering
     const arrowOperations: Array<{
       fromX: number;
@@ -492,6 +537,21 @@ export function GraphCanvas({
           }
         }
       }
+    });
+
+    // Render unselected dotted edges behind everything else
+    dottedEdgeOperations.forEach(({ sourceNode, targetNode }) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(sourceNode.x, sourceNode.y);
+      ctx.lineTo(targetNode.x, targetNode.y);
+      ctx.strokeStyle = isDarkMode ? '#6b7280' : '#94a3b8';
+      ctx.lineWidth = Math.max(0.5, 1 / current.scale);
+      const dashLength = Math.max(4, 6 / current.scale);
+      ctx.setLineDash([dashLength, dashLength]);
+      ctx.globalAlpha = 0.25;
+      ctx.stroke();
+      ctx.restore();
     });
 
     // Helper function to draw an edge with its label
@@ -715,7 +775,7 @@ export function GraphCanvas({
     });
 
     ctx.restore();
-  }, [nodes, edges, connections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow, currentPath]);
+  }, [nodes, edges, connections, allConnections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow, currentPath]);
 
   // Always sync the ref with the prop, but track internal updates to prevent feedback loops
   useEffect(() => {
@@ -797,6 +857,9 @@ export function GraphCanvas({
       const graphX = (mouseX - current.x) / current.scale;
       const graphY = (mouseY - current.y) / current.scale;
 
+      const nodeMap = new Map(nodes.map(node => [node.id, node]));
+      const selectedEdgeKeys = new Set(edges.map(edge => getEdgeKey(edge.source, edge.target)));
+
       // Check if click is on a node first
       let clickedNode = null;
       for (const node of nodes) {
@@ -825,10 +888,12 @@ export function GraphCanvas({
       }
 
       // Check if click is on an edge
-      let clickedEdge = null;
+      let clickedEdge: Edge | null = null;
+      let clickedEdgeIsDotted = false;
+
       for (const edge of edges) {
-        const sourceNode = nodes.find((n) => n.id === edge.source);
-        const targetNode = nodes.find((n) => n.id === edge.target);
+        const sourceNode = nodeMap.get(edge.source);
+        const targetNode = nodeMap.get(edge.target);
 
         if (sourceNode && targetNode) {
           // Check if this edge should be transparent (and therefore not clickable)
@@ -874,24 +939,89 @@ export function GraphCanvas({
         }
       }
 
+      if (!clickedEdge && allConnections.length > 0) {
+        const processedKeys = new Set<string>();
+
+        for (const conn of allConnections) {
+          if (!conn || typeof conn.word1 !== 'string' || typeof conn.word2 !== 'string') {
+            continue;
+          }
+
+          const key = getEdgeKey(conn.word1, conn.word2);
+          if (selectedEdgeKeys.has(key) || processedKeys.has(key)) {
+            continue;
+          }
+
+          processedKeys.add(key);
+
+          const sourceNode = nodeMap.get(conn.word1);
+          const targetNode = nodeMap.get(conn.word2);
+
+          if (!sourceNode || !targetNode) {
+            continue;
+          }
+
+          const A = graphX - sourceNode.x;
+          const B = graphY - sourceNode.y;
+          const C = targetNode.x - sourceNode.x;
+          const D = targetNode.y - sourceNode.y;
+
+          const dot = A * C + B * D;
+          const lenSq = C * C + D * D;
+          let param = -1;
+          if (lenSq !== 0) param = dot / lenSq;
+
+          let xx, yy;
+          if (param < 0) {
+            xx = sourceNode.x;
+            yy = sourceNode.y;
+          } else if (param > 1) {
+            xx = targetNode.x;
+            yy = targetNode.y;
+          } else {
+            xx = sourceNode.x + param * C;
+            yy = sourceNode.y + param * D;
+          }
+
+          const dx = graphX - xx;
+          const dy = graphY - yy;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < 5) {
+            clickedEdge = {
+              source: conn.word1,
+              target: conn.word2,
+              reference: conn.reference,
+              versePositions: conn.versePositions,
+            };
+            clickedEdgeIsDotted = true;
+            break;
+          }
+        }
+      }
+
       if (clickedEdge) {
         // Check if this is a right-click (context menu)
         if (e.button === 2) { // Right mouse button
-          e.preventDefault(); // Prevent context menu
-          const edgeId = [clickedEdge.source, clickedEdge.target].sort().join('-');
-          if (onEdgeExclusionToggle) {
-            onEdgeExclusionToggle(edgeId);
+          if (clickedEdgeIsDotted) {
+            e.preventDefault();
+          } else {
+            e.preventDefault(); // Prevent context menu
+            const edgeId = [clickedEdge.source, clickedEdge.target].sort().join('-');
+            if (onEdgeExclusionToggle) {
+              onEdgeExclusionToggle(edgeId);
+            }
           }
           return;
         } else {
           // Left click - show edge modal
-          const allConnections = connections.filter(conn =>
+          const matchingConnections = allConnections.filter(conn =>
             (conn.word1 === clickedEdge.source && conn.word2 === clickedEdge.target) ||
             (conn.word1 === clickedEdge.target && conn.word2 === clickedEdge.source)
           );
 
-          if (allConnections.length > 0) {
-            onEdgeClick(clickedEdge, allConnections);
+          if (matchingConnections.length > 0) {
+            onEdgeClick(clickedEdge, matchingConnections);
             return;
           }
         }
@@ -945,7 +1075,7 @@ export function GraphCanvas({
       canvas.removeEventListener('mouseleave', handleMouseUp);
       canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, connections, onEdgeClick, onEdgeExclusionToggle, onNodeClick, draw]);
+  }, [isDragging, dragStart, lastPanPoint, onTransformChange, edges, nodes, allConnections, onEdgeClick, onEdgeExclusionToggle, onNodeClick, draw]);
 
   // Single drawing effect - handles all drawing triggers
   useEffect(() => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { kjvParser, VersePairing } from '../../lib';
 import { PairingDisplay } from '../shared/pairing-display';
 import { CardinalityType } from '../ui/cardinality-toggle';
@@ -31,6 +32,12 @@ interface GraphModalProps {
     reference: string;
     versePositions?: number[];
   }>;
+  allConnections?: Array<{
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions?: number[];
+  }>;
   onClose: () => void;
   onToggleGraph?: (connection: {
     word1: string;
@@ -43,45 +50,84 @@ interface GraphModalProps {
   isDarkMode?: boolean;
 }
 
+const createConnectionKey = (connection: {
+  word1: string;
+  word2: string;
+  versePositions?: number[];
+}) => {
+  const positions = (connection.versePositions || []).slice().sort((a, b) => a - b).join(',');
+  return `${connection.word1}|${connection.word2}|${positions}`;
+};
+
 export function GraphModal({
   selectedEdge,
   connections,
+  allConnections = [],
   onClose,
   onToggleGraph,
   onUpdateCardinality,
   connectionCardinalities = {},
   isDarkMode = false,
 }: GraphModalProps) {
-  // Get current connections for this word pair (real-time)
-  const currentConnections = connections
-    .filter(
-      (conn) =>
-        (conn.word1 === selectedEdge.edge.source &&
-          conn.word2 === selectedEdge.edge.target) ||
-        (conn.word1 === selectedEdge.edge.target &&
-          conn.word2 === selectedEdge.edge.source)
-    )
-    .sort((a, b) => {
-      // Calculate proximity for each connection
-      const proximityA =
-        a.versePositions && a.versePositions.length > 1
-          ? Math.abs(a.versePositions[0] - a.versePositions[1])
-          : 0;
-      const proximityB =
-        b.versePositions && b.versePositions.length > 1
-          ? Math.abs(b.versePositions[0] - b.versePositions[1])
-          : 0;
+  const selectedConnectionKeys = useMemo(() => {
+    return new Set(connections.map((conn) => createConnectionKey(conn)));
+  }, [connections]);
 
-      // Sort by proximity first (same verse = 0, then 1, 2, etc.)
-      if (proximityA !== proximityB) {
-        return proximityA - proximityB;
-      }
+  const edgeConnections = useMemo(() => {
+    if (!selectedEdge) {
+      return [];
+    }
 
-      // If proximity is the same, sort by first verse position
-      const firstPosA = a.versePositions?.[0] || 0;
-      const firstPosB = b.versePositions?.[0] || 0;
-      return firstPosA - firstPosB;
-    });
+    if (selectedEdge.allConnections && selectedEdge.allConnections.length > 0) {
+      return selectedEdge.allConnections;
+    }
+
+    const { source, target } = selectedEdge.edge;
+    const matchEdge = (conn: { word1: string; word2: string }) =>
+      (conn.word1 === source && conn.word2 === target) ||
+      (conn.word1 === target && conn.word2 === source);
+
+    if (allConnections.length > 0) {
+      return allConnections.filter(matchEdge);
+    }
+
+    return connections.filter(matchEdge);
+  }, [selectedEdge, allConnections, connections]);
+
+  const connectionsWithMeta = useMemo(() => {
+    return edgeConnections
+      .map((conn) => {
+        const key = createConnectionKey(conn);
+        const versePositions = conn.versePositions || [];
+        const proximity =
+          versePositions.length > 1
+            ? Math.abs(versePositions[0] - versePositions[1])
+            : 0;
+
+        return {
+          connection: conn,
+          isSelected: selectedConnectionKeys.has(key),
+          proximity,
+        };
+      })
+      .sort((a, b) => {
+        if (a.isSelected !== b.isSelected) {
+          return a.isSelected ? -1 : 1;
+        }
+
+        if (a.proximity !== b.proximity) {
+          return a.proximity - b.proximity;
+        }
+
+        const firstPosA = a.connection.versePositions?.[0] || 0;
+        const firstPosB = b.connection.versePositions?.[0] || 0;
+        return firstPosA - firstPosB;
+      });
+  }, [edgeConnections, selectedConnectionKeys]);
+
+  const totalConnections = connectionsWithMeta.length;
+  const selectedCount = connectionsWithMeta.filter((item) => item.isSelected).length;
+  const hasConnections = totalConnections > 0;
 
   const allVerses = kjvParser.getVerses();
 
@@ -123,25 +169,25 @@ export function GraphModal({
             isDarkMode ? 'text-gray-300' : 'text-gray-600'
           }`}
         >
-          {currentConnections.length > 0
-            ? `Found ${currentConnections.length} connection(s) between these words`
-            : 'No connections currently selected for these words'}
+          {hasConnections
+            ? `Selected ${selectedCount} of ${totalConnections} connection${totalConnections === 1 ? '' : 's'} between these words`
+            : 'No connections found between these words'}
         </div>
 
-        {currentConnections.length === 0 ? (
+        {!hasConnections ? (
           <div
             className={`text-center py-8 ${
               isDarkMode ? 'text-gray-400' : 'text-gray-500'
             }`}
           >
-            <p>No verses currently selected for this word pair.</p>
+            <p>No verses available for this word pair yet.</p>
             <p className='text-sm mt-2'>
-              Add pairings from the search results to see verses here.
+              Try adding pairings from the search results to explore potential connections.
             </p>
           </div>
         ) : (
           <div className='space-y-3'>
-            {currentConnections.map((conn, index) => {
+            {connectionsWithMeta.map(({ connection: conn, isSelected }, index) => {
               const versePositions = conn.versePositions || [];
               const verseObjects = versePositions
                 .map((pos) => allVerses.find((v) => v.position === pos))
@@ -166,21 +212,34 @@ export function GraphModal({
                 <div
                   key={`${conn.word1}-${conn.word2}-${versePositions.join('-')}-${index}`}
                   className={`rounded-md border shadow-sm p-3 ${
-                    isDarkMode
-                      ? 'bg-gray-800 border-gray-700'
-                      : 'bg-white border-gray-200'
+                    isSelected
+                      ? (isDarkMode
+                          ? 'bg-gray-800 border-green-500/60'
+                          : 'bg-white border-green-300')
+                      : (isDarkMode
+                          ? 'bg-gray-900 border-gray-700 border-dashed'
+                          : 'bg-gray-50 border-gray-300 border-dashed')
                   }`}
                 >
+                  {!isSelected && (
+                    <div
+                      className={`text-[10px] uppercase tracking-wide font-semibold mb-2 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}
+                    >
+                      Not in graph
+                    </div>
+                  )}
                   <PairingDisplay
                     pairing={mockPairing}
                     searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
                     isDarkMode={isDarkMode}
-                    showGraph={true}
+                    showGraph={isSelected && Boolean(onToggleGraph && onUpdateCardinality)}
                     selectedConnections={connections}
                     onToggleGraph={onToggleGraph}
                     onUpdateCardinality={onUpdateCardinality}
                     connectionCardinalities={connectionCardinalities}
-                    showCardinalityToggle={Boolean(onToggleGraph && onUpdateCardinality)}
+                    showCardinalityToggle={isSelected && Boolean(onToggleGraph && onUpdateCardinality)}
                   />
                 </div>
               );

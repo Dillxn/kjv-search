@@ -37,6 +37,12 @@ interface GraphVisualizerProps {
     reference: string;
     versePositions?: number[];
   }>;
+  allConnections?: Array<{
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions?: number[];
+  }>;
   searchTerms?: string;
   isDarkMode?: boolean;
   initialTransform?: {
@@ -68,6 +74,7 @@ interface GraphVisualizerProps {
 
 export function GraphVisualizer({
   connections,
+  allConnections = [],
   searchTerms = '',
   isDarkMode = false,
   initialTransform = { x: 0, y: 0, scale: 1 },
@@ -428,6 +435,7 @@ export function GraphVisualizer({
           <GraphModal
             selectedEdge={selectedEdge}
             connections={connections}
+            allConnections={allConnections}
             onClose={() => setSelectedEdge(null)}
             onToggleGraph={onToggleGraph}
             onUpdateCardinality={onUpdateCardinality}
@@ -452,6 +460,7 @@ export function GraphVisualizer({
         nodes={nodes}
         edges={edges}
         connections={connections}
+        allConnections={allConnections}
         searchTerms={searchTerms}
         isDarkMode={isDarkMode}
         canvasSize={canvasSize}

@@ -121,6 +121,42 @@ function generateSearchKey(tab: TabState): string {
 // Cache for converted connections to avoid repeated conversions
 const connectionCache = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[]; }>();
 
+function getConnectionCacheKey(pairing: VersePairing) {
+  const primaryReference = pairing.verses[0]?.reference ?? '';
+  const secondaryReference = pairing.verses[1]?.reference ?? '';
+  return `${pairing.term1}-${pairing.term2}-${primaryReference}-${secondaryReference}-${pairing.proximity}`;
+}
+
+function getOrCreateConnectionFromPairing(pairing: VersePairing) {
+  const cacheKey = getConnectionCacheKey(pairing);
+
+  let connection = connectionCache.get(cacheKey);
+  if (!connection) {
+    const verseRef = pairing.verses.length === 1
+      ? pairing.verses[0].reference
+      : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
+
+    connection = {
+      word1: pairing.term1,
+      word2: pairing.term2,
+      reference: verseRef,
+      versePositions: pairing.verses.map(v => v.position),
+    };
+
+    connectionCache.set(cacheKey, connection);
+
+    // Prevent cache from growing too large
+    if (connectionCache.size > 1000) {
+      const firstKey = connectionCache.keys().next().value;
+      if (firstKey) {
+        connectionCache.delete(firstKey);
+      }
+    }
+  }
+
+  return connection;
+}
+
 // Helper functions to convert between connection keys and full connection objects
 export function getSelectedConnections(
   selectedKeys: string[],
@@ -140,38 +176,21 @@ export function getSelectedConnections(
     });
 
     if (pairing) {
-      // Create a cache key based on the pairing's unique properties
-      const cacheKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}-${pairing.proximity}`;
-
-      let connection = connectionCache.get(cacheKey);
-      if (!connection) {
-        const verseRef = pairing.verses.length === 1
-          ? pairing.verses[0].reference
-          : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
-
-        connection = {
-          word1: pairing.term1,
-          word2: pairing.term2,
-          reference: verseRef,
-          versePositions: pairing.verses.map(v => v.position),
-        };
-
-        connectionCache.set(cacheKey, connection);
-
-        // Prevent cache from growing too large
-        if (connectionCache.size > 1000) {
-          const firstKey = connectionCache.keys().next().value;
-          if (firstKey) {
-            connectionCache.delete(firstKey);
-          }
-        }
-      }
-
-      result.push(connection);
+      result.push(getOrCreateConnectionFromPairing(pairing));
     }
   }
 
   return result;
+}
+
+export function convertPairingsToConnections(
+  pairings: VersePairing[]
+): Array<{ word1: string; word2: string; reference: string; versePositions: number[] }> {
+  if (pairings.length === 0) {
+    return [];
+  }
+
+  return pairings.map(pairing => getOrCreateConnectionFromPairing(pairing));
 }
 
 export function getConnectionKeys(

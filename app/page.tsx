@@ -10,7 +10,7 @@ import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
 import { CardinalityType } from '../components/ui/cardinality-toggle';
 
-import { useTabReducer, getSelectedConnections, getConnectionKeys } from '../hooks/use-tab-reducer';
+import { useTabReducer, getSelectedConnections, getConnectionKeys, convertPairingsToConnections } from '../hooks/use-tab-reducer';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
 
@@ -296,6 +296,10 @@ export default function Home() {
   const filterCounts = activeTab.filterCounts;
 
   // Memoize selected connections to avoid expensive recalculations on every render
+  const allGraphConnections = useMemo(() => {
+    return convertPairingsToConnections(activeTab.linkings);
+  }, [activeTab.linkings]);
+
   const selectedConnections = useMemo(() => {
     const connections = getSelectedConnections(activeTab.linkingGraphState.selectedConnectionKeys, activeTab.linkings);
     console.log('selectedConnections recalculated:', {
@@ -424,6 +428,7 @@ export default function Home() {
             >
               <GraphVisualizer
                 connections={selectedConnections}
+                allConnections={allGraphConnections}
                 searchTerms={activeTab.searchTerms}
                 isDarkMode={activeTab.isDarkMode}
                 initialTransform={activeTab.linkingGraphState.graphTransform}
