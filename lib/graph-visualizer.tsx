@@ -57,6 +57,13 @@ interface GraphVisualizerProps {
   excludedEdges?: string[];
   onEdgeExclusionToggle?: (edgeId: string) => void;
   connectionCardinalities?: Record<string, CardinalityType>;
+  onToggleGraph?: (connection: {
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions: number[];
+  }) => void;
+  onUpdateCardinality?: (connectionKey: string, cardinality: CardinalityType) => void;
 }
 
 export function GraphVisualizer({
@@ -73,6 +80,8 @@ export function GraphVisualizer({
   excludedEdges = [],
   onEdgeExclusionToggle,
   connectionCardinalities = {},
+  onToggleGraph,
+  onUpdateCardinality,
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -420,6 +429,10 @@ export function GraphVisualizer({
             selectedEdge={selectedEdge}
             connections={connections}
             onClose={() => setSelectedEdge(null)}
+            onToggleGraph={onToggleGraph}
+            onUpdateCardinality={onUpdateCardinality}
+            connectionCardinalities={connectionCardinalities}
+            isDarkMode={isDarkMode}
           />
         </div>
       </div>

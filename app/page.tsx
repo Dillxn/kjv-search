@@ -436,6 +436,8 @@ export default function Home() {
                 excludedEdges={excludedEdges}
                 onEdgeExclusionToggle={handleEdgeExclusionToggle}
                 connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
+                onToggleGraph={handleToggleGraph}
+                onUpdateCardinality={handleUpdateCardinality}
               />
             </div>
           )}

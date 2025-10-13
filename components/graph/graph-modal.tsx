@@ -2,6 +2,7 @@
 
 import { kjvParser, VersePairing } from '../../lib';
 import { PairingDisplay } from '../shared/pairing-display';
+import { CardinalityType } from '../ui/cardinality-toggle';
 
 interface GraphModalProps {
   selectedEdge: {
@@ -31,12 +32,25 @@ interface GraphModalProps {
     versePositions?: number[];
   }>;
   onClose: () => void;
+  onToggleGraph?: (connection: {
+    word1: string;
+    word2: string;
+    reference: string;
+    versePositions: number[];
+  }) => void;
+  onUpdateCardinality?: (connectionKey: string, cardinality: CardinalityType) => void;
+  connectionCardinalities?: Record<string, CardinalityType>;
+  isDarkMode?: boolean;
 }
 
 export function GraphModal({
   selectedEdge,
   connections,
   onClose,
+  onToggleGraph,
+  onUpdateCardinality,
+  connectionCardinalities = {},
+  isDarkMode = false,
 }: GraphModalProps) {
   // Get current connections for this word pair (real-time)
   const currentConnections = connections
@@ -131,8 +145,13 @@ export function GraphModal({
                   )}-${index}`}
                   pairing={mockPairing}
                   searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
-                  isDarkMode={false}
-                  showCardinalityToggle={false}
+                  isDarkMode={isDarkMode}
+                  showGraph={true}
+                  selectedConnections={connections}
+                  onToggleGraph={onToggleGraph}
+                  onUpdateCardinality={onUpdateCardinality}
+                  connectionCardinalities={connectionCardinalities}
+                  showCardinalityToggle={Boolean(onToggleGraph && onUpdateCardinality)}
                 />
               );
             })}
