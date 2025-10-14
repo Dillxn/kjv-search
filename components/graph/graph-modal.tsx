@@ -69,6 +69,8 @@ export function GraphModal({
   connectionCardinalities = {},
   isDarkMode = false,
 }: GraphModalProps) {
+  const canEditCardinality = Boolean(onToggleGraph && onUpdateCardinality);
+
   const selectedConnectionKeys = useMemo(() => {
     return new Set(connections.map((conn) => createConnectionKey(conn)));
   }, [connections]);
@@ -234,12 +236,11 @@ export function GraphModal({
                     pairing={mockPairing}
                     searchTerms={`${selectedEdge.edge.source} ${selectedEdge.edge.target}`}
                     isDarkMode={isDarkMode}
-                    showGraph={isSelected && Boolean(onToggleGraph && onUpdateCardinality)}
+                    showGraph={canEditCardinality}
                     selectedConnections={connections}
                     onToggleGraph={onToggleGraph}
                     onUpdateCardinality={onUpdateCardinality}
                     connectionCardinalities={connectionCardinalities}
-                    showCardinalityToggle={isSelected && Boolean(onToggleGraph && onUpdateCardinality)}
                   />
                 </div>
               );
