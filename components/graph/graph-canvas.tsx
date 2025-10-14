@@ -25,6 +25,8 @@ interface Edge {
 const getEdgeKey = (word1: string, word2: string) =>
   [word1, word2].sort((a, b) => a.localeCompare(b)).join('|');
 
+const EDGE_CLICK_THRESHOLD_PX = 12;
+
 interface GraphCanvasProps {
   nodes: Node[];
   edges: Edge[];
@@ -854,6 +856,8 @@ export function GraphCanvas({
       const mouseY = e.clientY - rect.top;
 
       const current = currentTransform.current;
+      const isWithinEdgeClickRadius = (distance: number) =>
+        distance * current.scale < EDGE_CLICK_THRESHOLD_PX;
       const graphX = (mouseX - current.x) / current.scale;
       const graphY = (mouseY - current.y) / current.scale;
 
@@ -932,7 +936,7 @@ export function GraphCanvas({
           const dy = graphY - yy;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          if (distance < 5) {
+          if (isWithinEdgeClickRadius(distance)) {
             clickedEdge = edge;
             break;
           }
@@ -987,7 +991,7 @@ export function GraphCanvas({
           const dy = graphY - yy;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          if (distance < 5) {
+          if (isWithinEdgeClickRadius(distance)) {
             clickedEdge = {
               source: conn.word1,
               target: conn.word2,
