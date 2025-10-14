@@ -5,6 +5,7 @@ import { VirtualScroll } from '../../lib/virtual-scroll';
 import { UnifiedHighlighter } from '../../lib/highlighting';
 import { SearchResultsHelper } from '../../lib/search-utils';
 import { PairingDisplay } from '../shared/pairing-display';
+import { VerseContextTooltip } from '../shared/verse-context-tooltip';
 
 interface SearchResultsProps {
   results: SearchResult[];
@@ -45,36 +46,43 @@ export function SearchResults({
   };
 
   const renderResult = (result: SearchResult) => (
-    <div
+    <VerseContextTooltip
       key={`${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
-      className={`border-l-2 pl-2 py-1 mb-1 ${
-        isDarkMode ? 'border-blue-400' : 'border-blue-500'
-      }`}
+      verse={result.verse}
+      isDarkMode={isDarkMode}
+      contextBefore={1}
+      contextAfter={1}
     >
-      <div className='mb-0.5'>
-        <span
-          className={`font-semibold text-xs ${
-            isDarkMode ? 'text-gray-200' : 'text-gray-800'
-          }`}
-        >
-          {result.verse.reference}
-        </span>
-      </div>
       <div
-        className={`text-xs leading-snug ${
-          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+        className={`border-l-2 pl-2 py-1 mb-1 ${
+          isDarkMode ? 'border-blue-400' : 'border-blue-500'
         }`}
-        dangerouslySetInnerHTML={{
-          __html: UnifiedHighlighter.highlightText(result.verse.text, {
-            matches: result.matches,
-            mainTerms: getSearchTermsArray(),
-            isDarkMode,
-            maintainInputOrder: true,
-            usePairingsColors: false, // Use main colors for regular search results
-          }),
-        }}
-      />
-    </div>
+      >
+        <div className='mb-0.5'>
+          <span
+            className={`font-semibold text-xs ${
+              isDarkMode ? 'text-gray-200' : 'text-gray-800'
+            }`}
+          >
+            {result.verse.reference}
+          </span>
+        </div>
+        <div
+          className={`text-xs leading-snug ${
+            isDarkMode ? 'text-gray-300' : 'text-gray-700'
+          }`}
+          dangerouslySetInnerHTML={{
+            __html: UnifiedHighlighter.highlightText(result.verse.text, {
+              matches: result.matches,
+              mainTerms: getSearchTermsArray(),
+              isDarkMode,
+              maintainInputOrder: true,
+              usePairingsColors: false, // Use main colors for regular search results
+            }),
+          }}
+        />
+      </div>
+    </VerseContextTooltip>
   );
 
   const renderPairing = (pairing: VersePairing) => {

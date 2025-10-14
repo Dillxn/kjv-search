@@ -6,6 +6,7 @@ import { SearchResultsHelper } from '../../lib/search-utils';
 import { RegexUtils } from '../../lib/shared/regex-utils';
 import { MatchBounds } from '../../lib/types/verse';
 import { CardinalityToggle, CardinalityType } from '../ui/cardinality-toggle';
+import { VerseContextTooltip } from './verse-context-tooltip';
 
 interface PairingDisplayProps {
   pairing: VersePairing;
@@ -108,25 +109,33 @@ export function PairingDisplay({
       <div className='flex-1'>
         
         {pairing.verses.map((verse, verseIndex) => (
-          <div key={verse.position} className={verseIndex > 0 ? 'mt-1' : ''}>
-            <div className='mb-0.5'>
-              <span
-                className={`font-semibold text-xs ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-800'
+          <VerseContextTooltip
+            key={verse.position}
+            verse={verse}
+            isDarkMode={isDarkMode}
+            contextBefore={1}
+            contextAfter={1}
+          >
+            <div className={verseIndex > 0 ? 'mt-1' : ''}>
+              <div className='mb-0.5'>
+                <span
+                  className={`font-semibold text-xs ${
+                    isDarkMode ? 'text-gray-200' : 'text-gray-800'
+                  }`}
+                >
+                  {verse.reference}
+                </span>
+              </div>
+              <div
+                className={`text-xs leading-snug ${
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}
-              >
-                {verse.reference}
-              </span>
+                dangerouslySetInnerHTML={{
+                  __html: highlightPairingText(verse.text),
+                }}
+              />
             </div>
-            <div
-              className={`text-xs leading-snug ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
-              dangerouslySetInnerHTML={{
-                __html: highlightPairingText(verse.text),
-              }}
-            />
-          </div>
+          </VerseContextTooltip>
         ))}
       </div>
       {showGraph && showCardinalityToggle && onToggleGraph && onUpdateCardinality && (
