@@ -443,6 +443,8 @@ export default function Home() {
                 connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
                 onToggleGraph={handleToggleGraph}
                 onUpdateCardinality={handleUpdateCardinality}
+                checkedEdges={activeTab.linkingGraphState.checkedEdges}
+                onCheckedEdgesChange={actions.setCheckedEdges}
               />
             </div>
           )}

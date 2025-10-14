@@ -23,7 +23,7 @@ interface Edge {
 }
 
 const getEdgeKey = (word1: string, word2: string) =>
-  [word1, word2].sort((a, b) => a.localeCompare(b)).join('|');
+  [word1, word2].sort((a, b) => a.localeCompare(b)).join('-');
 
 const EDGE_CLICK_THRESHOLD_PX = 12;
 
@@ -59,6 +59,7 @@ interface GraphCanvasProps {
   currentPath?: string[] | null;
   excludedEdges?: string[];
   connectionCardinalities?: Record<string, CardinalityType>;
+  checkedEdges?: string[];
 }
 
 export function GraphCanvas({
@@ -78,6 +79,7 @@ export function GraphCanvas({
   currentPath = null,
   excludedEdges = [],
   connectionCardinalities = {},
+  checkedEdges = [],
 }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -104,6 +106,8 @@ export function GraphCanvas({
     // Otherwise, fall back to the original behavior (show all paths)
     return getHighlightedElements(selectedNodes, nodes, edges, excludedEdges, connectionCardinalities);
   }, [selectedNodes, nodes, edges, currentPath, excludedEdges, connectionCardinalities]);
+
+  const checkedEdgeSet = React.useMemo(() => new Set(checkedEdges), [checkedEdges]);
 
   // Calculate cumulative edge directions based on all connections
   const getEdgeDirection = useCallback((edge: Edge): { left: boolean; right: boolean; isPathEdge?: boolean } => {
@@ -458,6 +462,7 @@ export function GraphCanvas({
       nodeRadius: number;
       isHighlighted: boolean;
       isPathEdge: boolean;
+      isChecked: boolean;
     }> = [];
 
     // Collect edge drawing operations for proper z-ordering
@@ -467,6 +472,7 @@ export function GraphCanvas({
       targetNode: Node;
       isExcluded: boolean;
       shouldShowTransparent: boolean;
+      isChecked: boolean;
     }> = [];
 
     const highlightedEdgeOperations: Array<{
@@ -475,6 +481,7 @@ export function GraphCanvas({
       targetNode: Node;
       isExcluded: boolean;
       shouldShowTransparent: boolean;
+      isChecked: boolean;
     }> = [];
 
     // Collect edge operations instead of drawing immediately
@@ -484,10 +491,11 @@ export function GraphCanvas({
 
       if (sourceNode && targetNode) {
         // Create edge ID for comparison
-        const edgeId = [edge.source, edge.target].sort().join('-');
+        const edgeId = getEdgeKey(edge.source, edge.target);
         const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
         const isExcluded = excludedEdges.includes(edgeId);
-        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
+        const isChecked = checkedEdgeSet.has(edgeId);
+        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted && !isChecked;
 
         // Collect edge operation for later rendering
         const edgeOperation = {
@@ -495,10 +503,11 @@ export function GraphCanvas({
           sourceNode,
           targetNode,
           isExcluded,
-          shouldShowTransparent
+          shouldShowTransparent,
+          isChecked
         };
 
-        if (isHighlighted || isExcluded) {
+        if (isHighlighted || isExcluded || isChecked) {
           highlightedEdgeOperations.push(edgeOperation);
         } else {
           nonHighlightedEdgeOperations.push(edgeOperation);
@@ -520,7 +529,8 @@ export function GraphCanvas({
               arrowSize,
               nodeRadius,
               isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
-              isPathEdge: edgeDirection.isPathEdge ?? false
+              isPathEdge: edgeDirection.isPathEdge ?? false,
+              isChecked
             });
           }
 
@@ -534,7 +544,8 @@ export function GraphCanvas({
               arrowSize,
               nodeRadius,
               isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
-              isPathEdge: edgeDirection.isPathEdge ?? false
+              isPathEdge: edgeDirection.isPathEdge ?? false,
+              isChecked
             });
           }
         }
@@ -558,8 +569,8 @@ export function GraphCanvas({
 
     // Helper function to draw an edge with its label
     const drawEdgeWithLabel = (edgeOp: typeof nonHighlightedEdgeOperations[0]) => {
-      const { edge, sourceNode, targetNode, isExcluded, shouldShowTransparent } = edgeOp;
-      const edgeId = [edge.source, edge.target].sort().join('-');
+      const { edge, sourceNode, targetNode, isExcluded, shouldShowTransparent, isChecked } = edgeOp;
+      const edgeId = getEdgeKey(edge.source, edge.target);
       const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
 
       // Set edge style based on highlighting and exclusion
@@ -569,8 +580,13 @@ export function GraphCanvas({
         ctx.lineWidth = Math.max(1, 2 / current.scale);
         ctx.globalAlpha = 1;
         ctx.setLineDash([5, 5]); // Dashed line
+      } else if (isChecked) {
+        ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Blue for checked edges
+        ctx.lineWidth = Math.max(1.5, 2.5 / current.scale);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]); // Solid line
       } else if (isHighlighted) {
-        ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color
+        ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Gold for pathfinding
         ctx.lineWidth = Math.max(2, 3 / current.scale);
         ctx.globalAlpha = 1;
         ctx.setLineDash([]); // Solid line
@@ -642,27 +658,58 @@ export function GraphCanvas({
         ctx.closePath();
 
         // Fill background with current alpha
-        const bgAlpha = isExcluded ? 0.95 : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95));
-        const bgColor = isExcluded
-          ? (isDarkMode ? `rgba(127, 29, 29, ${bgAlpha})` : `rgba(254, 202, 202, ${bgAlpha})`) // Red background for excluded
-          : (isDarkMode ? `rgba(31, 41, 55, ${bgAlpha})` : `rgba(255, 255, 255, ${bgAlpha})`);
+        const bgAlpha = isExcluded
+          ? 0.95
+          : (isChecked ? 0.95 : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95)));
+        let bgColor: string;
+        if (isExcluded) {
+          bgColor = isDarkMode ? `rgba(127, 29, 29, ${bgAlpha})` : `rgba(254, 202, 202, ${bgAlpha})`; // Red background for excluded
+        } else if (isChecked) {
+          bgColor = isDarkMode ? `rgba(37, 99, 235, ${bgAlpha})` : `rgba(59, 130, 246, ${bgAlpha})`;
+        } else if (isHighlighted) {
+          bgColor = isDarkMode ? `rgba(120, 53, 15, ${bgAlpha})` : `rgba(253, 224, 71, ${bgAlpha})`;
+        } else {
+          bgColor = isDarkMode ? `rgba(31, 41, 55, ${bgAlpha})` : `rgba(255, 255, 255, ${bgAlpha})`;
+        }
         ctx.fillStyle = bgColor;
         ctx.fill();
 
         // Add subtle border
-        const borderAlpha = isExcluded ? 0.6 : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3));
-        const borderColor = isExcluded
-          ? `rgba(220, 38, 38, ${borderAlpha})` // Red border for excluded
-          : (isDarkMode ? `rgba(156, 163, 175, ${borderAlpha})` : `rgba(107, 114, 128, ${borderAlpha})`);
+        const borderAlpha = isExcluded
+          ? 0.6
+          : (isChecked ? 0.4 : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3)));
+        const borderColor = (() => {
+          if (isExcluded) {
+            return `rgba(220, 38, 38, ${borderAlpha})`; // Red border for excluded
+          }
+          if (isChecked) {
+            return isDarkMode ? `rgba(96, 165, 250, ${borderAlpha})` : `rgba(59, 130, 246, ${borderAlpha})`;
+          }
+          if (isHighlighted) {
+            return isDarkMode ? `rgba(251, 191, 36, ${borderAlpha})` : `rgba(245, 158, 11, ${borderAlpha})`;
+          }
+          return isDarkMode ? `rgba(156, 163, 175, ${borderAlpha})` : `rgba(107, 114, 128, ${borderAlpha})`;
+        })();
         ctx.strokeStyle = borderColor;
         ctx.lineWidth = Math.max(0.5, 1 / current.scale);
         ctx.stroke();
 
         // Draw text centered
-        const textAlpha = isExcluded ? 1 : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1));
-        const textColor = isExcluded
-          ? `rgba(31, 41, 55, ${textAlpha})` // Dark text for excluded
-          : (isDarkMode ? `rgba(243, 244, 246, ${textAlpha})` : `rgba(31, 41, 55, ${textAlpha})`);
+        const textAlpha = isExcluded
+          ? 1
+          : (isChecked ? 1 : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1)));
+        const textColor = (() => {
+          if (isExcluded) {
+            return `rgba(31, 41, 55, ${textAlpha})`; // Dark text for excluded
+          }
+          if (isChecked && !isHighlighted) {
+            return `rgba(255, 255, 255, ${textAlpha})`;
+          }
+          if (isHighlighted && !isChecked) {
+            return isDarkMode ? `rgba(254, 243, 199, ${textAlpha})` : `rgba(67, 56, 12, ${textAlpha})`;
+          }
+          return isDarkMode ? `rgba(243, 244, 246, ${textAlpha})` : `rgba(31, 41, 55, ${textAlpha})`;
+        })();
         ctx.fillStyle = textColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -678,10 +725,13 @@ export function GraphCanvas({
     // 2. All arrows (non-highlighted first, then highlighted)
     arrowOperations
       .sort((a, b) => {
-        // Sort by highlight status: non-highlighted (0) before highlighted (1)
-        const aPriority = a.isHighlighted ? 1 : 0;
-        const bPriority = b.isHighlighted ? 1 : 0;
-        return aPriority - bPriority;
+        const getPriority = (op: typeof arrowOperations[number]) => {
+          if (op.isPathEdge) return 3;
+          if (op.isHighlighted) return 2;
+          if (op.isChecked) return 1;
+          return 0;
+        };
+        return getPriority(a) - getPriority(b);
       })
       .forEach(arrowOp => {
         // Save current context state
@@ -689,10 +739,13 @@ export function GraphCanvas({
 
         // Set arrow style based on highlighting
         if (arrowOp.isPathEdge) {
-          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for path edges
+          ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Highlighted color for path edges
           ctx.lineWidth = Math.max(4, 5 / current.scale); // Even thicker for path edges
+        } else if (arrowOp.isChecked) {
+          ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Checked edge arrows
+          ctx.lineWidth = Math.max(3, 4 / current.scale);
         } else if (arrowOp.isHighlighted) {
-          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Highlighted color for highlighted edges
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Gold for highlighted edges
           ctx.lineWidth = Math.max(3, 4 / current.scale); // Thicker for highlighted edges
         } else {
           ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777'; // Regular color for non-highlighted edges
@@ -777,7 +830,7 @@ export function GraphCanvas({
     });
 
     ctx.restore();
-  }, [nodes, edges, connections, allConnections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow, currentPath]);
+  }, [nodes, edges, connections, allConnections, getNodeColor, getColorsFromTailwind, isDarkMode, selectedNodes, highlightedElements, excludedEdges, getEdgeDirection, drawArrow, checkedEdgeSet]);
 
   // Always sync the ref with the prop, but track internal updates to prevent feedback loops
   useEffect(() => {

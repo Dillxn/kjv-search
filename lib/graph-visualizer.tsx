@@ -30,6 +30,9 @@ interface Edge {
   versePositions?: number[];
 }
 
+const getEdgeKey = (word1: string, word2: string) =>
+  [word1, word2].sort((a, b) => a.localeCompare(b)).join('-');
+
 interface GraphVisualizerProps {
   connections: Array<{
     word1: string;
@@ -70,6 +73,8 @@ interface GraphVisualizerProps {
     versePositions: number[];
   }) => void;
   onUpdateCardinality?: (connectionKey: string, cardinality: CardinalityType) => void;
+  checkedEdges?: string[];
+  onCheckedEdgesChange?: (edgeIds: string[]) => void;
 }
 
 export function GraphVisualizer({
@@ -89,6 +94,8 @@ export function GraphVisualizer({
   connectionCardinalities = {},
   onToggleGraph,
   onUpdateCardinality,
+  checkedEdges = [],
+  onCheckedEdgesChange,
 }: GraphVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -101,6 +108,18 @@ export function GraphVisualizer({
     connection: (typeof connections)[0];
     allConnections?: typeof connections;
   } | null>(null);
+  const checkedEdgeSet = React.useMemo(() => new Set(checkedEdges), [checkedEdges]);
+  const checkedEdgesChangeRef = useRef(onCheckedEdgesChange);
+  const checkedEdgesRef = useRef<string[]>(checkedEdges);
+  const hasRenderedConnectionsRef = useRef(false);
+
+  useEffect(() => {
+    checkedEdgesChangeRef.current = onCheckedEdgesChange;
+  }, [onCheckedEdgesChange]);
+
+  useEffect(() => {
+    checkedEdgesRef.current = checkedEdges;
+  }, [checkedEdges]);
 
   const availablePaths = React.useMemo(() => {
     if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
@@ -236,13 +255,20 @@ export function GraphVisualizer({
 
   // Update graph when connections change
   useEffect(() => {
+    const updateCheckedEdges = checkedEdgesChangeRef.current;
+
     if (connections.length === 0) {
       console.log('GraphVisualizer: clearing nodes and edges (no connections)');
       setNodes([]);
       setEdges([]);
+      if (hasRenderedConnectionsRef.current && updateCheckedEdges && checkedEdgesRef.current.length > 0) {
+        updateCheckedEdges([]);
+      }
       // Don't reset transform when clearing - let it maintain the current state
       return;
     }
+
+    hasRenderedConnectionsRef.current = true;
 
     setNodes((prevNodes) => {
       const newNodes: Node[] = [];
@@ -324,6 +350,14 @@ export function GraphVisualizer({
       // Apply force-directed layout to minimize edge crossings
       const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
       setEdges(newEdges);
+      if (updateCheckedEdges) {
+        const validEdgeKeys = new Set(newEdges.map((edge) => getEdgeKey(edge.source, edge.target)));
+        const currentCheckedEdges = checkedEdgesRef.current;
+        const filteredEdges = currentCheckedEdges.filter((edgeKey) => validEdgeKeys.has(edgeKey));
+        if (filteredEdges.length !== currentCheckedEdges.length) {
+          updateCheckedEdges(filteredEdges);
+        }
+      }
 
       const newNodeIds = layoutedNodes.map(n => n.id).sort();
       const prevNodeIds = prevNodes.map(n => n.id).sort();
@@ -407,6 +441,28 @@ export function GraphVisualizer({
     setSelectedEdge({ edge, connection: allConnections[0], allConnections });
   };
 
+  const handleEdgeCheckToggle = useCallback(
+    (edgeKey: string, nextChecked: boolean) => {
+      if (!onCheckedEdgesChange) {
+        return;
+      }
+
+      const isCurrentlyChecked = checkedEdges.includes(edgeKey);
+
+      if (nextChecked) {
+        if (!isCurrentlyChecked) {
+          onCheckedEdgesChange([...checkedEdges, edgeKey]);
+        }
+        return;
+      }
+
+      if (isCurrentlyChecked) {
+        onCheckedEdgesChange(checkedEdges.filter((id) => id !== edgeKey));
+      }
+    },
+    [onCheckedEdgesChange, checkedEdges]
+  );
+
   const handleEdgeExclusionToggle = useCallback((edgeId: string) => {
     if (onEdgeExclusionToggle) {
       onEdgeExclusionToggle(edgeId);
@@ -441,6 +497,13 @@ export function GraphVisualizer({
             onUpdateCardinality={onUpdateCardinality}
             connectionCardinalities={connectionCardinalities}
             isDarkMode={isDarkMode}
+            isEdgeChecked={checkedEdgeSet.has(getEdgeKey(selectedEdge.edge.source, selectedEdge.edge.target))}
+            onEdgeCheckToggle={(nextChecked) =>
+              handleEdgeCheckToggle(
+                getEdgeKey(selectedEdge.edge.source, selectedEdge.edge.target),
+                nextChecked
+              )
+            }
           />
         </div>
       </div>
@@ -473,6 +536,7 @@ export function GraphVisualizer({
         currentPath={availablePaths[effectivePathIndex] || null}
         excludedEdges={excludedEdges}
         connectionCardinalities={connectionCardinalities}
+        checkedEdges={checkedEdges}
       />
 
       {/* Control buttons */}

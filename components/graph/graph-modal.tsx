@@ -48,6 +48,8 @@ interface GraphModalProps {
   onUpdateCardinality?: (connectionKey: string, cardinality: CardinalityType) => void;
   connectionCardinalities?: Record<string, CardinalityType>;
   isDarkMode?: boolean;
+  isEdgeChecked?: boolean;
+  onEdgeCheckToggle?: (nextChecked: boolean) => void;
 }
 
 const createConnectionKey = (connection: {
@@ -68,6 +70,8 @@ export function GraphModal({
   onUpdateCardinality,
   connectionCardinalities = {},
   isDarkMode = false,
+  isEdgeChecked = false,
+  onEdgeCheckToggle,
 }: GraphModalProps) {
   const canEditCardinality = Boolean(onToggleGraph && onUpdateCardinality);
 
@@ -130,6 +134,16 @@ export function GraphModal({
   const totalConnections = connectionsWithMeta.length;
   const selectedCount = connectionsWithMeta.filter((item) => item.isSelected).length;
   const hasConnections = totalConnections > 0;
+  const edgeHasSelectedConnections = connectionsWithMeta.some((item) => item.isSelected);
+  const showEdgeCheckToggle = Boolean(onEdgeCheckToggle) && edgeHasSelectedConnections;
+  const edgeToggleButtonClass = isEdgeChecked
+    ? (isDarkMode
+        ? 'bg-blue-600 text-white hover:bg-blue-500 border border-blue-500'
+        : 'bg-blue-500 text-white hover:bg-blue-600 border border-blue-600')
+    : (isDarkMode
+        ? 'bg-gray-800 text-gray-200 hover:bg-gray-700 border border-gray-600'
+        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300');
+  const edgeToggleLabel = isEdgeChecked ? '✓' : '✓';
 
   const allVerses = kjvParser.getVerses();
 
@@ -152,16 +166,27 @@ export function GraphModal({
         >
           {selectedEdge.edge.source} ↔ {selectedEdge.edge.target}
         </h3>
-        <button
-          onClick={onClose}
-          className={`text-lg font-bold px-1 py-0.5 rounded ${
-            isDarkMode
-              ? 'text-gray-300 hover:text-white hover:bg-gray-700'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          ×
-        </button>
+        <div className='flex items-center gap-2'>
+          {showEdgeCheckToggle && (
+            <button
+              type='button'
+              onClick={() => onEdgeCheckToggle?.(!isEdgeChecked)}
+              className={`text-xs font-semibold px-2 py-1 rounded transition-colors ${edgeToggleButtonClass}`}
+            >
+              {edgeToggleLabel}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className={`text-lg font-bold px-1 py-0.5 rounded ${
+              isDarkMode
+                ? 'text-gray-300 hover:text-white hover:bg-gray-700'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Content */}

@@ -32,6 +32,7 @@ export interface TabState {
     currentPathIndex: number; // Current path index for path slider
     excludedEdges: string[]; // Array of edge IDs (word1-word2 sorted) to exclude from pathfinding
     connectionCardinalities: Record<string, CardinalityType>; // Cardinality for each connection key
+    checkedEdges: string[]; // Edge IDs that are manually checked/annotated
   };
   // Search results stored directly in tab state (runtime only, not persisted)
   results: SearchResult[];
@@ -69,6 +70,7 @@ export type TabAction =
   | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
   | { type: 'UPDATE_CONNECTION_CARDINALITY'; payload: { connectionKey: string; cardinality: CardinalityType } }
   | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { edgeId: string } }
+  | { type: 'SET_CHECKED_EDGES'; payload: { edgeIds: string[] } }
   | { type: 'SET_SEARCH_LOADING'; payload: { isLoading: boolean } }
   | { type: 'SET_SEARCH_RESULTS'; payload: { results: SearchResult[]; linkings: VersePairing[]; error?: string } }
   | { type: 'SET_SEARCH_ERROR'; payload: { error: string } }
@@ -90,6 +92,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
     currentPathIndex: 0,
     excludedEdges: [],
     connectionCardinalities: {},
+    checkedEdges: [],
   },
   results: [],
   linkings: [],
@@ -261,7 +264,7 @@ function loadStateFromStorage(): TabReducerState {
 
       const fullTabs: TabState[] = parsed.tabs.map((minimalTab: MinimalTabState) => {
         // Handle migration from old format with selectedConnections to new selectedConnectionKeys
-        let linkingGraphState = minimalTab.linkingGraphState || {};
+        const linkingGraphState = minimalTab.linkingGraphState || {};
 
         // Migrate from old selectedConnectionIndexes format to selectedConnectionKeys
         // Since we can't recover the exact connections from indexes without historical data,
@@ -298,6 +301,7 @@ function loadStateFromStorage(): TabReducerState {
             currentPathIndex: linkingGraphState.currentPathIndex || 0,
             excludedEdges: linkingGraphState.excludedEdges || [],
             connectionCardinalities: linkingGraphState.connectionCardinalities || {},
+            checkedEdges: linkingGraphState.checkedEdges || [],
           },
           // Runtime state - always starts fresh
           results: [],
@@ -358,6 +362,7 @@ interface MinimalTabState {
     currentPathIndex: number;
     excludedEdges: string[];
     connectionCardinalities?: Record<string, CardinalityType>;
+    checkedEdges?: string[];
   };
 }
 
@@ -410,6 +415,7 @@ function saveStateToStorage(state: TabReducerState): void {
             currentPathIndex: tab.linkingGraphState.currentPathIndex,
             excludedEdges: tab.linkingGraphState.excludedEdges,
             connectionCardinalities: tab.linkingGraphState.connectionCardinalities,
+            checkedEdges: tab.linkingGraphState.checkedEdges,
           },
           // Exclude: results, linkings, isLoading, error, lastSearchKey, filterCounts
         })),
@@ -444,6 +450,7 @@ function saveStateToStorage(state: TabReducerState): void {
                 currentPathIndex: currentTab?.linkingGraphState.currentPathIndex || 0,
                 excludedEdges: currentTab?.linkingGraphState.excludedEdges || [],
                 connectionCardinalities: currentTab?.linkingGraphState.connectionCardinalities || {},
+                checkedEdges: currentTab?.linkingGraphState.checkedEdges || [],
               },
             }],
             activeTabId: state.activeTabId,
@@ -692,6 +699,26 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
                       ? currentExcluded.filter(id => id !== edgeId)
                       : [...currentExcluded, edgeId];
                   })(),
+                }
+              }
+            : tab
+        ),
+      };
+      saveStateToStorage(newState);
+      return newState;
+    }
+
+    case 'SET_CHECKED_EDGES': {
+      const { edgeIds } = action.payload;
+      const newState = {
+        ...state,
+        tabs: state.tabs.map(tab =>
+          tab.id === state.activeTabId
+            ? {
+                ...tab,
+                linkingGraphState: {
+                  ...tab.linkingGraphState,
+                  checkedEdges: edgeIds,
                 }
               }
             : tab
@@ -1050,6 +1077,9 @@ export function useTabReducer() {
 
     toggleEdgeExclusion: (edgeId: string) =>
       dispatch({ type: 'TOGGLE_EDGE_EXCLUSION', payload: { edgeId } }),
+
+    setCheckedEdges: (edgeIds: string[]) =>
+      dispatch({ type: 'SET_CHECKED_EDGES', payload: { edgeIds } }),
   };
 
   // Cleanup timeout on unmount
