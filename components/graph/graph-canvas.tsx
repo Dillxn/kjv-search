@@ -119,6 +119,8 @@ export function GraphCanvas({
     let hasLeftDirection = false;
     let hasRightDirection = false;
     let isPathEdge = false;
+    let hasForwardConnection = false;
+    let hasReverseConnection = false;
 
     // Check if this edge is part of the current path
     if (currentPath && currentPath.length > 1) {
@@ -131,7 +133,7 @@ export function GraphCanvas({
             (edge.source === pathTarget && edge.target === pathSource)) {
           isPathEdge = true;
 
-          // For path edges, we want to show the arrow in the direction of the path flow
+          // For path edges, keep the arrow in the direction of the path flow
           if (edge.source === pathSource && edge.target === pathTarget) {
             hasLeftDirection = true; // Path flows from source to target
           } else if (edge.source === pathTarget && edge.target === pathSource) {
@@ -142,33 +144,47 @@ export function GraphCanvas({
       }
     }
 
-    // If this is not a path edge, fall back to cardinality-based direction
-    if (!isPathEdge) {
-      edgeConnections.forEach(conn => {
-        const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
-        const cardinality = connectionCardinalities[connectionKey];
+    edgeConnections.forEach(conn => {
+      const isForwardConnection = conn.word1 === edge.source && conn.word2 === edge.target;
+      const isReverseConnection = conn.word1 === edge.target && conn.word2 === edge.source;
 
-        if (cardinality === 'left') {
-          // Left means second term points to first term
-          if (conn.word1 === edge.source && conn.word2 === edge.target) {
-            hasRightDirection = true; // Arrow from target to source (right to left)
-          } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
-            hasLeftDirection = true; // Arrow from source to target (left to right)
-          }
-        } else if (cardinality === 'right') {
-          // Right means first term points to second term
-          if (conn.word1 === edge.source && conn.word2 === edge.target) {
-            hasLeftDirection = true; // Arrow from source to target (left to right)
-          } else if (conn.word1 === edge.target && conn.word2 === edge.source) {
-            hasRightDirection = true; // Arrow from target to source (right to left)
-          }
-        } else if (cardinality === 'omni') {
-          // Omni means both directions
-          hasLeftDirection = true;
-          hasRightDirection = true;
+      if (isForwardConnection) {
+        hasForwardConnection = true;
+      }
+      if (isReverseConnection) {
+        hasReverseConnection = true;
+      }
+
+      const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
+      const cardinality = connectionCardinalities[connectionKey];
+
+      if (cardinality === 'left') {
+        // Left means second term points to first term
+        if (isForwardConnection) {
+          hasRightDirection = true; // Arrow from target to source (right to left)
+        } else if (isReverseConnection) {
+          hasLeftDirection = true; // Arrow from source to target (left to right)
         }
-        // If cardinality is null, no arrow is shown for this connection
-      });
+      } else if (cardinality === 'right') {
+        // Right means first term points to second term
+        if (isForwardConnection) {
+          hasLeftDirection = true; // Arrow from source to target (left to right)
+        } else if (isReverseConnection) {
+          hasRightDirection = true; // Arrow from target to source (right to left)
+        }
+      } else if (cardinality === 'omni') {
+        // Omni means both directions
+        hasLeftDirection = true;
+        hasRightDirection = true;
+      }
+      // If cardinality is null, we defer to path direction or connection presence
+    });
+
+    // For path edges that have evidence of connections in both directions,
+    // ensure arrows are rendered on both ends even when cardinality is unset.
+    if (isPathEdge && hasForwardConnection && hasReverseConnection) {
+      hasLeftDirection = true;
+      hasRightDirection = true;
     }
 
     return { left: hasLeftDirection, right: hasRightDirection, isPathEdge };
