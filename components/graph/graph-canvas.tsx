@@ -463,6 +463,7 @@ export function GraphCanvas({
       isHighlighted: boolean;
       isPathEdge: boolean;
       isChecked: boolean;
+      shouldShowTransparent: boolean;
     }> = [];
 
     // Collect edge drawing operations for proper z-ordering
@@ -495,7 +496,7 @@ export function GraphCanvas({
         const isHighlighted = highlightedElements.highlightedEdgeIds.has(edgeId);
         const isExcluded = excludedEdges.includes(edgeId);
         const isChecked = checkedEdgeSet.has(edgeId);
-        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted && !isChecked;
+        const shouldShowTransparent = selectedNodes.length === 2 && !isHighlighted;
 
         // Collect edge operation for later rendering
         const edgeOperation = {
@@ -530,7 +531,8 @@ export function GraphCanvas({
               nodeRadius,
               isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
               isPathEdge: edgeDirection.isPathEdge ?? false,
-              isChecked
+              isChecked,
+              shouldShowTransparent
             });
           }
 
@@ -545,7 +547,8 @@ export function GraphCanvas({
               nodeRadius,
               isHighlighted: (edgeDirection.isPathEdge ?? false) || isHighlighted,
               isPathEdge: edgeDirection.isPathEdge ?? false,
-              isChecked
+              isChecked,
+              shouldShowTransparent
             });
           }
         }
@@ -660,7 +663,9 @@ export function GraphCanvas({
         // Fill background with current alpha
         const bgAlpha = isExcluded
           ? 0.95
-          : (isChecked ? 0.95 : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95)));
+          : (isChecked
+              ? (shouldShowTransparent ? 0.3 : 0.95)
+              : (isHighlighted ? 0.95 : (shouldShowTransparent ? 0.3 : 0.95)));
         let bgColor: string;
         if (isExcluded) {
           bgColor = isDarkMode ? `rgba(127, 29, 29, ${bgAlpha})` : `rgba(254, 202, 202, ${bgAlpha})`; // Red background for excluded
@@ -677,7 +682,9 @@ export function GraphCanvas({
         // Add subtle border
         const borderAlpha = isExcluded
           ? 0.6
-          : (isChecked ? 0.4 : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3)));
+          : (isChecked
+              ? (shouldShowTransparent ? 0.1 : 0.4)
+              : (isHighlighted ? 0.4 : (shouldShowTransparent ? 0.1 : 0.3)));
         const borderColor = (() => {
           if (isExcluded) {
             return `rgba(220, 38, 38, ${borderAlpha})`; // Red border for excluded
@@ -697,7 +704,9 @@ export function GraphCanvas({
         // Draw text centered
         const textAlpha = isExcluded
           ? 1
-          : (isChecked ? 1 : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1)));
+          : (isChecked
+              ? (shouldShowTransparent ? 0.4 : 1)
+              : (isHighlighted ? 1 : (shouldShowTransparent ? 0.4 : 1)));
         const textColor = (() => {
           if (isExcluded) {
             return `rgba(31, 41, 55, ${textAlpha})`; // Dark text for excluded
@@ -751,7 +760,7 @@ export function GraphCanvas({
           ctx.strokeStyle = isDarkMode ? '#9ca3af' : '#777'; // Regular color for non-highlighted edges
           ctx.lineWidth = Math.max(3, 4 / current.scale); // Slightly thicker than edge line
         }
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = arrowOp.shouldShowTransparent ? 0.2 : 1;
 
         // Draw the arrow
         drawArrow(ctx, arrowOp.fromX, arrowOp.fromY, arrowOp.toX, arrowOp.toY, arrowOp.arrowSize, arrowOp.nodeRadius);
