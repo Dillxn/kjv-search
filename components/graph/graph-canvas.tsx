@@ -747,12 +747,12 @@ export function GraphCanvas({
         ctx.save();
 
         // Set arrow style based on highlighting
-        if (arrowOp.isPathEdge) {
-          ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Highlighted color for path edges
+        if (arrowOp.isChecked) {
+          ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Checked edge arrows stay blue
+          ctx.lineWidth = arrowOp.isPathEdge ? Math.max(4, 5 / current.scale) : Math.max(3, 4 / current.scale);
+        } else if (arrowOp.isPathEdge) {
+          ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Gold for path edges between selected nodes
           ctx.lineWidth = Math.max(4, 5 / current.scale); // Even thicker for path edges
-        } else if (arrowOp.isChecked) {
-          ctx.strokeStyle = isDarkMode ? '#60a5fa' : '#2563eb'; // Checked edge arrows
-          ctx.lineWidth = Math.max(3, 4 / current.scale);
         } else if (arrowOp.isHighlighted) {
           ctx.strokeStyle = isDarkMode ? '#fbbf24' : '#f59e0b'; // Gold for highlighted edges
           ctx.lineWidth = Math.max(3, 4 / current.scale); // Thicker for highlighted edges
