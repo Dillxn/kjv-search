@@ -11,7 +11,7 @@ import {
   calculateNodeRadius,
 } from './graph/force-layout';
 import { getAllPathsBetweenNodes } from './graph/path-finding';
-import { Fullscreen, Maximize2, RotateCcw } from 'lucide-react';
+import { Fullscreen, Maximize2, RefreshCw, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 import { CardinalityType } from '../components/ui/cardinality-toggle';
 
@@ -473,6 +473,23 @@ export function GraphVisualizer({
     setIsFullScreen(!isFullScreen);
   };
 
+  const handleRearrangeGraph = useCallback(() => {
+    let didRearrange = false;
+
+    setNodes((currentNodes) => {
+      if (currentNodes.length === 0) {
+        return currentNodes;
+      }
+
+      didRearrange = true;
+      return applyForceDirectedLayout([...currentNodes], edges);
+    });
+
+    if (didRearrange) {
+      setShouldAutoFit(true);
+    }
+  }, [edges]);
+
   if (selectedEdge) {
     return (
       <div
@@ -551,6 +568,13 @@ export function GraphVisualizer({
               <RotateCcw size={16} />
             </IconButton>
           )}
+          <IconButton
+            onClick={handleRearrangeGraph}
+            title='Rearrange graph layout'
+            isDarkMode={isDarkMode}
+          >
+            <RefreshCw size={16} />
+          </IconButton>
           <IconButton
             onClick={fitToView}
             title='Fit graph to view'
