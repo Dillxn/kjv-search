@@ -7,6 +7,7 @@ import { RegexUtils } from '../../lib/shared/regex-utils';
 import { MatchBounds } from '../../lib/types/verse';
 import { CardinalityToggle, CardinalityType } from '../ui/cardinality-toggle';
 import { VerseContextTooltip } from './verse-context-tooltip';
+import { convertPairingToConnection, getConnectionKey } from '../../lib/graph/connection-utils';
 
 interface PairingDisplayProps {
   pairing: VersePairing;
@@ -79,22 +80,28 @@ export function PairingDisplay({
     });
   };
 
-  // Check if this specific pairing is already in the graph
-  const versePositions = pairing.verses.map((v) => v.position);
-  const isInGraph = Array.isArray(selectedConnections) && selectedConnections.some(conn => {
-    const positionsMatch = conn.versePositions &&
-      conn.versePositions.length === versePositions.length &&
-      conn.versePositions.every((pos) => versePositions.includes(pos));
-
-    const wordsMatch = (conn.word1 === pairing.term1 && conn.word2 === pairing.term2) ||
-                      (conn.word1 === pairing.term2 && conn.word2 === pairing.term1);
-
-    return wordsMatch && positionsMatch;
-  });
-
-  // Create connection key for cardinality tracking
-  const connectionKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+  const connectionInfo = convertPairingToConnection(pairing);
+  const connectionKey = getConnectionKey(pairing);
   const currentCardinality = connectionCardinalities[connectionKey] || null;
+
+  const isInGraph =
+    Array.isArray(selectedConnections) &&
+    selectedConnections.some((conn) => {
+      if (!conn?.versePositions) {
+        return false;
+      }
+
+      const positionsMatch =
+        conn.versePositions.length === connectionInfo.versePositions.length &&
+        conn.versePositions.every((pos) => connectionInfo.versePositions.includes(pos));
+
+      if (!positionsMatch) {
+        return false;
+      }
+
+      const connectionKeyFromSelection = `${conn.word1}-${conn.word2}-${conn.reference}`;
+      return connectionKeyFromSelection === connectionKey;
+    });
 
 
   return (
@@ -147,13 +154,7 @@ export function PairingDisplay({
             isInGraph={isInGraph}
             onToggleGraph={() => {
               // Convert pairing to connection format expected by handleToggleGraph
-              const connection = {
-                word1: pairing.term1,
-                word2: pairing.term2,
-                reference: pairing.verses[0].reference,
-                versePositions: pairing.verses.map(v => v.position),
-              };
-              onToggleGraph(connection);
+              onToggleGraph(connectionInfo);
             }}
           />
         </div>

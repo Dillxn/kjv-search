@@ -155,29 +155,42 @@ export function GraphCanvas({
         hasReverseConnection = true;
       }
 
-      const connectionKey = `${conn.word1}-${conn.word2}-${conn.reference}`;
-      const cardinality = connectionCardinalities[connectionKey];
+      const forwardKey = `${edge.source}-${edge.target}-${conn.reference}`;
+      const reverseKey = `${edge.target}-${edge.source}-${conn.reference}`;
+      const forwardCardinality = connectionCardinalities[forwardKey];
+      const reverseCardinality = connectionCardinalities[reverseKey];
 
-      if (cardinality === 'left') {
-        // Left means second term points to first term
-        if (isForwardConnection) {
-          hasRightDirection = true; // Arrow from target to source (right to left)
-        } else if (isReverseConnection) {
-          hasLeftDirection = true; // Arrow from source to target (left to right)
+      const applyCardinality = (cardinality: CardinalityType | undefined, orientation: 'forward' | 'reverse') => {
+        if (!cardinality) {
+          return;
         }
-      } else if (cardinality === 'right') {
-        // Right means first term points to second term
-        if (isForwardConnection) {
-          hasLeftDirection = true; // Arrow from source to target (left to right)
-        } else if (isReverseConnection) {
-          hasRightDirection = true; // Arrow from target to source (right to left)
+
+        if (cardinality === 'omni') {
+          hasLeftDirection = true;
+          hasRightDirection = true;
+          return;
         }
-      } else if (cardinality === 'omni') {
-        // Omni means both directions
-        hasLeftDirection = true;
-        hasRightDirection = true;
-      }
-      // If cardinality is null, we defer to path direction or connection presence
+
+        if (cardinality === 'right') {
+          if (orientation === 'forward') {
+            hasLeftDirection = true; // Source -> target
+          } else {
+            hasRightDirection = true; // Target -> source
+          }
+          return;
+        }
+
+        if (cardinality === 'left') {
+          if (orientation === 'forward') {
+            hasRightDirection = true; // Target -> source
+          } else {
+            hasLeftDirection = true; // Source -> target
+          }
+        }
+      };
+
+      applyCardinality(forwardCardinality, 'forward');
+      applyCardinality(reverseCardinality, 'reverse');
     });
 
     // For path edges that have evidence of connections in both directions,

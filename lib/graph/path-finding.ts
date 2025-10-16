@@ -31,42 +31,64 @@ function getAllowedDirection(
   const forwardCardinality = connectionCardinalities[forwardKey];
   const reverseCardinality = connectionCardinalities[reverseKey];
 
-  // Use explicit cardinality if set, otherwise default to omni (bidirectional)
-  const effectiveCardinality = forwardCardinality || reverseCardinality;
+  let forwardAllowed = false;
+  let reverseAllowed = false;
+  let hasExplicit = false;
 
-  // Debug logging
-  if (effectiveCardinality && effectiveCardinality !== 'omni') {
-    console.log('Cardinality check:', {
-      word1,
-      word2,
-      reference,
-      forwardKey,
-      reverseKey,
-      forwardCardinality,
-      reverseCardinality,
-      effectiveCardinality
-    });
-  }
+  const applyForwardCardinality = (cardinality: CardinalityType | undefined | null) => {
+    if (!cardinality) {
+      return;
+    }
+    hasExplicit = true;
 
-  if (!effectiveCardinality || effectiveCardinality === 'omni') {
+    switch (cardinality) {
+      case 'omni':
+        forwardAllowed = true;
+        reverseAllowed = true;
+        break;
+      case 'right':
+        forwardAllowed = true;
+        break;
+      case 'left':
+        reverseAllowed = true;
+        break;
+      default:
+        break;
+    }
+  };
+
+  const applyReverseCardinality = (cardinality: CardinalityType | undefined | null) => {
+    if (!cardinality) {
+      return;
+    }
+    hasExplicit = true;
+
+    switch (cardinality) {
+      case 'omni':
+        forwardAllowed = true;
+        reverseAllowed = true;
+        break;
+      case 'right':
+        // Reverse connection "right" means original edge can only flow reverse (word2 -> word1)
+        reverseAllowed = true;
+        break;
+      case 'left':
+        // Reverse connection "left" means original edge can only flow forward (word1 -> word2)
+        forwardAllowed = true;
+        break;
+      default:
+        break;
+    }
+  };
+
+  applyForwardCardinality(forwardCardinality);
+  applyReverseCardinality(reverseCardinality);
+
+  if (!hasExplicit) {
     return { forward: true, reverse: true };
   }
 
-  switch (effectiveCardinality) {
-    case 'left':
-      // Second term points to first term (word2 -> word1)
-      console.log('LEFT: Allowing reverse direction only for', word1, '->', word2);
-      return { forward: false, reverse: true };
-    case 'right':
-      // First term points to second term (word1 -> word2)
-      console.log('RIGHT: Allowing forward direction only for', word1, '->', word2);
-      return { forward: true, reverse: false };
-    case null:
-      console.log('NULL: No direction allowed for', word1, '->', word2);
-      return { forward: false, reverse: false };
-    default:
-      return { forward: true, reverse: true };
-  }
+  return { forward: forwardAllowed, reverse: reverseAllowed };
 }
 
 /**

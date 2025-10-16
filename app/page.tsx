@@ -10,9 +10,10 @@ import { TabNavigation } from '../components/ui/tab-navigation';
 import { SearchResults } from '../components/search/search-results';
 import { CardinalityType } from '../components/ui/cardinality-toggle';
 
-import { useTabReducer, getSelectedConnections, getConnectionKeys, convertPairingsToConnections } from '../hooks/use-tab-reducer';
+import { useTabReducer, getSelectedConnections, convertPairingsToConnections } from '../hooks/use-tab-reducer';
 import { testLocalStorage, getLocalStorageInfo } from '../lib/storage-test';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
+import { convertPairingToConnection, getConnectionKey } from '../lib/graph/connection-utils';
 
 import {
   getBackgroundClass,
@@ -130,12 +131,7 @@ export default function Home() {
 
     const connectionKey = `${connection.word1}-${connection.word2}-${connection.reference}`;
 
-    // Verify the connection still exists in current results
-    const allConnections = activeTab.linkings;
-    const connectionExists = allConnections.some(conn => {
-      const connKey = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
-      return connKey === connectionKey;
-    });
+    const connectionExists = activeTab.linkings.some(conn => getConnectionKey(conn) === connectionKey);
 
     if (!connectionExists) return; // Connection not found in current results
 
@@ -158,7 +154,7 @@ export default function Home() {
     // Find keys of pairings that aren't already selected
     const newKeys: string[] = [];
     pairings.forEach((pairing) => {
-      const key = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+      const key = getConnectionKey(pairing);
       if (!existingKeySet.has(key)) {
         newKeys.push(key);
       }
@@ -171,18 +167,101 @@ export default function Home() {
     }
   }, [actions, activeTab.linkingGraphState]);
 
+  const connectionKeyMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        word1: string;
+        word2: string;
+        reference: string;
+        canonicalKey: string;
+        canonicalWord1: string;
+        canonicalWord2: string;
+        isPrimary: boolean;
+      }
+    >();
+
+    activeTab.linkings.forEach((pairing) => {
+      if (!pairing?.verses?.length) {
+        return;
+      }
+
+      const connection = convertPairingToConnection(pairing);
+      const key = `${connection.word1}-${connection.word2}-${connection.reference}`;
+      const reverseKey = `${connection.word2}-${connection.word1}-${connection.reference}`;
+
+      map.set(key, {
+        word1: connection.word1,
+        word2: connection.word2,
+        reference: connection.reference,
+        canonicalKey: key,
+        canonicalWord1: connection.word1,
+        canonicalWord2: connection.word2,
+        isPrimary: true,
+      });
+
+      map.set(reverseKey, {
+        word1: connection.word2,
+        word2: connection.word1,
+        reference: connection.reference,
+        canonicalKey: key,
+        canonicalWord1: connection.word1,
+        canonicalWord2: connection.word2,
+        isPrimary: false,
+      });
+    });
+
+    return map;
+  }, [activeTab.linkings]);
+
+  const updateCardinalityWithMirroring = useCallback(
+    (connectionKey: string, cardinality: CardinalityType) => {
+      const connectionInfo = connectionKeyMap.get(connectionKey);
+      if (!connectionInfo) {
+        return;
+      }
+
+      const { reference, canonicalKey, canonicalWord1, canonicalWord2, isPrimary } = connectionInfo;
+      if (canonicalWord1 === canonicalWord2) {
+        return;
+      }
+
+      const baseCardinality =
+        isPrimary || cardinality === null
+          ? cardinality
+          : cardinality === 'right'
+            ? 'left'
+            : cardinality === 'left'
+              ? 'right'
+              : cardinality;
+
+      actions.updateConnectionCardinality(canonicalKey, baseCardinality);
+
+      const reverseKey = `${canonicalWord2}-${canonicalWord1}-${reference}`;
+      const mirroredCardinality =
+        baseCardinality === 'right'
+          ? 'left'
+          : baseCardinality === 'left'
+            ? 'right'
+            : baseCardinality;
+
+      actions.updateConnectionCardinality(reverseKey, mirroredCardinality);
+    },
+    [actions, connectionKeyMap]
+  );
+
   const handleDeselectAllPairings = useCallback(() => {
     const currentGraphState = activeTab.linkingGraphState;
     const selectedKeys = currentGraphState.selectedConnectionKeys;
 
     // Clear cardinality values for all currently selected connections
-    selectedKeys.forEach(connectionKey => {
-      actions.updateConnectionCardinality(connectionKey, null);
+    selectedKeys.forEach((connectionKey) => {
+      updateCardinalityWithMirroring(connectionKey, null);
     });
 
     // Clear the selected connection keys
     actions.updateGraphState({ selectedConnectionKeys: [] });
-  }, [actions, activeTab.linkingGraphState]);
+  }, [actions, activeTab.linkingGraphState, updateCardinalityWithMirroring]);
 
   const handleNodeClick = useCallback((nodeId: string | string[]) => {
     const currentGraphState = activeTab.linkingGraphState;
@@ -222,8 +301,8 @@ export default function Home() {
   }, [actions]);
 
   const handleUpdateCardinality = useCallback((connectionKey: string, cardinality: CardinalityType) => {
-    actions.updateConnectionCardinality(connectionKey, cardinality);
-  }, [actions]);
+    updateCardinalityWithMirroring(connectionKey, cardinality);
+  }, [updateCardinalityWithMirroring]);
 
   const handleBulkCardinalityChange = useCallback((cardinality: CardinalityType) => {
     // First add all pairings to graph
@@ -231,10 +310,10 @@ export default function Home() {
 
     // Then set the cardinality for all of them
     activeTab.linkings.forEach(pairing => {
-      const connectionKey = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
-      actions.updateConnectionCardinality(connectionKey, cardinality);
+      const connectionKey = getConnectionKey(pairing);
+      updateCardinalityWithMirroring(connectionKey, cardinality);
     });
-  }, [actions, activeTab.linkings, handleSelectAllPairings]);
+  }, [activeTab.linkings, handleSelectAllPairings, updateCardinalityWithMirroring]);
 
   // Computed values
   const allPairingsSelected = useCallback((pairings: VersePairing[]) => {
@@ -245,7 +324,7 @@ export default function Home() {
     const selectedKeySet = new Set(currentGraphState.selectedConnectionKeys);
 
     return pairings.every((pairing) => {
-      const key = `${pairing.term1}-${pairing.term2}-${pairing.verses[0].reference}`;
+      const key = getConnectionKey(pairing);
       return selectedKeySet.has(key);
     });
   }, [activeTab.linkingGraphState]);

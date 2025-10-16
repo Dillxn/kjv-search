@@ -2,6 +2,7 @@
 
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
 import { SearchResult, VersePairing, kjvParser, OLD_TESTAMENT_BOOKS, NEW_TESTAMENT_BOOKS } from '../lib';
+import { convertPairingToConnection, getConnectionKey } from '../lib/graph/connection-utils';
 import { APP_CONFIG } from '../lib/constants';
 import { SearchTermProcessor, SearchStateValidator } from '../lib/search-utils';
 import { DevStorageHelper } from '../lib/dev-storage-helper';
@@ -122,12 +123,18 @@ function generateSearchKey(tab: TabState): string {
 }
 
 // Cache for converted connections to avoid repeated conversions
-const connectionCache = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[]; }>();
+const connectionCache = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[] }>();
 
 function getConnectionCacheKey(pairing: VersePairing) {
-  const primaryReference = pairing.verses[0]?.reference ?? '';
-  const secondaryReference = pairing.verses[1]?.reference ?? '';
-  return `${pairing.term1}-${pairing.term2}-${primaryReference}-${secondaryReference}-${pairing.proximity}`;
+  const sortedTerms = [pairing.term1, pairing.term2]
+    .map(term => term.toLowerCase())
+    .sort((a, b) => a.localeCompare(b));
+
+  const versePositions = pairing.verses
+    .map(verse => verse.position)
+    .sort((a, b) => a - b);
+
+  return `${sortedTerms.join('|')}|${versePositions.join(',')}|${pairing.verses.length}`;
 }
 
 function getOrCreateConnectionFromPairing(pairing: VersePairing) {
@@ -135,16 +142,7 @@ function getOrCreateConnectionFromPairing(pairing: VersePairing) {
 
   let connection = connectionCache.get(cacheKey);
   if (!connection) {
-    const verseRef = pairing.verses.length === 1
-      ? pairing.verses[0].reference
-      : `${pairing.verses[0].reference} & ${pairing.verses[1].reference}`;
-
-    connection = {
-      word1: pairing.term1,
-      word2: pairing.term2,
-      reference: verseRef,
-      versePositions: pairing.verses.map(v => v.position),
-    };
+    connection = convertPairingToConnection(pairing);
 
     connectionCache.set(cacheKey, connection);
 
@@ -169,21 +167,28 @@ export function getSelectedConnections(
     return [];
   }
 
-  const result: Array<{ word1: string; word2: string; reference: string; versePositions: number[]; }> = [];
+  const connectionMap = new Map<string, { word1: string; word2: string; reference: string; versePositions: number[] }>();
 
-  for (const key of selectedKeys) {
-    // Find the connection in allConnections that matches this key
-    const pairing = allConnections.find(conn => {
-      const connectionKey = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
-      return connectionKey === key;
-    });
+  allConnections.forEach((pairing) => {
+    const key = getConnectionKey(pairing);
+    if (!connectionMap.has(key)) {
+      const connection = getOrCreateConnectionFromPairing(pairing);
+      connectionMap.set(key, connection);
 
-    if (pairing) {
-      result.push(getOrCreateConnectionFromPairing(pairing));
+      const reverseKey = `${connection.word2}-${connection.word1}-${connection.reference}`;
+      if (!connectionMap.has(reverseKey)) {
+        connectionMap.set(reverseKey, connection);
+      }
     }
-  }
+  });
 
-  return result;
+  return selectedKeys.reduce<Array<{ word1: string; word2: string; reference: string; versePositions: number[] }>>((acc, key) => {
+    const connection = connectionMap.get(key);
+    if (connection) {
+      acc.push(connection);
+    }
+    return acc;
+  }, []);
 }
 
 export function convertPairingsToConnections(
@@ -202,15 +207,10 @@ export function getConnectionKeys(
 ): string[] {
   return selectedConnections
     .map(connection => {
-      // Create the key for this connection
-      return `${connection.term1}-${connection.term2}-${connection.verses[0].reference}`;
+      return getConnectionKey(connection);
     })
     .filter(key => {
-      // Verify the connection still exists in allConnections
-      return allConnections.some(conn => {
-        const connectionKey = `${conn.term1}-${conn.term2}-${conn.verses[0].reference}`;
-        return connectionKey === key;
-      });
+      return allConnections.some(conn => getConnectionKey(conn) === key);
     });
 }
 
