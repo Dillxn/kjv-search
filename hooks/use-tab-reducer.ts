@@ -25,6 +25,7 @@ export interface TabState {
   linkingGraphState: {
     selectedConnectionKeys: string[]; // Store connection keys instead of indexes for robustness
     selectedNodes: string[];
+    panelSplit: number; // Horizontal split ratio between results and graph panels
     graphTransform: {
       x: number;
       y: number;
@@ -68,7 +69,7 @@ export type TabAction =
   | { type: 'UPDATE_SEARCH_TERMS'; payload: { searchTerms: string } }
   | { type: 'UPDATE_FILTERS'; payload: { selectedTestament: 'all' | 'old' | 'new'; selectedBooks: string[]; maxProximity: number } }
   | { type: 'UPDATE_UI_STATE'; payload: { showFilters?: boolean; activeTab?: 'all' | 'linking'; isDarkMode?: boolean; showGraph?: boolean } }
-  | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number } }
+  | { type: 'UPDATE_GRAPH_STATE'; payload: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number; panelSplit?: number } }
   | { type: 'UPDATE_CONNECTION_CARDINALITY'; payload: { connectionKey: string; cardinality: CardinalityType } }
   | { type: 'TOGGLE_EDGE_EXCLUSION'; payload: { edgeId: string } }
   | { type: 'SET_CHECKED_EDGES'; payload: { edgeIds: string[] } }
@@ -89,6 +90,7 @@ const DEFAULT_TAB_STATE: Omit<TabState, 'id' | 'name'> = {
   linkingGraphState: {
     selectedConnectionKeys: [],
     selectedNodes: [],
+    panelSplit: 0.5,
     graphTransform: { x: 0, y: 0, scale: 1 },
     currentPathIndex: 0,
     excludedEdges: [],
@@ -297,6 +299,7 @@ function loadStateFromStorage(): TabReducerState {
           linkingGraphState: {
             selectedConnectionKeys: linkingGraphState.selectedConnectionKeys || [],
             selectedNodes: linkingGraphState.selectedNodes || [],
+            panelSplit: linkingGraphState.panelSplit ?? 0.5,
             graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
             currentPathIndex: linkingGraphState.currentPathIndex || 0,
             excludedEdges: linkingGraphState.excludedEdges || [],
@@ -358,6 +361,7 @@ interface MinimalTabState {
     selectedConnectionKeys?: string[];
     selectedConnectionIndexes?: number[]; // For migration from old format
     selectedNodes: string[];
+    panelSplit?: number;
     graphTransform: { x: number; y: number; scale: number };
     currentPathIndex: number;
     excludedEdges: string[];
@@ -411,6 +415,7 @@ function saveStateToStorage(state: TabReducerState): void {
           linkingGraphState: {
             selectedConnectionKeys: tab.linkingGraphState.selectedConnectionKeys,
             selectedNodes: tab.linkingGraphState.selectedNodes,
+            panelSplit: tab.linkingGraphState.panelSplit,
             graphTransform: tab.linkingGraphState.graphTransform,
             currentPathIndex: tab.linkingGraphState.currentPathIndex,
             excludedEdges: tab.linkingGraphState.excludedEdges,
@@ -446,6 +451,7 @@ function saveStateToStorage(state: TabReducerState): void {
               linkingGraphState: {
                 selectedConnectionKeys: currentTab?.linkingGraphState.selectedConnectionKeys || [],
                 selectedNodes: currentTab?.linkingGraphState.selectedNodes || [],
+                panelSplit: currentTab?.linkingGraphState.panelSplit ?? 0.5,
                 graphTransform: currentTab?.linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
                 currentPathIndex: currentTab?.linkingGraphState.currentPathIndex || 0,
                 excludedEdges: currentTab?.linkingGraphState.excludedEdges || [],
@@ -637,7 +643,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
     }
 
     case 'UPDATE_GRAPH_STATE': {
-      const { selectedConnectionKeys, selectedNodes, graphTransform, currentPathIndex } = action.payload;
+      const { selectedConnectionKeys, selectedNodes, graphTransform, currentPathIndex, panelSplit } = action.payload;
       const newState = {
         ...state,
         tabs: state.tabs.map(tab =>
@@ -650,6 +656,7 @@ function tabReducer(state: TabReducerState, action: TabAction): TabReducerState 
                   ...(selectedNodes !== undefined && { selectedNodes }),
                   ...(graphTransform !== undefined && { graphTransform }),
                   ...(currentPathIndex !== undefined && { currentPathIndex }),
+                  ...(panelSplit !== undefined && { panelSplit }),
                 }
               }
             : tab
@@ -1069,7 +1076,7 @@ export function useTabReducer() {
     updateUIState: (updates: { showFilters?: boolean; activeTab?: 'all' | 'linking'; isDarkMode?: boolean; showGraph?: boolean }) =>
       dispatch({ type: 'UPDATE_UI_STATE', payload: updates }),
 
-    updateGraphState: (updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number }) =>
+    updateGraphState: (updates: { selectedConnectionKeys?: string[]; selectedNodes?: string[]; graphTransform?: { x: number; y: number; scale: number; }; currentPathIndex?: number; panelSplit?: number }) =>
       dispatch({ type: 'UPDATE_GRAPH_STATE', payload: { ...updates } }),
 
     updateConnectionCardinality: (connectionKey: string, cardinality: CardinalityType) =>

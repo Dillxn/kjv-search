@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { kjvParser, VersePairing } from '../lib';
 import { TabBar } from '../lib/tab-bar';
 import { GraphVisualizer } from '../lib/graph-visualizer';
@@ -28,6 +37,12 @@ type GraphConnection = {
   versePositions: number[];
 };
 
+const MIN_PANEL_SPLIT = 0.2;
+const MAX_PANEL_SPLIT = 0.8;
+
+const clampPanelSplit = (value: number) =>
+  Math.min(MAX_PANEL_SPLIT, Math.max(MIN_PANEL_SPLIT, value));
+
 export default function Home() {
   // All state managed by atomic reducer
   const { state, activeTab, actions, performSearch } = useTabReducer();
@@ -35,6 +50,220 @@ export default function Home() {
   // UI state
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const resultsPanelRef = useRef<HTMLDivElement | null>(null);
+  const graphPanelRef = useRef<HTMLDivElement | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  const [panelSplit, setPanelSplit] = useState(() =>
+    clampPanelSplit(activeTab.linkingGraphState.panelSplit ?? 0.5)
+  );
+  const latestSplitRef = useRef(panelSplit);
+  const isGraphVisible = activeTab.showGraph && activeTab.activeTab === 'linking';
+  const resultsFlexShare = Math.max(MIN_PANEL_SPLIT, Math.min(MAX_PANEL_SPLIT, panelSplit));
+  const graphFlexShare = Math.max(MIN_PANEL_SPLIT, 1 - resultsFlexShare);
+
+  const applySplitStyles = useCallback(
+    (split: number) => {
+      if (!isGraphVisible) {
+        return;
+      }
+
+      const resultsEl = resultsPanelRef.current;
+      const graphEl = graphPanelRef.current;
+      if (resultsEl) {
+        const clampedSplit = clampPanelSplit(split);
+        resultsEl.style.flexGrow = String(clampedSplit);
+        resultsEl.style.flexShrink = '1';
+        resultsEl.style.flexBasis = '0';
+      }
+
+      if (graphEl) {
+        const clampedRemaining = clampPanelSplit(1 - split);
+        graphEl.style.flexGrow = String(clampedRemaining);
+        graphEl.style.flexShrink = '1';
+        graphEl.style.flexBasis = '0';
+      }
+    },
+    [isGraphVisible]
+  );
+
+  useEffect(() => {
+    const storedSplit = clampPanelSplit(activeTab.linkingGraphState.panelSplit ?? 0.5);
+    setPanelSplit((prev) => {
+      if (Math.abs(prev - storedSplit) < 0.001) {
+        latestSplitRef.current = prev;
+        applySplitStyles(prev);
+        return prev;
+      }
+      latestSplitRef.current = storedSplit;
+      applySplitStyles(storedSplit);
+      return storedSplit;
+    });
+  }, [activeTab.id, activeTab.linkingGraphState.panelSplit, applySplitStyles]);
+
+  useEffect(() => {
+    latestSplitRef.current = panelSplit;
+  }, [panelSplit]);
+
+  useEffect(() => {
+    if (isGraphVisible) {
+      applySplitStyles(panelSplit);
+    } else {
+      const resultsEl = resultsPanelRef.current;
+      if (resultsEl) {
+        resultsEl.style.removeProperty('flex-grow');
+        resultsEl.style.removeProperty('flex-shrink');
+        resultsEl.style.removeProperty('flex-basis');
+      }
+      const graphEl = graphPanelRef.current;
+      if (graphEl) {
+        graphEl.style.removeProperty('flex-grow');
+        graphEl.style.removeProperty('flex-shrink');
+        graphEl.style.removeProperty('flex-basis');
+      }
+    }
+  }, [applySplitStyles, isGraphVisible, panelSplit]);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
+  const updateSplitFromClientX = useCallback(
+    (clientX: number) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0) return;
+
+      const rawRatio = (clientX - rect.left) / rect.width;
+      if (!Number.isFinite(rawRatio)) return;
+
+      const clamped = clampPanelSplit(rawRatio);
+      if (Math.abs(clamped - latestSplitRef.current) < 0.001) {
+        return;
+      }
+
+      latestSplitRef.current = clamped;
+      applySplitStyles(clamped);
+    },
+    [applySplitStyles]
+  );
+
+  const startDragging = useCallback(
+    (clientX: number) => {
+      if (!isGraphVisible) {
+        return;
+      }
+
+      updateSplitFromClientX(clientX);
+
+      const handleMouseMove = (event: MouseEvent) => {
+        updateSplitFromClientX(event.clientX);
+      };
+
+      const handleTouchMove = (event: TouchEvent) => {
+        if (event.touches.length > 0) {
+          updateSplitFromClientX(event.touches[0].clientX);
+        }
+      };
+
+      const stopDrag = () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', stopDrag);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', stopDrag);
+        window.removeEventListener('touchcancel', stopDrag);
+
+        const finalSplit = clampPanelSplit(latestSplitRef.current);
+        const storedSplit = clampPanelSplit(activeTab.linkingGraphState.panelSplit ?? 0.5);
+        applySplitStyles(finalSplit);
+        if (Math.abs(finalSplit - storedSplit) > 0.001) {
+          actions.updateGraphState({ panelSplit: finalSplit });
+        }
+
+        dragCleanupRef.current = null;
+      };
+
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = stopDrag;
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', stopDrag);
+      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchend', stopDrag);
+      window.addEventListener('touchcancel', stopDrag);
+    },
+    [actions, activeTab.linkingGraphState.panelSplit, applySplitStyles, isGraphVisible, updateSplitFromClientX]
+  );
+
+  useEffect(() => {
+    if (!isGraphVisible) {
+      dragCleanupRef.current?.();
+    }
+  }, [isGraphVisible]);
+
+  const handleSeparatorMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      startDragging(event.clientX);
+    },
+    [startDragging]
+  );
+
+  const handleSeparatorTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (event.touches.length > 0) {
+        event.preventDefault();
+        startDragging(event.touches[0].clientX);
+      }
+    },
+    [startDragging]
+  );
+
+  const handleSeparatorKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (!isGraphVisible) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const delta = event.key === 'ArrowLeft' ? -0.02 : 0.02;
+        const next = clampPanelSplit(panelSplit + delta);
+        if (Math.abs(next - panelSplit) < 0.001) {
+          return;
+        }
+        latestSplitRef.current = next;
+        applySplitStyles(next);
+        if (Math.abs(next - panelSplit) > 0.001) {
+          setPanelSplit(next);
+        }
+        const storedSplit = clampPanelSplit(activeTab.linkingGraphState.panelSplit ?? 0.5);
+        if (Math.abs(next - storedSplit) > 0.001) {
+          actions.updateGraphState({ panelSplit: next });
+        }
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        const next = clampPanelSplit(0.5);
+        if (Math.abs(next - panelSplit) < 0.001) {
+          return;
+        }
+        latestSplitRef.current = next;
+        applySplitStyles(next);
+        const storedSplit = clampPanelSplit(activeTab.linkingGraphState.panelSplit ?? 0.5);
+        if (Math.abs(next - panelSplit) > 0.001) {
+          setPanelSplit(next);
+        }
+        if (Math.abs(next - storedSplit) > 0.001) {
+          actions.updateGraphState({ panelSplit: next });
+        }
+      }
+    },
+    [actions, activeTab.linkingGraphState.panelSplit, applySplitStyles, panelSplit, isGraphVisible]
+  );
 
   // Generate unique localStorage key for scroll position
   const scrollPositionKey = useMemo(() => {
@@ -444,90 +673,134 @@ export default function Home() {
       />
 
       {/* Content Area */}
-      <div className='flex-1 flex gap-2 min-h-0'>
-          {/* Results Panel */}
-          <div
-            className={`flex-1 flex flex-col gap-2 min-h-0 ${
-              activeTab.showGraph ? 'w-1/2' : 'w-full'
-            }`}
-          >
-            <TabNavigation
-              activeTab={activeTab.activeTab}
-              resultsCount={activeTab.results.length}
-              pairingsCount={activeTab.linkings.length}
-              linkingsCount={activeTab.linkings.length}
-              isDarkMode={activeTab.isDarkMode}
-              showGraph={activeTab.showGraph}
-              allPairingsSelected={allPairingsSelected(activeTab.linkings)}
-              allSelectedHaveSameCardinality={allSelectedHaveSameCardinality()}
-              selectedCardinalityType={getSelectedCardinalityType()}
-              onTabChange={(tab) => actions.updateUIState({ activeTab: tab })}
-              onSelectAllPairings={() => handleSelectAllPairings(activeTab.linkings)}
-              onDeselectAllPairings={handleDeselectAllPairings}
-              onBulkCardinalityChange={handleBulkCardinalityChange}
-            />
+      <div
+        className='flex-1 flex gap-2 min-h-0'
+        ref={containerRef}
+      >
+        {/* Results Panel */}
+        <div
+          ref={resultsPanelRef}
+          className={`flex flex-col gap-2 min-h-0 ${isGraphVisible ? '' : 'flex-1'}`}
+          style={
+            isGraphVisible
+              ? {
+                  flexGrow: resultsFlexShare,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                }
+              : { flexGrow: 1, flexShrink: 1, flexBasis: 0 }
+          }
+        >
+          <TabNavigation
+            activeTab={activeTab.activeTab}
+            resultsCount={activeTab.results.length}
+            pairingsCount={activeTab.linkings.length}
+            linkingsCount={activeTab.linkings.length}
+            isDarkMode={activeTab.isDarkMode}
+            showGraph={activeTab.showGraph}
+            allPairingsSelected={allPairingsSelected(activeTab.linkings)}
+            allSelectedHaveSameCardinality={allSelectedHaveSameCardinality()}
+            selectedCardinalityType={getSelectedCardinalityType()}
+            onTabChange={(tab) => actions.updateUIState({ activeTab: tab })}
+            onSelectAllPairings={() => handleSelectAllPairings(activeTab.linkings)}
+            onDeselectAllPairings={handleDeselectAllPairings}
+            onBulkCardinalityChange={handleBulkCardinalityChange}
+          />
 
-            {/* Search Results */}
-            <div className='flex-1 min-h-0'>
-              {activeTab.error ? (
-                <div
-                  className={`flex items-center justify-center h-full ${getTextClass(
-                    activeTab.isDarkMode,
-                    'error'
-                  )}`}
-                >
-                  <p className='text-sm'>{activeTab.error}</p>
-                </div>
-              ) : (
-                <SearchResults
-                  results={activeTab.results}
-                  pairings={activeTab.linkings}
-                  linkings={activeTab.linkings}
-                  activeTab={activeTab.activeTab}
-                  searchTerms={activeTab.searchTerms}
-                  isDarkMode={activeTab.isDarkMode}
-                  scrollPositionKey={scrollPositionKey}
-                  showGraph={activeTab.showGraph}
-                  selectedConnections={selectedConnections}
-                  onToggleGraph={handleToggleGraph}
-                  onUpdateCardinality={handleUpdateCardinality}
-                  connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Graph Panel */}
-          {activeTab.showGraph && (
-            <div
-              className={`w-1/2 rounded-sm overflow-hidden shadow-md flex flex-col min-h-0 ${getBackgroundClass(
-                activeTab.isDarkMode,
-                'card'
-              )}`}
-            >
-              <GraphVisualizer
-                connections={selectedConnections}
-                allConnections={allGraphConnections}
+          {/* Search Results */}
+          <div className='flex-1 min-h-0'>
+            {activeTab.error ? (
+              <div
+                className={`flex items-center justify-center h-full ${getTextClass(
+                  activeTab.isDarkMode,
+                  'error'
+                )}`}
+              >
+                <p className='text-sm'>{activeTab.error}</p>
+              </div>
+            ) : (
+              <SearchResults
+                results={activeTab.results}
+                pairings={activeTab.linkings}
+                linkings={activeTab.linkings}
+                activeTab={activeTab.activeTab}
                 searchTerms={activeTab.searchTerms}
                 isDarkMode={activeTab.isDarkMode}
-                initialTransform={activeTab.linkingGraphState.graphTransform}
-                onTransformChange={handleGraphTransformChange}
-                selectedNodes={activeTab.linkingGraphState.selectedNodes}
-                onNodeClick={handleNodeClick}
-                onClearSelection={clearNodeSelection}
-                currentPathIndex={activeTab.linkingGraphState.currentPathIndex}
-                onPathIndexChange={handlePathIndexChange}
-                excludedEdges={excludedEdges}
-                onEdgeExclusionToggle={handleEdgeExclusionToggle}
-                connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
+                scrollPositionKey={scrollPositionKey}
+                showGraph={activeTab.showGraph}
+                selectedConnections={selectedConnections}
                 onToggleGraph={handleToggleGraph}
                 onUpdateCardinality={handleUpdateCardinality}
-                checkedEdges={activeTab.linkingGraphState.checkedEdges}
-                onCheckedEdgesChange={actions.setCheckedEdges}
+                connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
+              />
+            )}
+          </div>
+        </div>
+
+        {isGraphVisible && (
+          <>
+            <div
+              role='separator'
+              aria-orientation='vertical'
+              aria-label='Resize results and graph panels'
+              tabIndex={0}
+              className={`relative w-3 h-full cursor-col-resize select-none flex items-center justify-center rounded-sm transition-colors ${
+                activeTab.isDarkMode
+                  ? 'bg-gray-800 hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
+                  : 'bg-gray-200 hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
+              }`}
+              onMouseDown={handleSeparatorMouseDown}
+              onTouchStart={handleSeparatorTouchStart}
+              onKeyDown={handleSeparatorKeyDown}
+            >
+              <span
+                aria-hidden='true'
+                className={`block h-2/3 w-0.5 rounded-full ${
+                  activeTab.isDarkMode ? 'bg-gray-400' : 'bg-gray-500'
+                }`}
               />
             </div>
-          )}
-        </div>
+
+            <div
+              ref={graphPanelRef}
+              className='flex flex-col min-h-0'
+              style={{
+                flexGrow: graphFlexShare,
+                flexShrink: 1,
+                flexBasis: 0,
+              }}
+            >
+              <div
+                className={`h-full rounded-sm overflow-hidden shadow-md flex flex-col min-h-0 ${getBackgroundClass(
+                  activeTab.isDarkMode,
+                  'card'
+                )}`}
+              >
+                <GraphVisualizer
+                  connections={selectedConnections}
+                  allConnections={allGraphConnections}
+                  searchTerms={activeTab.searchTerms}
+                  isDarkMode={activeTab.isDarkMode}
+                  initialTransform={activeTab.linkingGraphState.graphTransform}
+                  onTransformChange={handleGraphTransformChange}
+                  selectedNodes={activeTab.linkingGraphState.selectedNodes}
+                  onNodeClick={handleNodeClick}
+                  onClearSelection={clearNodeSelection}
+                  currentPathIndex={activeTab.linkingGraphState.currentPathIndex}
+                  onPathIndexChange={handlePathIndexChange}
+                  excludedEdges={excludedEdges}
+                  onEdgeExclusionToggle={handleEdgeExclusionToggle}
+                  connectionCardinalities={activeTab.linkingGraphState.connectionCardinalities}
+                  onToggleGraph={handleToggleGraph}
+                  onUpdateCardinality={handleUpdateCardinality}
+                  checkedEdges={activeTab.linkingGraphState.checkedEdges}
+                  onCheckedEdgesChange={actions.setCheckedEdges}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
