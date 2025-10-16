@@ -8,6 +8,7 @@ import { MatchBounds } from '../../lib/types/verse';
 import { CardinalityToggle, CardinalityType } from '../ui/cardinality-toggle';
 import { VerseContextTooltip } from './verse-context-tooltip';
 import { convertPairingToConnection, getConnectionKey } from '../../lib/graph/connection-utils';
+import { BookOpen } from 'lucide-react';
 
 interface PairingDisplayProps {
   pairing: VersePairing;
@@ -103,6 +104,9 @@ export function PairingDisplay({
       return connectionKeyFromSelection === connectionKey;
     });
 
+  const contextButtonClasses = isDarkMode
+    ? 'p-1 rounded text-blue-200 hover:bg-blue-500/10 border border-transparent transition-colors data-[open=true]:border-blue-500/60 data-[open=true]:bg-blue-500/10'
+    : 'p-1 rounded text-blue-700 hover:bg-blue-100 border border-transparent transition-colors data-[open=true]:border-blue-400 data-[open=true]:bg-blue-100';
 
   return (
     <div
@@ -114,35 +118,41 @@ export function PairingDisplay({
       }`}
     >
       <div className='flex-1'>
-        
         {pairing.verses.map((verse, verseIndex) => (
-          <VerseContextTooltip
-            key={verse.position}
-            verse={verse}
-            isDarkMode={isDarkMode}
-            contextBefore={1}
-            contextAfter={1}
-          >
-            <div className={verseIndex > 0 ? 'mt-1' : ''}>
-              <div className='mb-0.5'>
-                <span
-                  className={`font-semibold text-xs ${
-                    isDarkMode ? 'text-gray-200' : 'text-gray-800'
-                  }`}
-                >
-                  {verse.reference}
-                </span>
-              </div>
-              <div
-                className={`text-xs leading-snug ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
+          <div key={verse.position} className={verseIndex > 0 ? 'mt-1' : ''}>
+            <div className='flex items-center gap-2 mb-0.5'>
+              <span
+                className={`font-semibold text-xs ${
+                  isDarkMode ? 'text-gray-200' : 'text-gray-800'
                 }`}
-                dangerouslySetInnerHTML={{
-                  __html: highlightPairingText(verse.text),
-                }}
-              />
+              >
+                {verse.reference}
+              </span>
+              <VerseContextTooltip
+                verse={verse}
+                isDarkMode={isDarkMode}
+                contextBefore={1}
+                contextAfter={1}
+                triggerMode='button'
+              >
+                <button
+                  type='button'
+                  className={contextButtonClasses}
+                  aria-label='View verse context'
+                >
+                  <BookOpen className='h-3.5 w-3.5' strokeWidth={2} />
+                </button>
+              </VerseContextTooltip>
             </div>
-          </VerseContextTooltip>
+            <div
+              className={`text-xs leading-snug ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}
+              dangerouslySetInnerHTML={{
+                __html: highlightPairingText(verse.text),
+              }}
+            />
+          </div>
         ))}
       </div>
       {showGraph && showCardinalityToggle && onToggleGraph && onUpdateCardinality && (

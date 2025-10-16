@@ -6,6 +6,7 @@ import { UnifiedHighlighter } from '../../lib/highlighting';
 import { SearchResultsHelper } from '../../lib/search-utils';
 import { PairingDisplay } from '../shared/pairing-display';
 import { VerseContextTooltip } from '../shared/verse-context-tooltip';
+import { BookOpen } from 'lucide-react';
 
 interface SearchResultsProps {
   results: SearchResult[];
@@ -46,43 +47,55 @@ export function SearchResults({
   };
 
   const renderResult = (result: SearchResult) => (
-    <VerseContextTooltip
+    <div
       key={`${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
-      verse={result.verse}
-      isDarkMode={isDarkMode}
-      contextBefore={1}
-      contextAfter={1}
+      className={`border-l-2 pl-2 py-1 mb-1 ${
+        isDarkMode ? 'border-blue-400' : 'border-blue-500'
+      }`}
     >
-      <div
-        className={`border-l-2 pl-2 py-1 mb-1 ${
-          isDarkMode ? 'border-blue-400' : 'border-blue-500'
-        }`}
-      >
-        <div className='mb-0.5'>
-          <span
-            className={`font-semibold text-xs ${
-              isDarkMode ? 'text-gray-200' : 'text-gray-800'
-            }`}
-          >
-            {result.verse.reference}
-          </span>
-        </div>
-        <div
-          className={`text-xs leading-snug ${
-            isDarkMode ? 'text-gray-300' : 'text-gray-700'
+      <div className='flex items-center gap-2 mb-0.5'>
+        <span
+          className={`font-semibold text-xs ${
+            isDarkMode ? 'text-gray-200' : 'text-gray-800'
           }`}
-          dangerouslySetInnerHTML={{
-            __html: UnifiedHighlighter.highlightText(result.verse.text, {
-              matches: result.matches,
-              mainTerms: getSearchTermsArray(),
-              isDarkMode,
-              maintainInputOrder: true,
-              usePairingsColors: false, // Use main colors for regular search results
-            }),
-          }}
-        />
+        >
+          {result.verse.reference}
+        </span>
+        <VerseContextTooltip
+          verse={result.verse}
+          isDarkMode={isDarkMode}
+          contextBefore={1}
+          contextAfter={1}
+          triggerMode='button'
+        >
+          <button
+            type='button'
+            className={`p-1 rounded border border-transparent transition-colors ${
+              isDarkMode
+                ? 'text-blue-200 hover:bg-blue-500/10 data-[open=true]:border-blue-500/60 data-[open=true]:bg-blue-500/10'
+                : 'text-blue-700 hover:bg-blue-100 data-[open=true]:border-blue-400 data-[open=true]:bg-blue-100'
+            }`}
+            aria-label='View verse context'
+          >
+            <BookOpen className='h-3.5 w-3.5' strokeWidth={2} />
+          </button>
+        </VerseContextTooltip>
       </div>
-    </VerseContextTooltip>
+      <div
+        className={`text-xs leading-snug ${
+          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+        }`}
+        dangerouslySetInnerHTML={{
+          __html: UnifiedHighlighter.highlightText(result.verse.text, {
+            matches: result.matches,
+            mainTerms: getSearchTermsArray(),
+            isDarkMode,
+            maintainInputOrder: true,
+            usePairingsColors: false, // Use main colors for regular search results
+          }),
+        }}
+      />
+    </div>
   );
 
   const renderPairing = (pairing: VersePairing) => {
