@@ -7,6 +7,7 @@ import { PathSlider } from '../components/graph/path-slider';
 import { IconButton } from '../components/ui/button';
 import {
   applyForceDirectedLayout,
+  applyPathAwareLayout,
   generateInitialPosition,
   calculateNodeRadius,
 } from './graph/force-layout';
@@ -486,6 +487,11 @@ export function GraphVisualizer({
   };
 
   const handleRearrangeGraph = useCallback(() => {
+    const pathForLayout =
+      availablePaths.length > 0
+        ? availablePaths[Math.min(effectivePathIndex, availablePaths.length - 1)]
+        : null;
+
     let didRearrange = false;
 
     setNodes((currentNodes) => {
@@ -494,13 +500,18 @@ export function GraphVisualizer({
       }
 
       didRearrange = true;
+
+      if (pathForLayout && pathForLayout.length > 1) {
+        return applyPathAwareLayout([...currentNodes], edges, pathForLayout);
+      }
+
       return applyForceDirectedLayout([...currentNodes], edges);
     });
 
     if (didRearrange) {
       setShouldAutoFit(true);
     }
-  }, [edges]);
+  }, [availablePaths, edges, effectivePathIndex]);
 
   if (selectedEdge) {
     return (
