@@ -11,7 +11,7 @@ import {
   calculateNodeRadius,
 } from './graph/force-layout';
 import { getAllPathsBetweenNodes } from './graph/path-finding';
-import { Fullscreen, Maximize2, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowLeftRight, Fullscreen, Maximize2, RefreshCw, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 import { CardinalityType } from '../components/ui/cardinality-toggle';
 
@@ -473,6 +473,14 @@ export function GraphVisualizer({
     }
   }, [onEdgeExclusionToggle]);
 
+  const handleSwapSelectedNodes = useCallback(() => {
+    if (!onNodeClick || selectedNodes.length !== 2) {
+      return;
+    }
+
+    onNodeClick([selectedNodes[1], selectedNodes[0]]);
+  }, [onNodeClick, selectedNodes]);
+
   const handleFullScreenToggle = () => {
     setIsFullScreen(!isFullScreen);
   };
@@ -606,10 +614,21 @@ export function GraphVisualizer({
                 to see path)
               </span>
             ) : selectedNodes.length === 2 ? (
-              <span>
-                Path: <strong>{selectedNodes[0]}</strong> →{' '}
-                <strong>{selectedNodes[1]}</strong>
-              </span>
+              <div className='flex items-center gap-2'>
+                <span>
+                  Path: <strong>{selectedNodes[0]}</strong> →{' '}
+                  <strong>{selectedNodes[1]}</strong>
+                </span>
+                {onNodeClick && (
+                  <IconButton
+                    onClick={handleSwapSelectedNodes}
+                    title='Swap selected node order'
+                    isDarkMode={isDarkMode}
+                  >
+                    <ArrowLeftRight size={16} />
+                  </IconButton>
+                )}
+              </div>
             ) : (
               <span>
                 Selected: {selectedNodes.length} nodes
