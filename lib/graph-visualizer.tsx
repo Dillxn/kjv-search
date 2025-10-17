@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import { GraphCanvas } from '../components/graph/graph-canvas';
 import { GraphModal } from '../components/graph/graph-modal';
 import { PathSlider } from '../components/graph/path-slider';
@@ -11,7 +11,7 @@ import {
   generateInitialPosition,
   calculateNodeRadius,
 } from './graph/force-layout';
-import { getAllPathsBetweenNodes } from './graph/path-finding';
+import { getAllPathsBetweenNodes, getPathEdges } from './graph/path-finding';
 import { ArrowLeftRight, Fullscreen, Maximize2, RefreshCw, RotateCcw } from 'lucide-react';
 import { getBackgroundClass } from './theme-utils';
 import { CardinalityType } from '../components/ui/cardinality-toggle';
@@ -33,6 +33,99 @@ interface Edge {
 
 const getEdgeKey = (word1: string, word2: string) =>
   [word1, word2].sort((a, b) => a.localeCompare(b)).join('-');
+
+const doSegmentsIntersect = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  x4: number,
+  y4: number
+) => {
+  const denominator =
+    (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denominator) < 1e-10) {
+    return false;
+  }
+
+  const t =
+    ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) /
+    denominator;
+  const u =
+    -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) /
+    denominator;
+
+  return t > 0 && t < 1 && u > 0 && u < 1;
+};
+
+const edgesShareNode = (edgeA: Edge, edgeB: Edge) => {
+  return (
+    edgeA.source === edgeB.source ||
+    edgeA.source === edgeB.target ||
+    edgeA.target === edgeB.source ||
+    edgeA.target === edgeB.target
+  );
+};
+
+const pathHasCrossingEdges = (path: string[], nodes: Node[], edges: Edge[]) => {
+  if (!Array.isArray(path) || path.length < 2) {
+    return false;
+  }
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const pathEdges = getPathEdges(path, edges);
+
+  const segments = pathEdges
+    .map((edge) => {
+      const source = nodeMap.get(edge.source);
+      const target = nodeMap.get(edge.target);
+
+      if (!source || !target) {
+        return null;
+      }
+
+      return { edge, source, target };
+    })
+    .filter((segment): segment is {
+      edge: Edge;
+      source: Node;
+      target: Node;
+    } => segment !== null);
+
+  if (segments.length < 2) {
+    return false;
+  }
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    for (let j = i + 1; j < segments.length; j++) {
+      const segmentA = segments[i];
+      const segmentB = segments[j];
+
+      if (edgesShareNode(segmentA.edge, segmentB.edge)) {
+        continue;
+      }
+
+      if (
+        doSegmentsIntersect(
+          segmentA.source.x,
+          segmentA.source.y,
+          segmentA.target.x,
+          segmentA.target.y,
+          segmentB.source.x,
+          segmentB.source.y,
+          segmentB.target.x,
+          segmentB.target.y
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
 
 interface GraphVisualizerProps {
   connections: Array<{
@@ -114,6 +207,8 @@ export function GraphVisualizer({
   const checkedEdgesRef = useRef<string[]>(checkedEdges);
   const hasRenderedConnectionsRef = useRef(false);
   const previousNodesRef = useRef<Node[]>([]);
+  const autoLayoutAttemptRef = useRef<string | null>(null);
+  const lastPathKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     checkedEdgesChangeRef.current = onCheckedEdgesChange;
@@ -159,6 +254,29 @@ export function GraphVisualizer({
     if (localPathIndex >= availablePaths.length) return availablePaths.length - 1;
     return localPathIndex;
   }, [localPathIndex, availablePaths.length]);
+
+  const currentPath = React.useMemo(() => {
+    if (availablePaths.length === 0) {
+      return null;
+    }
+    const clampedIndex = Math.min(
+      Math.max(effectivePathIndex, 0),
+      availablePaths.length - 1
+    );
+    return availablePaths[clampedIndex] || null;
+  }, [availablePaths, effectivePathIndex]);
+
+  const currentPathKey = React.useMemo(
+    () => (currentPath ? currentPath.join('→') : null),
+    [currentPath]
+  );
+
+  useEffect(() => {
+    if (currentPathKey !== lastPathKeyRef.current) {
+      lastPathKeyRef.current = currentPathKey;
+      autoLayoutAttemptRef.current = null;
+    }
+  }, [currentPathKey]);
 
   // Update canvas size when container resizes or full-screen changes
   useEffect(() => {
@@ -218,6 +336,34 @@ export function GraphVisualizer({
   }, [initialTransform]);
 
   const [shouldAutoFit, setShouldAutoFit] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!currentPath || currentPath.length < 2) {
+      return;
+    }
+
+    if (!currentPathKey) {
+      return;
+    }
+
+    if (nodes.length === 0 || edges.length === 0) {
+      return;
+    }
+
+    if (autoLayoutAttemptRef.current === currentPathKey) {
+      return;
+    }
+
+    if (!pathHasCrossingEdges(currentPath, nodes, edges)) {
+      return;
+    }
+
+    autoLayoutAttemptRef.current = currentPathKey;
+    setNodes((currentNodes) =>
+      applyPathAwareLayout([...currentNodes], edges, currentPath)
+    );
+    setShouldAutoFit(true);
+  }, [currentPath, currentPathKey, edges, nodes]);
 
   const fitToView = useCallback(() => {
     if (nodes.length === 0) {
@@ -487,11 +633,7 @@ export function GraphVisualizer({
   };
 
   const handleRearrangeGraph = useCallback(() => {
-    const pathForLayout =
-      availablePaths.length > 0
-        ? availablePaths[Math.min(effectivePathIndex, availablePaths.length - 1)]
-        : null;
-
+    const pathForLayout = currentPath;
     let didRearrange = false;
 
     setNodes((currentNodes) => {
@@ -511,7 +653,7 @@ export function GraphVisualizer({
     if (didRearrange) {
       setShouldAutoFit(true);
     }
-  }, [availablePaths, edges, effectivePathIndex]);
+  }, [currentPath, edges]);
 
   if (selectedEdge) {
     return (
@@ -573,7 +715,7 @@ export function GraphVisualizer({
         onTransformChange={handleTransformChange}
         selectedNodes={selectedNodes}
         onNodeClick={onNodeClick}
-        currentPath={availablePaths[effectivePathIndex] || null}
+        currentPath={currentPath || null}
         excludedEdges={excludedEdges}
         connectionCardinalities={connectionCardinalities}
         checkedEdges={checkedEdges}
