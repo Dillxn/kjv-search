@@ -340,6 +340,20 @@ export default function Home() {
     actions.duplicateTab(tabId);
   }, [actions]);
 
+  const handleImportTabsFromFile = useCallback(async (file: File) => {
+    const result = await actions.importTabsFromFile(file);
+    if (!result.success) {
+      window.alert(result.error || 'Failed to load tabs from file.');
+    }
+  }, [actions]);
+
+  const handleExportTabsToFile = useCallback(() => {
+    const result = actions.exportTabsToFile();
+    if (!result.success) {
+      window.alert(result.error || 'Failed to save tabs to file.');
+    }
+  }, [actions]);
+
 
   // Event handlers
   const handleTestamentChange = useCallback((testament: 'all' | 'old' | 'new') => {
@@ -651,6 +665,8 @@ export default function Home() {
         onRemoveTab={handleRemoveTab}
         onRenameTab={handleRenameTab}
         onDuplicateTab={handleDuplicateTab}
+        onImportTabs={handleImportTabsFromFile}
+        onExportTabs={handleExportTabsToFile}
       />
 
       <AppHeader

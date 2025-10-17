@@ -237,96 +237,25 @@ function loadStateFromStorage(): TabReducerState {
   }
 
   try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      
-      // Check if we need to migrate from an older version
       if (!parsed.version || parsed.version !== STORAGE_VERSION) {
         console.log('Migrating localStorage from version', parsed.version || '1.0', 'to', STORAGE_VERSION);
-        // Clear localStorage for major version changes to avoid conflicts
-        if (!parsed.version || parsed.version < '2.0') {
-          console.log('Clearing old localStorage format and starting fresh');
-          localStorage.removeItem(STORAGE_KEY);
-          return createDefaultState();
-        }
-      }
-      
-      // Validate and migrate data
-      if (!parsed.tabs || parsed.tabs.length === 0) {
-        return createDefaultState();
       }
 
-      // Ensure activeTabId exists
-      if (!parsed.tabs.find((tab: MinimalTabState) => tab.id === parsed.activeTabId)) {
-        parsed.activeTabId = parsed.tabs[0].id;
-      }
-
-      // Convert minimal storage format back to full TabState
-
-      const fullTabs: TabState[] = parsed.tabs.map((minimalTab: MinimalTabState) => {
-        // Handle migration from old format with selectedConnections to new selectedConnectionKeys
-        const linkingGraphState = minimalTab.linkingGraphState || {};
-
-        // Migrate from old selectedConnectionIndexes format to selectedConnectionKeys
-        // Since we can't recover the exact connections from indexes without historical data,
-        // we'll clear the selections during migration to ensure consistency
-        if (linkingGraphState.selectedConnectionIndexes && !linkingGraphState.selectedConnectionKeys) {
-          console.log('Migrating linking selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
-          linkingGraphState.selectedConnectionKeys = [];
-        }
-
-        // Handle migration from pairings tab to linking tab
-        let activeTab = minimalTab.activeTab;
-        if (activeTab === 'pairings') {
-          console.log('Migrating from pairings tab to linking tab');
-          activeTab = 'linking';
-        }
-
+      const converted = convertParsedStorageState(parsed);
+      if (converted) {
         return {
-          ...DEFAULT_TAB_STATE,
-          // Restore persisted properties
-          id: minimalTab.id,
-          name: minimalTab.name,
-          searchTerms: minimalTab.searchTerms || '',
-          selectedTestament: minimalTab.selectedTestament || 'all',
-          selectedBooks: minimalTab.selectedBooks || [],
-          maxProximity: minimalTab.maxProximity !== undefined ? minimalTab.maxProximity : DEFAULT_TAB_STATE.maxProximity,
-          showFilters: minimalTab.showFilters || false,
-          activeTab: activeTab || 'all',
-          isDarkMode: minimalTab.isDarkMode || false,
-          showGraph: minimalTab.showGraph || false,
-          linkingGraphState: {
-            selectedConnectionKeys: linkingGraphState.selectedConnectionKeys || [],
-            selectedNodes: linkingGraphState.selectedNodes || [],
-            panelSplit: linkingGraphState.panelSplit ?? 0.5,
-            graphTransform: linkingGraphState.graphTransform || { x: 0, y: 0, scale: 1 },
-            currentPathIndex: linkingGraphState.currentPathIndex || 0,
-            excludedEdges: linkingGraphState.excludedEdges || [],
-            connectionCardinalities: linkingGraphState.connectionCardinalities || {},
-            checkedEdges: linkingGraphState.checkedEdges || [],
-          },
-          // Runtime state - always starts fresh
-          results: [],
-          linkings: [],
-          isLoading: false,
-          error: '',
-          lastSearchKey: '',
-          filterCounts: {
-            total: 0,
-            oldTestament: 0,
-            newTestament: 0,
-            books: {},
-          },
+          tabs: converted.tabs,
+          activeTabId: converted.activeTabId,
+          isInitialized: true,
+          version: STORAGE_VERSION,
         };
-      });
+      }
 
-      return {
-        tabs: fullTabs,
-        activeTabId: parsed.activeTabId,
-        isInitialized: true,
-        version: STORAGE_VERSION,
-      };
+      console.log('Stored tab state could not be converted. Clearing saved data.');
+      localStorage.removeItem(STORAGE_KEY);
     }
   } catch (error) {
     console.error('Failed to load tab state from localStorage:', error);
@@ -355,16 +284,16 @@ interface MinimalTabState {
   activeTab: 'all' | 'linking' | 'pairings'; // Include 'pairings' for migration from old versions
   isDarkMode: boolean;
   showGraph: boolean;
-  showFilters: boolean;
+  showFilters?: boolean;
   // Store keys and minimal graph state (backwards compatible with old indexes)
-  linkingGraphState: {
+  linkingGraphState?: {
     selectedConnectionKeys?: string[];
     selectedConnectionIndexes?: number[]; // For migration from old format
-    selectedNodes: string[];
+    selectedNodes?: string[];
     panelSplit?: number;
-    graphTransform: { x: number; y: number; scale: number };
-    currentPathIndex: number;
-    excludedEdges: string[];
+    graphTransform?: { x: number; y: number; scale: number };
+    currentPathIndex?: number;
+    excludedEdges?: string[];
     connectionCardinalities?: Record<string, CardinalityType>;
     checkedEdges?: string[];
   };
@@ -374,6 +303,122 @@ interface MinimalStorageState {
   tabs: MinimalTabState[];
   activeTabId: string;
   version: string;
+}
+
+function convertMinimalTabToFullState(minimalTab: MinimalTabState): TabState | null {
+  if (!minimalTab || typeof minimalTab !== 'object' || !minimalTab.id) {
+    console.warn('Skipping tab without valid identifier during state conversion.');
+    return null;
+  }
+
+  const linkingState = minimalTab.linkingGraphState ? { ...minimalTab.linkingGraphState } : {};
+
+  if (linkingState.selectedConnectionIndexes && !linkingState.selectedConnectionKeys) {
+    console.log('Migrating linking selectedConnectionIndexes to selectedConnectionKeys - clearing selections');
+    linkingState.selectedConnectionKeys = [];
+  }
+
+  const normalizedActiveTab = minimalTab.activeTab === 'pairings'
+    ? 'linking'
+    : minimalTab.activeTab || 'all';
+
+  return {
+    ...DEFAULT_TAB_STATE,
+    id: minimalTab.id,
+    name: minimalTab.name || 'Untitled',
+    searchTerms: minimalTab.searchTerms || '',
+    selectedTestament: minimalTab.selectedTestament || 'all',
+    selectedBooks: minimalTab.selectedBooks || [],
+    maxProximity: minimalTab.maxProximity !== undefined
+      ? minimalTab.maxProximity
+      : DEFAULT_TAB_STATE.maxProximity,
+    showFilters: minimalTab.showFilters || false,
+    activeTab: normalizedActiveTab,
+    isDarkMode: minimalTab.isDarkMode || false,
+    showGraph: minimalTab.showGraph || false,
+    linkingGraphState: {
+      selectedConnectionKeys: linkingState.selectedConnectionKeys || [],
+      selectedNodes: linkingState.selectedNodes || [],
+      panelSplit: linkingState.panelSplit ?? 0.5,
+      graphTransform: linkingState.graphTransform || { x: 0, y: 0, scale: 1 },
+      currentPathIndex: linkingState.currentPathIndex || 0,
+      excludedEdges: linkingState.excludedEdges || [],
+      connectionCardinalities: linkingState.connectionCardinalities || {},
+      checkedEdges: linkingState.checkedEdges || [],
+    },
+    results: [],
+    linkings: [],
+    isLoading: false,
+    error: '',
+    lastSearchKey: '',
+    filterCounts: {
+      total: 0,
+      oldTestament: 0,
+      newTestament: 0,
+      books: {},
+    },
+  };
+}
+
+function convertParsedStorageState(parsed: any): { tabs: TabState[]; activeTabId: string } | null {
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const version = typeof parsed.version === 'string' ? parsed.version : undefined;
+
+  if (!version || version < '2.0') {
+    console.log('Storage version too old to migrate, ignoring stored data');
+    return null;
+  }
+
+  const minimalTabs = Array.isArray(parsed.tabs) ? parsed.tabs as MinimalTabState[] : null;
+  if (!minimalTabs || minimalTabs.length === 0) {
+    return null;
+  }
+
+  const fullTabs = minimalTabs
+    .map(convertMinimalTabToFullState)
+    .filter((tab): tab is TabState => Boolean(tab));
+  if (fullTabs.length === 0) {
+    return null;
+  }
+
+  const storedActiveId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null;
+  const activeTabId = storedActiveId && fullTabs.some(tab => tab.id === storedActiveId)
+    ? storedActiveId
+    : fullTabs[0].id;
+
+  return { tabs: fullTabs, activeTabId };
+}
+
+function createMinimalStorageState(state: TabReducerState): MinimalStorageState {
+  return {
+    tabs: state.tabs.map(tab => ({
+      id: tab.id,
+      name: tab.name,
+      searchTerms: tab.searchTerms,
+      selectedTestament: tab.selectedTestament,
+      selectedBooks: tab.selectedBooks,
+      maxProximity: tab.maxProximity,
+      activeTab: tab.activeTab,
+      isDarkMode: tab.isDarkMode,
+      showGraph: tab.showGraph,
+      showFilters: tab.showFilters,
+      linkingGraphState: {
+        selectedConnectionKeys: tab.linkingGraphState.selectedConnectionKeys,
+        selectedNodes: tab.linkingGraphState.selectedNodes,
+        panelSplit: tab.linkingGraphState.panelSplit,
+        graphTransform: tab.linkingGraphState.graphTransform,
+        currentPathIndex: tab.linkingGraphState.currentPathIndex,
+        excludedEdges: tab.linkingGraphState.excludedEdges,
+        connectionCardinalities: tab.linkingGraphState.connectionCardinalities,
+        checkedEdges: tab.linkingGraphState.checkedEdges,
+      },
+    })),
+    activeTabId: state.activeTabId,
+    version: STORAGE_VERSION,
+  };
 }
 
 function saveStateToStorage(state: TabReducerState): void {
@@ -399,37 +444,10 @@ function saveStateToStorage(state: TabReducerState): void {
       }
 
       // Create minimal state for storage - exclude all runtime/derived data
-      const minimalState: MinimalStorageState = {
-        tabs: state.tabs.map(tab => ({
-          id: tab.id,
-          name: tab.name,
-          searchTerms: tab.searchTerms,
-          selectedTestament: tab.selectedTestament,
-          selectedBooks: tab.selectedBooks,
-          maxProximity: tab.maxProximity,
-          activeTab: tab.activeTab,
-          isDarkMode: tab.isDarkMode,
-          showGraph: tab.showGraph,
-          showFilters: tab.showFilters,
-          // Store only keys instead of full connection objects
-          linkingGraphState: {
-            selectedConnectionKeys: tab.linkingGraphState.selectedConnectionKeys,
-            selectedNodes: tab.linkingGraphState.selectedNodes,
-            panelSplit: tab.linkingGraphState.panelSplit,
-            graphTransform: tab.linkingGraphState.graphTransform,
-            currentPathIndex: tab.linkingGraphState.currentPathIndex,
-            excludedEdges: tab.linkingGraphState.excludedEdges,
-            connectionCardinalities: tab.linkingGraphState.connectionCardinalities,
-            checkedEdges: tab.linkingGraphState.checkedEdges,
-          },
-          // Exclude: results, linkings, isLoading, error, lastSearchKey, filterCounts
-        })),
-        activeTabId: state.activeTabId,
-        version: STORAGE_VERSION,
-      };
-      
+      const minimalState = createMinimalStorageState(state);
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalState));
-      
+
     } catch (error) {
       console.error('Failed to save tab state to localStorage:', error);
       if (error instanceof Error && error.name === 'QuotaExceededError') {
@@ -1059,6 +1077,69 @@ export function useTabReducer() {
     }
   }, [state.isInitialized, activeTab?.id, activeTab?.searchTerms, performSearch]);
 
+  const exportTabsToFile = useCallback((): { success: boolean; error?: string; fileName?: string } => {
+    if (typeof window === 'undefined') {
+      return { success: false, error: 'Export unavailable during server-side rendering.' };
+    }
+
+    try {
+      const minimalState = createMinimalStorageState(stateRef.current);
+      const serialized = JSON.stringify(minimalState, null, 2);
+      const blob = new Blob([serialized], { type: 'application/json' });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `kjv-tabs-${timestamp}.json`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      return { success: true, fileName };
+    } catch (error) {
+      console.error('Failed to export tab state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error while exporting tabs.',
+      };
+    }
+  }, []);
+
+  const importTabsFromFile = useCallback(async (file: File): Promise<{ success: boolean; error?: string }> => {
+    if (typeof window === 'undefined') {
+      return { success: false, error: 'Import unavailable during server-side rendering.' };
+    }
+
+    try {
+      const fileContents = await file.text();
+      const parsed = JSON.parse(fileContents);
+      const converted = convertParsedStorageState(parsed);
+
+      if (!converted) {
+        return { success: false, error: 'Invalid or incompatible tab backup file.' };
+      }
+
+      dispatch({
+        type: 'INITIALIZE',
+        payload: {
+          tabs: converted.tabs,
+          activeTabId: converted.activeTabId,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to import tab state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error while importing tabs.',
+      };
+    }
+  }, [dispatch]);
+
   // Action creators
   const actions = {
     addTab: (name?: string) => dispatch({ type: 'ADD_TAB', payload: { name } }),
@@ -1087,6 +1168,9 @@ export function useTabReducer() {
 
     setCheckedEdges: (edgeIds: string[]) =>
       dispatch({ type: 'SET_CHECKED_EDGES', payload: { edgeIds } }),
+
+    exportTabsToFile,
+    importTabsFromFile,
   };
 
   // Cleanup timeout on unmount

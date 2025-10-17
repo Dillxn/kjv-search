@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Upload, Download } from 'lucide-react';
 import { Tab } from '../components/ui/tab';
 import { TabState } from '../hooks/use-tab-reducer';
 
@@ -14,6 +14,8 @@ interface TabBarProps {
   onRemoveTab: (tabId: string) => void;
   onRenameTab: (tabId: string, name: string) => void;
   onDuplicateTab: (tabId: string) => void;
+  onImportTabs?: (file: File) => void | Promise<void>;
+  onExportTabs?: () => void;
 }
 
 export function TabBar({
@@ -25,10 +27,13 @@ export function TabBar({
   onRemoveTab,
   onRenameTab,
   onDuplicateTab,
+  onImportTabs,
+  onExportTabs,
 }: TabBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editingTabId && editInputRef.current) {
@@ -79,9 +84,28 @@ export function TabBar({
     onDuplicateTab(tabId);
   };
 
+  const handleImportClick = () => {
+    if (!onImportTabs) return;
+    importInputRef.current?.click();
+  };
+
+  const handleImportChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onImportTabs) return;
+    const file = event.target.files?.[0];
+    if (file) {
+      onImportTabs(file);
+    }
+    // Reset input so the same file can be reselected
+    event.target.value = '';
+  };
+
+  const handleExportClick = () => {
+    onExportTabs?.();
+  };
+
   return (
-    <div className={`flex items-center`}>
-      <div className='flex items-center gap-2 overflow-x-auto scrollbar-thin'>
+    <div className='flex items-center justify-between gap-2'>
+      <div className='flex items-center gap-2 overflow-x-auto scrollbar-thin flex-1 min-w-0'>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const isEditing = editingTabId === tab.id;
@@ -176,6 +200,47 @@ export function TabBar({
           </button>
         )}
       </div>
+
+      {(onImportTabs || onExportTabs) && (
+        <div className='flex items-center gap-1 flex-shrink-0'>
+          {onImportTabs && (
+            <>
+              <input
+                ref={importInputRef}
+                type='file'
+                accept='application/json'
+                className='hidden'
+                onChange={handleImportChange}
+              />
+              <button
+                onClick={handleImportClick}
+                className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                  isDarkMode
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title='Load tabs from file'
+              >
+                <Upload className='w-3 h-3' />
+              </button>
+            </>
+          )}
+
+          {onExportTabs && (
+            <button
+              onClick={handleExportClick}
+              className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                isDarkMode
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title='Save tabs to file'
+            >
+              <Download className='w-3 h-3' />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
