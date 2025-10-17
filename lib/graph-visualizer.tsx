@@ -112,6 +112,7 @@ export function GraphVisualizer({
   const checkedEdgesChangeRef = useRef(onCheckedEdgesChange);
   const checkedEdgesRef = useRef<string[]>(checkedEdges);
   const hasRenderedConnectionsRef = useRef(false);
+  const previousNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
     checkedEdgesChangeRef.current = onCheckedEdgesChange;
@@ -120,6 +121,10 @@ export function GraphVisualizer({
   useEffect(() => {
     checkedEdgesRef.current = checkedEdges;
   }, [checkedEdges]);
+
+  useEffect(() => {
+    previousNodesRef.current = nodes;
+  }, [nodes]);
 
   const availablePaths = React.useMemo(() => {
     if (selectedNodes.length === 2 && nodes.length > 0 && edges.length > 0) {
@@ -270,119 +275,118 @@ export function GraphVisualizer({
 
     hasRenderedConnectionsRef.current = true;
 
-    setNodes((prevNodes) => {
-      const newNodes: Node[] = [];
-      const newEdges: Edge[] = [];
-      const hadNodes = prevNodes.length > 0;
+    const prevNodes = previousNodesRef.current;
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    const hadNodes = prevNodes.length > 0;
 
-      // Build map of existing nodes for position preservation
-      const existingNodePositions = new Map<string, { x: number; y: number }>();
-      prevNodes.forEach((node) => {
-        existingNodePositions.set(node.id, { x: node.x, y: node.y });
-      });
-
-      // Collect all words that appear in current connections
-      const wordsInConnections = new Set<string>();
-      connections.forEach((conn) => {
-        // Safety check for valid connection data
-        if (
-          conn &&
-          typeof conn.word1 === 'string' &&
-          typeof conn.word2 === 'string'
-        ) {
-          wordsInConnections.add(conn.word1);
-          wordsInConnections.add(conn.word2);
-        } else {
-          console.warn('Invalid connection data:', conn);
-        }
-      });
-
-      // Create nodes only for words that appear in connections
-      wordsInConnections.forEach((word) => {
-        // Additional safety check for word
-        if (!word || typeof word !== 'string') {
-          console.warn('Skipping invalid word:', word);
-          return;
-        }
-
-        const existingPosition = existingNodePositions.get(word);
-        const position =
-          existingPosition || generateInitialPosition(word, newNodes);
-        const radius = calculateNodeRadius(word);
-
-        const node: Node = {
-          id: word,
-          x: position.x,
-          y: position.y,
-          word: word,
-          radius: radius,
-        };
-        newNodes.push(node);
-      });
-
-      connections.forEach((conn) => {
-        // Safety check for valid connection data
-        if (
-          !conn ||
-          typeof conn.word1 !== 'string' ||
-          typeof conn.word2 !== 'string'
-        ) {
-          console.warn('Skipping invalid connection:', conn);
-          return;
-        }
-
-        const edgeExists = newEdges.some(
-          (edge) =>
-            (edge.source === conn.word1 && edge.target === conn.word2) ||
-            (edge.source === conn.word2 && edge.target === conn.word1)
-        );
-
-        if (!edgeExists) {
-          newEdges.push({
-            source: conn.word1,
-            target: conn.word2,
-            reference: conn.reference,
-            versePositions: conn.versePositions,
-          });
-        }
-      });
-
-      // Apply force-directed layout to minimize edge crossings
-      const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
-      setEdges(newEdges);
-      if (updateCheckedEdges) {
-        const validEdgeKeys = new Set(newEdges.map((edge) => getEdgeKey(edge.source, edge.target)));
-        const currentCheckedEdges = checkedEdgesRef.current;
-        const filteredEdges = currentCheckedEdges.filter((edgeKey) => validEdgeKeys.has(edgeKey));
-        if (filteredEdges.length !== currentCheckedEdges.length) {
-          updateCheckedEdges(filteredEdges);
-        }
-      }
-
-      const newNodeIds = layoutedNodes.map(n => n.id).sort();
-      const prevNodeIds = prevNodes.map(n => n.id).sort();
-
-      if (JSON.stringify(newNodeIds) !== JSON.stringify(prevNodeIds)) {
-        console.log('GraphVisualizer: nodes changed from', prevNodeIds, 'to', newNodeIds);
-      }
-
-      // Mark for auto-fit when first nodes are added, but only if we don't have a meaningful transform
-      if (!hadNodes && layoutedNodes.length > 0) {
-        // Only auto-fit if we're at the default transform (no meaningful pan/zoom)
-        // Also check that initialTransform is default to avoid auto-fitting during tab switches
-        const isDefaultTransform =
-          transform.x === 0 && transform.y === 0 && transform.scale === 1;
-        const isDefaultInitialTransform =
-          initialTransform.x === 0 &&
-          initialTransform.y === 0 &&
-          initialTransform.scale === 1;
-        if (isDefaultTransform && isDefaultInitialTransform) {
-          setShouldAutoFit(true);
-        }
-      }
-
-      return layoutedNodes;
+    // Build map of existing nodes for position preservation
+    const existingNodePositions = new Map<string, { x: number; y: number }>();
+    prevNodes.forEach((node) => {
+      existingNodePositions.set(node.id, { x: node.x, y: node.y });
     });
+
+    // Collect all words that appear in current connections
+    const wordsInConnections = new Set<string>();
+    connections.forEach((conn) => {
+      // Safety check for valid connection data
+      if (
+        conn &&
+        typeof conn.word1 === 'string' &&
+        typeof conn.word2 === 'string'
+      ) {
+        wordsInConnections.add(conn.word1);
+        wordsInConnections.add(conn.word2);
+      } else {
+        console.warn('Invalid connection data:', conn);
+      }
+    });
+
+    // Create nodes only for words that appear in connections
+    wordsInConnections.forEach((word) => {
+      // Additional safety check for word
+      if (!word || typeof word !== 'string') {
+        console.warn('Skipping invalid word:', word);
+        return;
+      }
+
+      const existingPosition = existingNodePositions.get(word);
+      const position =
+        existingPosition || generateInitialPosition(word, newNodes);
+      const radius = calculateNodeRadius(word);
+
+      const node: Node = {
+        id: word,
+        x: position.x,
+        y: position.y,
+        word: word,
+        radius: radius,
+      };
+      newNodes.push(node);
+    });
+
+    connections.forEach((conn) => {
+      // Safety check for valid connection data
+      if (
+        !conn ||
+        typeof conn.word1 !== 'string' ||
+        typeof conn.word2 !== 'string'
+      ) {
+        console.warn('Skipping invalid connection:', conn);
+        return;
+      }
+
+      const edgeExists = newEdges.some(
+        (edge) =>
+          (edge.source === conn.word1 && edge.target === conn.word2) ||
+          (edge.source === conn.word2 && edge.target === conn.word1)
+      );
+
+      if (!edgeExists) {
+        newEdges.push({
+          source: conn.word1,
+          target: conn.word2,
+          reference: conn.reference,
+          versePositions: conn.versePositions,
+        });
+      }
+    });
+
+    // Apply force-directed layout to minimize edge crossings
+    const layoutedNodes = applyForceDirectedLayout(newNodes, newEdges);
+    setEdges(newEdges);
+    setNodes(layoutedNodes);
+
+    if (updateCheckedEdges) {
+      const validEdgeKeys = new Set(newEdges.map((edge) => getEdgeKey(edge.source, edge.target)));
+      const currentCheckedEdges = checkedEdgesRef.current;
+      const filteredEdges = currentCheckedEdges.filter((edgeKey) => validEdgeKeys.has(edgeKey));
+      if (filteredEdges.length !== currentCheckedEdges.length) {
+        updateCheckedEdges(filteredEdges);
+      }
+    }
+
+    const newNodeIds = layoutedNodes.map(n => n.id).sort();
+    const prevNodeIds = prevNodes.map(n => n.id).sort();
+
+    if (JSON.stringify(newNodeIds) !== JSON.stringify(prevNodeIds)) {
+      console.log('GraphVisualizer: nodes changed from', prevNodeIds, 'to', newNodeIds);
+    }
+
+    // Mark for auto-fit when first nodes are added, but only if we don't have a meaningful transform
+    if (!hadNodes && layoutedNodes.length > 0) {
+      // Only auto-fit if we're at the default transform (no meaningful pan/zoom)
+      // Also check that initialTransform is default to avoid auto-fitting during tab switches
+      const isDefaultTransform =
+        transform.x === 0 && transform.y === 0 && transform.scale === 1;
+      const isDefaultInitialTransform =
+        initialTransform.x === 0 &&
+        initialTransform.y === 0 &&
+        initialTransform.scale === 1;
+      if (isDefaultTransform && isDefaultInitialTransform) {
+        setShouldAutoFit(true);
+      }
+    }
   }, [connections]);
 
   // Auto-fit effect - separate from the nodes update
